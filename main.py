@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+from tqdm import tqdm
 from dotenv import load_dotenv
 from utils.database import init_db, store_video_summary, store_keyword_analysis
 from agents.search_agent import multiagent_search
@@ -9,8 +10,8 @@ from agents.transcript_agent import fetch_transcript
 from agents.summarization_agent import gpt_summarizer_agent
 from agents.standardizer_agent import standardizer_agent
 from agents.filter_agent import filter_videos
+from agents.audio_agent import transcribe_audio_to_text
 from datetime import datetime
-from tqdm import tqdm
 
 # Load environment variables
 load_dotenv()
@@ -35,40 +36,46 @@ def retry(max_retries=3, delay=2):
 # Main video processing pipeline
 async def process_videos(keyword, agent_count, top_k, filter_type, youtube_api_key, openai_api_key, db_path):
     logging.info("Starting video processing pipeline.")
-    
-    # Step 1: Initialize database
     conn = init_db(db_path)
-    
-    # Step 2: Brainstorm and search keyword variations
-    search_results = multiagent_search(keyword, agent_count, top_k, youtube_api_key, openai_api_key)
-    
-    # Step 3: Critique and select the best keyword
-    best_keyword, keyword_rankings = await critic_agent(search_results, openai_api_key)
-    store_keyword_analysis(conn, keyword_rankings)
-    
-    # Step 4: Filter videos based on the best keyword
-    filtered_videos = filter_videos(search_results[best_keyword], filter_type)
-    
-    # Step 5: Process each video with retries and detailed logging
-    for video in tqdm(filtered_videos, desc="Processing Videos"):
-        video_id = video['video_id']
-        try:
-            # Fetch transcript with retry
-            transcript = await fetch_transcript_with_retry(video_id)
-            if transcript:
-                summary = await summarize_with_retry(transcript, openai_api_key)
-                enriched_summary = await standardize_with_retry(summary, video, openai_api_key)
-                
-                # Store video info in database with current timestamp
-                video['transcript'] = transcript
-                video['summary'] = enriched_summary
+
+    try:
+        # Step 1: Brainstorm and search keyword variations
+        search_results = multiagent_search(keyword, agent_count, top_k, youtube_api_key, openai_api_key)
+        best_keyword, keyword_rankings = await critic_agent(search_results, openai_api_key)
+        store_keyword_analysis(conn, keyword_rankings)
+
+        # Step 2: Process videos
+        filtered_videos = filter_videos(search_results[best_keyword], filter_type)
+        for video in filtered_videos:
+            video_id = video['video_id']
+            try:
+                transcript = await fetch_transcript_with_retry(video_id)
+                if transcript:
+                    video['transcript'] = transcript
+                    video['summary'] = await summarize_with_retry(transcript, openai_api_key)
+                    video['summary_source'] = 'transcript'
+                else:
+                    # Try audio transcription
+                    audio_path = await download_audio(video_id)
+                    if audio_path:
+                        transcript = await transcribe_audio(audio_path)
+                        video['transcript'] = transcript
+                        video['summary'] = await summarize_with_retry(transcript, openai_api_key)
+                        video['summary_source'] = 'audio'
+                    else:
+                        logging.error(f"Failed to process video {video_id}: No transcript or audio found")
+                        continue
+
+                # Store video info in DB
                 video['timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 store_video_summary(conn, video)
-        except Exception as e:
-            logging.error(f"Error processing video {video_id}: {e}")
 
-    conn.close()
-    logging.info("Video processing pipeline completed.")
+            except Exception as e:
+                logging.error(f"Error processing video {video_id}: {e}")
+
+    finally:
+        conn.close()
+        logging.info("Video processing pipeline completed.")
 
 # Retry-enhanced fetch transcript function
 @retry(max_retries=3, delay=2)
@@ -90,14 +97,19 @@ if __name__ == "__main__":
     openai_api_key = os.getenv("OPENAI_API_KEY")
 
     if not youtube_api_key or not openai_api_key:
-        logging.error("API keys not found. Ensure that .env file contains both YOUTUBE_API_KEY and OPENAI_API_KEY.")
+        logging.error("API keys not found. Make sure .env file is set correctly and contains both YOUTUBE_API_KEY and OPENAI_API_KEY.")
     else:
-        asyncio.run(process_videos(
-            keyword="virginia fishing",
-            agent_count=5,
-            top_k=5,
-            filter_type="relevance",
-            youtube_api_key=youtube_api_key,
-            openai_api_key=openai_api_key,
-            db_path="youtube_summaries.db"
-        ))
+        logging.info("Starting the video processing script...")
+        try:
+            asyncio.run(process_videos(
+                keyword="virginia fishing",
+                agent_count=5,
+                top_k=5,
+                filter_type="relevance",
+                youtube_api_key=youtube_api_key,
+                openai_api_key=openai_api_key,
+                db_path="youtube_summaries.db"
+            ))
+        except Exception as e:
+            logging.error(f"An error occurred while running the pipeline: {e}")
+        logging.info("Script execution finished.")

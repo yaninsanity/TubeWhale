@@ -24,18 +24,23 @@ def evaluate_keyword(keyword, videos):
         'critique': critique  # 确保返回了 critique 字段
     }
 
+
+# Main critic agent logic to rank topics
 async def critic_agent(search_results, api_key):
     logging.info("Starting critic agent to rank topics.")
     llm = OpenAI(api_key=api_key)
 
     rankings = []
 
+    # Evaluate each keyword
     for keyword, videos in search_results.items():
         evaluation = evaluate_keyword(keyword, videos)
         rankings.append(evaluation)
 
+    # Sort keywords based on total views, then by likes if views are equal
     rankings.sort(key=lambda x: (x['total_views'], x['total_likes']), reverse=True)
 
+    # Log and return the best keyword
     best_keyword = rankings[0]['keyword']
     logging.info(f"Best keyword based on views/likes: {best_keyword}")
 

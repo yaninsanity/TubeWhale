@@ -8,3 +8,4 @@ pip install pip --upgrade
 pip install -r requirements.txt
 python3 main.py
 ```
+brew install ffmpeg  # or apt install ffmpeg for Linux

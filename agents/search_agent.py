@@ -1,6 +1,6 @@
 import logging
 from googleapiclient.discovery import build
-from langchain.llms import OpenAI
+from langchain_openai import OpenAI
 
 # Initialize YouTube API service
 def get_youtube_service(api_key):

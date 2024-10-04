@@ -20,6 +20,7 @@ def init_db(db_path):
             hashtags TEXT,
             transcript TEXT,
             summary TEXT,
+            summary_source TEXT,  -- 字段用于追踪摘要来源（音频还是文本）
             view_count INTEGER,
             like_count INTEGER,
             comment_count INTEGER,
@@ -72,17 +73,25 @@ def store_video_summary(conn, video):
     cursor = conn.cursor()
 
     try:
-        # 使用事务确保数据持久化的可靠性
         cursor.execute('BEGIN')
         cursor.execute('''
             INSERT OR REPLACE INTO videos 
             (video_id, title, description, publish_time, channel_title, hashtags, transcript, summary, 
-             view_count, like_count, comment_count, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (video['video_id'], video.get('title', 'N/A'), video.get('description', 'N/A'), video.get('publish_time', 'N/A'),
-              video.get('channel_title', 'N/A'), ','.join(video.get('hashtags', [])), video.get('transcript', 'N/A'),
-              video.get('summary', 'N/A'), video.get('view_count', 0), video.get('like_count', 0),
-              video.get('comment_count', 0), video.get('timestamp', 'N/A')))
+             summary_source, view_count, like_count, comment_count, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (video['video_id'], 
+              video.get('title', 'N/A'), 
+              video.get('description', 'N/A'), 
+              video.get('publish_time', 'N/A'),
+              video.get('channel_title', 'N/A'), 
+              ','.join(video.get('hashtags', [])), 
+              video.get('transcript', 'N/A'),
+              video.get('summary', 'N/A'), 
+              video.get('summary_source', 'N/A'),  # 新增字段，标识是通过音频还是文本生成的摘要
+              video.get('view_count', 0), 
+              video.get('like_count', 0),
+              video.get('comment_count', 0), 
+              video.get('timestamp', 'N/A')))
         conn.commit()
         logging.info(f"Video summary stored for video ID: {video['video_id']}")
     except sqlite3.Error as e:
@@ -126,6 +135,7 @@ def store_brainstormed_topics(conn, topics, critique):
         logging.error(f"Failed to store brainstormed topics: {e}")
         raise
 
+# 存储关键词分析结果
 def store_keyword_analysis(conn, keyword_analysis):
     logging.info("Storing keyword analysis in the database.")
     cursor = conn.cursor()
@@ -133,14 +143,13 @@ def store_keyword_analysis(conn, keyword_analysis):
     try:
         cursor.execute('BEGIN')
         for analysis in keyword_analysis:
-            # 确保 'critique' 和 'total_views'、'total_likes' 字段存在
             cursor.execute('''
                 INSERT INTO keyword_analysis (keyword, critique, video_count, timestamp)
                 VALUES (?, ?, ?, ?)
             ''', (
                 analysis['keyword'], 
-                analysis['critique'],  # Critique 在这里正确插入
-                analysis['total_views'],  # Video count 可以是 total_views 或者 total_likes
+                analysis['critique'], 
+                analysis['total_views'],  # 使用 total_views 作为 video_count
                 datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             ))
         conn.commit()
