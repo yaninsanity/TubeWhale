@@ -3,3 +3,4 @@
 *.pyc
 .env
 .DS_Store
+.idea
