@@ -32,18 +32,22 @@ def generate_metadata_prompt():
 # 标准化代理，整合总结和元数据
 async def standardizer_agent(summary, metadata, api_key):
     logging.info("Starting standardizer agent.")
-    
+
+    # Check if summary or metadata is empty
+    if not summary or not metadata:
+        logging.error("Summary or metadata is empty. Skipping standardization.")
+        return None
+
     # 初始化 OpenAI 客户端
     llm = OpenAI(api_key=api_key)
 
-    # Step 1: 生成通用的标准化总结
-    general_prompt = generate_general_template()
-    prompt = ChatPromptTemplate.from_template(general_prompt)
-    base_summary = prompt.format(summary=summary)
-
     try:
-        logging.info("Generating standardized summary.")
-        # 生成基础的标准化总结
+        # Step 1: 生成通用的标准化总结
+        general_prompt = generate_general_template()
+        prompt = ChatPromptTemplate.from_template(general_prompt)
+        base_summary = prompt.format(summary=summary)
+
+        logging.info("Generating standardized summary using OpenAI.")
         standardized_summary = await llm.agenerate(base_summary)
 
         # Step 2: 生成元数据分析提示
@@ -51,14 +55,13 @@ async def standardizer_agent(summary, metadata, api_key):
         detailed_prompt = ChatPromptTemplate.from_template(metadata_prompt)
         enriched_metadata = detailed_prompt.format(metadata=metadata)
 
-        logging.info("Generating metadata analysis.")
-        # 生成元数据分析
+        logging.info("Generating metadata analysis using OpenAI.")
         enriched_summary = await llm.agenerate(enriched_metadata)
 
         logging.info("Standardization and metadata analysis completed.")
         return {
-            "standardized_summary": standardized_summary,
-            "metadata_analysis": enriched_summary
+            "standardized_summary": standardized_summary['choices'][0]['text'].strip(),
+            "metadata_analysis": enriched_summary['choices'][0]['text'].strip()
         }
 
     except Exception as e:

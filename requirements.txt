@@ -11,3 +11,4 @@ langchain_openai
 whisper
 youtube_dl
 yt-dlp
+pydub
