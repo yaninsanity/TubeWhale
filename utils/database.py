@@ -18,70 +18,38 @@ def init_db(db_path):
                 description TEXT,
                 publish_time TEXT,
                 channel_title TEXT,
-                hashtags TEXT,
-                transcript TEXT,
-                summary TEXT,
-                summary_source TEXT,  
+                tags TEXT,
+                category_id TEXT,
+                duration TEXT,
+                dimension TEXT,
+                definition TEXT,
+                caption TEXT,
+                licensed_content BOOLEAN,
                 view_count INTEGER DEFAULT 0,
                 like_count INTEGER DEFAULT 0,
                 comment_count INTEGER DEFAULT 0,
-                weighted_score REAL DEFAULT 0,  
+                weighted_score REAL DEFAULT 0,
+                default_audio_language TEXT,
+                country_code TEXT,
                 timestamp TEXT
             )
         ''')
 
-        # 创建评论信息表，包含 parent_id
+        # 创建评论信息表
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS comments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 video_id TEXT NOT NULL,
-                comment_id TEXT UNIQUE NOT NULL,  
+                comment_id TEXT UNIQUE NOT NULL,
                 author TEXT NOT NULL,
                 comment_text TEXT NOT NULL,
                 like_count INTEGER DEFAULT 0,
                 publish_time TEXT,
-                viewer_rating TEXT,  
-                moderation_status TEXT,  -- 用于存储审核状态
-                parent_id TEXT,  -- 该字段指向父评论的 comment_id
+                viewer_rating TEXT,
+                moderation_status TEXT,
+                parent_id TEXT,
                 FOREIGN KEY(video_id) REFERENCES videos(video_id) ON DELETE CASCADE,
-                FOREIGN KEY(parent_id) REFERENCES comments(comment_id) ON DELETE CASCADE  -- 级联删除
-            )
-        ''')
-
-        # 创建脑暴结果表
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS brainstormed_topics (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                keyword TEXT NOT NULL,
-                topics TEXT NOT NULL,
-                critique TEXT NOT NULL,
-                topic_score REAL DEFAULT 0,
-                timestamp TEXT NOT NULL
-            )
-        ''')
-
-        # 创建关键词分析表
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS keyword_analysis (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                keyword TEXT NOT NULL,
-                critique TEXT,
-                total_views INTEGER DEFAULT 0,
-                total_likes INTEGER DEFAULT 0,
-                weighted_score REAL DEFAULT 0,
-                timestamp TEXT
-            )
-        ''')
-
-        # 创建转录和总结表
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS transcripts (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                video_id TEXT NOT NULL,
-                transcript TEXT NOT NULL,
-                summary TEXT NOT NULL,
-                timestamp TEXT NOT NULL,
-                FOREIGN KEY(video_id) REFERENCES videos(video_id) ON DELETE CASCADE
+                FOREIGN KEY(parent_id) REFERENCES comments(comment_id) ON DELETE CASCADE
             )
         ''')
 
@@ -93,43 +61,54 @@ def init_db(db_path):
         raise
 
 # 存储视频信息到数据库
-def store_video_summary(conn, video):
+def store_video_metadata(conn, video_metadata):
     if not conn:
-        logging.error("Connection is None. Cannot store video summary.")
+        logging.error("Connection is None. Cannot store video metadata.")
         return
     
-    video['view_count'] = video.get('view_count', 0) or 0
-    video['like_count'] = video.get('like_count', 0) or 0
-    video['comment_count'] = video.get('comment_count', 0) or 0
-    video['weighted_score'] = video.get('weighted_score', 0) or 0
+    # 设置默认值，避免 None 造成的错误
+    video_metadata['view_count'] = int(video_metadata.get('view_count', 0)) or 0
+    video_metadata['like_count'] = int(video_metadata.get('like_count', 0)) or 0
+    video_metadata['comment_count'] = int(video_metadata.get('comment_count', 0)) or 0
 
-    logging.info(f"Storing video summary for video ID: {video['video_id']}")
+    # 计算 weighted_score：这里的公式可以自定义
+    video_metadata['weighted_score'] = (video_metadata['view_count'] * 0.1) + (video_metadata['like_count'] * 0.5) + (video_metadata['comment_count'] * 0.4)
+
+    logging.info(f"Storing metadata for video ID: {video_metadata['id']}")
     try:
         cursor = conn.cursor()
         cursor.execute('''
             INSERT OR REPLACE INTO videos 
-            (video_id, title, description, publish_time, channel_title, hashtags, transcript, summary, 
-             summary_source, view_count, like_count, comment_count, weighted_score, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (video['video_id'], 
-              video.get('title', 'N/A'), 
-              video.get('description', 'N/A'), 
-              video.get('publish_time', 'N/A'),
-              video.get('channel_title', 'N/A'), 
-              ','.join(video.get('hashtags', [])), 
-              video.get('transcript', 'N/A'),
-              video.get('summary', 'N/A'), 
-              video.get('summary_source', 'N/A'),  
-              video['view_count'], 
-              video['like_count'],
-              video['comment_count'], 
-              video['weighted_score'],  
-              datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+            (video_id, title, description, publish_time, channel_title, tags, category_id, duration, dimension, 
+             definition, caption, licensed_content, view_count, like_count, comment_count, weighted_score, 
+             default_audio_language, country_code, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            video_metadata['id'],  # 视频ID
+            video_metadata['snippet'].get('title', 'N/A'),  # 视频标题
+            video_metadata['snippet'].get('description', 'N/A'),  # 视频描述
+            video_metadata['snippet'].get('publishedAt', 'N/A'),  # 发布日期
+            video_metadata['snippet'].get('channelTitle', 'N/A'),  # 频道名称
+            ','.join(video_metadata['snippet'].get('tags', [])),  # 视频标签
+            video_metadata['snippet'].get('categoryId', 'N/A'),  # 视频分类
+            video_metadata['contentDetails'].get('duration', 'N/A'),  # 视频时长
+            video_metadata['contentDetails'].get('dimension', 'N/A'),  # 视频维度
+            video_metadata['contentDetails'].get('definition', 'N/A'),  # 清晰度
+            video_metadata['contentDetails'].get('caption', 'false'),  # 是否有字幕
+            video_metadata['contentDetails'].get('licensedContent', False),  # 是否为授权内容
+            video_metadata['view_count'],  # 观看次数
+            video_metadata['like_count'],  # 点赞次数
+            video_metadata['comment_count'],  # 评论次数
+            video_metadata['weighted_score'],  # 自定义加权评分
+            video_metadata['snippet'].get('defaultAudioLanguage', 'N/A'),  # 默认音频语言
+            video_metadata['snippet'].get('defaultLanguage', 'N/A'),  # 国家代码
+            datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # 插入时间戳
+        ))
         conn.commit()
-        logging.info(f"Video summary stored for video ID: {video['video_id']}")
+        logging.info(f"Metadata stored for video ID: {video_metadata['id']}")
     except sqlite3.Error as e:
         conn.rollback()
-        logging.error(f"Failed to store video summary for video ID {video['video_id']}: {e}")
+        logging.error(f"Failed to store video metadata for video ID {video_metadata['id']}: {e}")
         raise
 
 # 批量存储评论信息到数据库
@@ -148,13 +127,12 @@ def store_comments(conn, video_id, comments, parent_id=None):
     try:
         cursor.execute('BEGIN')
         for comment in comments:
-            # 存储主评论或回复
             cursor.execute('''
                 INSERT INTO comments (video_id, comment_id, author, comment_text, like_count, publish_time, viewer_rating, moderation_status, parent_id)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 video_id, 
-                comment['comment_id'],  # 现在确保每个评论有唯一的 comment_id
+                comment['comment_id'],  # 唯一的 comment_id
                 comment['author'], 
                 comment['text'], 
                 comment.get('like_count', 0) or 0, 
@@ -165,7 +143,7 @@ def store_comments(conn, video_id, comments, parent_id=None):
             ))
             comment_id = cursor.lastrowid
 
-            # 如果存在回复，递归存储
+            # 递归存储回复
             if 'replies' in comment and comment['replies']:
                 store_comments(conn, video_id, comment['replies'], parent_id=comment['comment_id'])
 
