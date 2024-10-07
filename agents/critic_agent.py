@@ -37,7 +37,7 @@ def evaluate_keyword(keyword, videos):
         'keyword': keyword,
         'total_views': total_views,
         'total_likes': total_likes,
-        'total_comments': total_comments,  # 添加评论统计
+        'total_comments': total_comments,
         'critique': critique
     }
 

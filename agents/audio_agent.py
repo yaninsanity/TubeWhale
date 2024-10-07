@@ -1,6 +1,7 @@
 import os
 import logging
-import openai
+import asyncio
+from openai import OpenAI
 from yt_dlp import YoutubeDL
 from pydub import AudioSegment
 
@@ -24,7 +25,7 @@ async def download_audio(video_id):
     try:
         os.makedirs('downloads', exist_ok=True)
         logging.info(f"Downloading audio for video ID: {video_id}")
-        
+
         ydl_opts = {
             'format': 'bestaudio/best',
             'outtmpl': f'downloads/{video_id}.%(ext)s',
@@ -42,7 +43,7 @@ async def download_audio(video_id):
 
         audio_path = f'downloads/{video_id}.mp3'
         return audio_path
-    
+
     except Exception as e:
         logging.error(f"Failed to download audio for video ID {video_id}: {e}")
         return None
@@ -63,7 +64,7 @@ def split_audio(audio_path, max_duration_ms=60000):
 @retry(max_retries=3, delay=5)
 async def analyze_audio_with_openai(audio_chunk, openai_api_key, topic):
     try:
-        openai.api_key = openai_api_key
+        client = OpenAI(api_key=openai_api_key)  # Initialize OpenAI client inside the function
 
         # Convert the AudioSegment chunk to bytes
         audio_bytes = audio_chunk.export(format="mp3")
@@ -71,10 +72,10 @@ async def analyze_audio_with_openai(audio_chunk, openai_api_key, topic):
         logging.info(f"Sending audio chunk to OpenAI for transcription with topic '{topic}'.")
 
         # OpenAI Whisper API for transcription
-        response = openai.Audio.transcribe("whisper-1", audio_bytes)
-        transcript_text = response['text']
+        response = client.audio.transcribe("whisper-1", audio_bytes)
+        transcript_text = response.text
         logging.info(f"Received transcription from OpenAI for audio chunk: {transcript_text}")
-        
+
         # Defining system rules and role upfront
         system_role_prompt = (
             f"You are an expert in the domain of '{topic}' and an advanced system designed to extract key insights "
@@ -85,7 +86,7 @@ async def analyze_audio_with_openai(audio_chunk, openai_api_key, topic):
             "3. Structure the summary to include important actions, challenges, or advice given. "
             "4. Provide context where necessary, but avoid unnecessary details."
         )
-        
+
         # Creating a detailed summary based on the transcript with rules
         summary_prompt = (
             f"{system_role_prompt}\n\n"
@@ -94,15 +95,15 @@ async def analyze_audio_with_openai(audio_chunk, openai_api_key, topic):
             "Generate a detailed and structured summary based on this transcript."
         )
 
-        enriched_response = openai.Completion.create(
+        enriched_response = client.completions.create(
             model="text-davinci-003",
             prompt=summary_prompt,
             max_tokens=1024,  # Adjust for more detailed summaries
             temperature=0.5  # Balances between creativity and adherence to the topic
         )
-        
-        return enriched_response['choices'][0]['text']
-    
+
+        return enriched_response.choices[0].text
+
     except Exception as e:
         logging.error(f"Failed to analyze audio with OpenAI: {e}")
         return None

@@ -1,6 +1,7 @@
 import sqlite3
 import logging
 from datetime import datetime
+import json  # Add this import for JSON serialization
 
 # 初始化数据库
 def init_db(db_path):
@@ -31,16 +32,29 @@ def init_db(db_path):
                 weighted_score REAL DEFAULT 0,
                 default_audio_language TEXT,
                 country_code TEXT,
-                timestamp TEXT
-            )
+                timestamp TEXT,
+                llm_summary TEXT,  -- AI-generated summary
+                transcript TEXT,  -- Raw transcript from video (if exists)
+                is_transcript INTEGER DEFAULT 0,  -- Boolean flag, 0 for False, 1 for True
+                audio_summary TEXT  -- Audio-based summary (if exists)
+            );
         ''')
 
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ai_interactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                input_data TEXT NOT NULL,      -- JSON serialized input data
+                output_data TEXT NOT NULL,     -- JSON serialized output data
+                interaction_type TEXT NOT NULL, -- Type of interaction (e.g., 'keyword_search', 'summarization')
+                timestamp TEXT NOT NULL         -- Timestamp of the interaction
+            );
+        ''')
         # 创建评论信息表
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS comments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 video_id TEXT NOT NULL,
-                comment_id TEXT UNIQUE NOT NULL,
+                comment_id TEXT NOT NULL,
                 author TEXT NOT NULL,
                 comment_text TEXT NOT NULL,
                 like_count INTEGER DEFAULT 0,
@@ -112,7 +126,7 @@ def store_video_metadata(conn, video_metadata):
         raise
 
 # 批量存储评论信息到数据库
-def store_comments(conn, video_id, comments, parent_id=None):
+def store_comments(conn, video_id, comments):
     if not conn:
         logging.error("Connection is None. Cannot store comments.")
         return
@@ -139,13 +153,8 @@ def store_comments(conn, video_id, comments, parent_id=None):
                 comment['publish_time'],
                 comment.get('viewer_rating', 'none'),  # 存储观看者的评分
                 comment.get('moderation_status', 'published'),  # 存储审核状态
-                parent_id  # 如果是回复，parent_id 指向父评论的 comment_id
+                comment['parent_id']  # 直接从 comment 字典中获取 parent_id
             ))
-            comment_id = cursor.lastrowid
-
-            # 递归存储回复
-            if 'replies' in comment and comment['replies']:
-                store_comments(conn, video_id, comment['replies'], parent_id=comment['comment_id'])
 
         conn.commit()
         logging.info(f"Comments stored for video ID: {video_id}")
@@ -187,6 +196,34 @@ def store_brainstormed_topics(conn, topics, critique, topic_score):
         conn.rollback()
         logging.error(f"Failed to store brainstormed topics: {e}")
         raise
+
+def store_ai_interaction(conn, input_data, output_data, interaction_type, timestamp):
+    if not conn:
+        logging.error("Connection is None. Cannot store AI interaction.")
+        return
+    
+    logging.info(f"Storing AI interaction of type: {interaction_type}")
+    
+    try:
+        cursor = conn.cursor()
+        
+        # Serialize input and output data to JSON format, ensuring proper serialization
+        input_json = json.dumps(input_data, default=str)  # Convert input_data to JSON
+        output_json = json.dumps(output_data, default=str)  # Convert output_data to JSON
+
+        # Inserting into the database
+        cursor.execute('''
+            INSERT INTO ai_interactions (input_data, output_data, interaction_type, timestamp)
+            VALUES (?, ?, ?, ?)
+        ''', (input_json, output_json, interaction_type, timestamp))
+        
+        conn.commit()
+        logging.info(f"AI interaction of type {interaction_type} stored successfully.")
+    
+    except sqlite3.Error as e:
+        conn.rollback()  # Roll back in case of error
+        logging.error(f"Failed to store AI interaction: {e}")
+        raise  # Reraise exception to handle it properly elsewhere
 
 # 存储关键词分析结果
 def store_keyword_analysis(conn, keyword_analysis):
@@ -282,3 +319,22 @@ def store_data(conn, table_name, data_dict):
         conn.rollback()
         logging.error(f"Failed to store data in {table_name}: {e}")
         raise
+
+
+def update_video_metadata(conn, video_id, llm_summary, transcript, audio_summary=None):
+    is_transcript = 1 if transcript else 0  # 1 if transcript exists, else 0
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE videos
+            SET llm_summary = ?, transcript = ?, is_transcript = ?, audio_summary = ?
+            WHERE video_id = ?
+        ''', (llm_summary, transcript, is_transcript, audio_summary, video_id))
+        
+        conn.commit()
+        logging.info(f"Video {video_id} metadata updated with AI summary and transcript.")
+    
+    except Exception as e:
+        logging.error(f"Failed to update video metadata for {video_id}: {e}")
+        conn.rollback()
+        raise e

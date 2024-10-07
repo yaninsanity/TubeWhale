@@ -3,7 +3,11 @@ import logging
 import whisper
 from youtube_dl import YoutubeDL
 from utils.database import store_transcript_summary
-import openai
+from openai import OpenAI
+import asyncio
+
+# Initialize OpenAI client with the API key
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # Retry decorator for handling retries on download or transcription failure
 def retry(max_retries=3, delay=2):
@@ -61,14 +65,8 @@ async def transcribe_audio(audio_path):
         logging.error(f"Failed to transcribe audio file {audio_path}: {e}")
         return None
 
-# 使用 YouTubeTranscriptApi 获取视频转录
+# Using YouTubeTranscriptApi to fetch video transcripts
 async def fetch_transcript(video_id):
-    """
-    Fetch transcript from the YouTube API or another source.
-    This is a placeholder function. You would replace this with actual logic to fetch the transcript.
-    """
-    # Logic to interact with the YouTube API or third-party transcript provider
-    # For example, using youtube_transcript_api:
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
         transcript = YouTubeTranscriptApi.get_transcript(video_id)
@@ -77,43 +75,37 @@ async def fetch_transcript(video_id):
         logging.error(f"Failed to fetch transcript for video {video_id}: {e}")
         return None
 
-
-# Function to interpret the transcript with OpenAI's LLM
-async def interpret_transcript(transcript, openai_api_key, topic):
+# Function to interpret the transcript using OpenAI's LLM (gpt-4o-mini)
+async def interpret_transcript(transcript, topic):
     try:
-        openai.api_key = openai_api_key
-        
         # Define system role and task prompt
         system_role_prompt = (
-            f"You are an expert system focused on analyzing audio transcripts in the context of '{topic}'. "
+            f"You are an expert in analyzing audio transcripts in the context of '{topic}'. "
             "Your task is to generate detailed, structured summaries based on the transcript provided. "
-            "Be sure to highlight any key insights, practical knowledge, or important information."
-        )
-        
-        # Combine the transcript and system role prompt for LLM interaction
-        prompt = (
-            f"{system_role_prompt}\n\n"
-            "Transcript:\n"
-            f"{transcript}\n\n"
-            "Generate a structured summary based on the transcript."
+            "Be sure to highlight key insights, practical knowledge, and important information."
         )
 
-        response = openai.Completion.create(
-            model="text-davinci-003",
-            prompt=prompt,
-            max_tokens=1024,  # Allow enough tokens for detailed response
+        # Use OpenAI chat completion API with gpt-4o-mini model
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",  # Use gpt-4o-mini model
+            messages=[
+                {"role": "system", "content": system_role_prompt},
+                {"role": "user", "content": transcript}
+            ],
+            max_tokens=1024,
             temperature=0.5
         )
 
-        logging.info(f"Transcript interpretation completed: {response['choices'][0]['text']}")
-        return response['choices'][0]['text']
+        summary = response.choices[0].message["content"].strip()
+        logging.info(f"Transcript interpretation completed: {summary}")
+        return summary
     
     except Exception as e:
         logging.error(f"Failed to interpret transcript: {e}")
         return None
 
-# Main function to download, transcribe and interpret the audio
-async def process_video_transcript(video_id, openai_api_key, topic, conn):
+# Main function to process the entire flow: download, transcribe, and interpret
+async def process_video_transcript(video_id, topic, conn):
     try:
         # Step 1: Download the audio
         audio_path = await download_audio(video_id)
@@ -127,8 +119,8 @@ async def process_video_transcript(video_id, openai_api_key, topic, conn):
             logging.error(f"Transcription failed for video ID: {video_id}")
             return None
 
-        # Step 3: Interpret the transcript using LLM
-        interpreted_summary = await interpret_transcript(transcript, openai_api_key, topic)
+        # Step 3: Interpret the transcript using OpenAI's gpt-4o-mini
+        interpreted_summary = await interpret_transcript(transcript, topic)
         if not interpreted_summary:
             logging.error(f"Transcript interpretation failed for video ID: {video_id}")
             return None

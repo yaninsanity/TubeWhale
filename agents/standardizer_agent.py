@@ -2,68 +2,68 @@ from langchain.prompts import ChatPromptTemplate
 from langchain_community.llms import OpenAI
 import logging
 
-# 通用标准化模板
+# Template for standardizing and enriching the summary
 def generate_general_template():
     return '''
-    Please standardize and enrich the following summary. Include structured information based on the following aspects:
+    Please standardize and enrich the following summary. Include structured information based on:
     - Main topic of the video
     - Key insights or knowledge shared
     - Important steps or actions mentioned
     - Recommended tools or equipment (if applicable)
     - Best practices or tips shared
-    - Any notable challenges or advice given
+    - Notable challenges or advice given
 
     Summary: {summary}
     '''
 
-# 元数据提取和标准化总结
+# Metadata analysis and summary enrichment
 def generate_metadata_prompt():
     return '''
     Please analyze the following video metadata and provide a structured analysis. Include information about:
     - Total number of likes and dislikes
     - Number of comments and engagement level
     - Number of views and subscribers
-    - Any notable video tags or hashtags
+    - Notable video tags or hashtags
     - Duration and publish date
 
     Metadata: {metadata}
     '''
 
-# 标准化代理，整合总结和元数据
-async def standardizer_agent(summary, metadata, api_key):
+# Standardizer agent to standardize the summary and analyze metadata
+def standardizer_agent(summary, metadata, api_key):
     logging.info("Starting standardizer agent.")
-
-    # Check if summary or metadata is empty
+    
     if not summary or not metadata:
-        logging.error("Summary or metadata is empty. Skipping standardization.")
+        logging.error("Summary or metadata is missing. Skipping standardization.")
         return None
 
-    # 初始化 OpenAI 客户端
     llm = OpenAI(api_key=api_key)
 
     try:
-        # Step 1: 生成通用的标准化总结
+        # Generate and format the general summary prompt
         general_prompt = generate_general_template()
         prompt = ChatPromptTemplate.from_template(general_prompt)
         base_summary = prompt.format(summary=summary)
 
-        logging.info("Generating standardized summary using OpenAI.")
-        standardized_summary = await llm.agenerate(base_summary)
+        # Call the OpenAI API for summary standardization
+        standardized_response = llm.generate(base_summary)
+        standardized_summary = standardized_response.choices[0].text.strip()
 
-        # Step 2: 生成元数据分析提示
+        # Generate and format the metadata prompt
         metadata_prompt = generate_metadata_prompt()
         detailed_prompt = ChatPromptTemplate.from_template(metadata_prompt)
         enriched_metadata = detailed_prompt.format(metadata=metadata)
 
-        logging.info("Generating metadata analysis using OpenAI.")
-        enriched_summary = await llm.agenerate(enriched_metadata)
+        # Call the OpenAI API for metadata analysis
+        metadata_response = llm.generate(enriched_metadata)
+        metadata_analysis = metadata_response.choices[0].text.strip()
 
         logging.info("Standardization and metadata analysis completed.")
         return {
-            "standardized_summary": standardized_summary['choices'][0]['text'].strip(),
-            "metadata_analysis": enriched_summary['choices'][0]['text'].strip()
+            "standardized_summary": standardized_summary,
+            "metadata_analysis": metadata_analysis
         }
 
     except Exception as e:
         logging.error(f"Error in standardization: {e}")
-        return None  # 保证在错误情况下不会中断流程
+        return None

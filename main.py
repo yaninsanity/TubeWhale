@@ -3,16 +3,16 @@ import logging
 import os
 from tqdm import tqdm
 from dotenv import load_dotenv
-from utils.database import init_db, store_video_summary, store_keyword_analysis
+from utils.database import init_db, store_video_metadata, store_keyword_analysis, store_comments, store_ai_interaction
 from agents.search_agent import multiagent_search
 from agents.critic_agent import critic_agent
-from agents.transcript_agent import process_video_transcript
+from agents.transcript_agent import fetch_transcript
 from agents.summarization_agent import gpt_summarizer_agent
-from agents.standardizer_agent import standardizer_agent
 from agents.filter_agent import filter_videos
 from agents.audio_agent import transcribe_audio_to_summary
+from agents.standardizer_agent import standardizer_agent  # Import standardizer agent
 from datetime import datetime
-from agents.transcript_agent import fetch_transcript
+from utils.youtube_fetcher import fetch_all_comments, fetch_video_metadata
 
 # Load environment variables
 load_dotenv()
@@ -31,27 +31,34 @@ def retry(max_retries=3, delay=2, backoff_factor=2):
                 except Exception as e:
                     logging.error(f"Error in {func.__name__}: {e}, retrying {attempt + 1}/{max_retries} in {_delay} seconds...")
                     await asyncio.sleep(_delay)
-                    _delay *= backoff_factor  # Increase delay exponentially
+                    _delay *= backoff_factor
             raise Exception(f"Failed to complete {func.__name__} after {max_retries} retries.")
         return wrapper
     return decorator
 
-# Retry-enhanced fetch transcript function (asynchronous version)
+# Fetch video transcript with retries
 @retry(max_retries=3, delay=2)
 async def fetch_transcript_with_retry(video_id):
     try:
-        # Assuming fetch_transcript is an async function that requires awaiting
         transcript = await fetch_transcript(video_id)
         return transcript
     except Exception as e:
         logging.error(f"Failed to fetch transcript for video {video_id}: {e}")
         raise
 
-# Process single video function for concurrency
-async def process_single_video(video, openai_api_key, keyword, conn, persist_agent_summaries, full_audio_analysis, dry_run):
+# Process a single video using agents and storing metadata, transcript, comments
+async def process_single_video(video, openai_api_key, keyword, conn, persist_agent_summaries, full_audio_analysis, dry_run, youtube_api_key):
     video_id = video['video_id']
     try:
-        # Step 1: Fetch transcript or summarize audio
+        step = "fetch_metadata"
+        # Step 1: Fetch video metadata and store
+        logging.info(f"Fetching metadata for video {video_id} using YouTube API.")
+        video_metadata = fetch_video_metadata(video_id, youtube_api_key)  # Pass the API key here
+        if video_metadata and not dry_run and persist_agent_summaries:
+            store_video_metadata(conn, video_metadata)
+        
+        step = "fetch_transcript_or_audio"
+        # Step 2: Fetch transcript or summarize audio
         transcript = await fetch_transcript_with_retry(video_id)
         if transcript:
             video['transcript'] = transcript
@@ -67,23 +74,42 @@ async def process_single_video(video, openai_api_key, keyword, conn, persist_age
                 logging.error(f"Failed to process video {video_id}: No transcript or audio found.")
                 return
 
+        step = "fetch_comments"
+        # Step 3: Fetch comments and store them
+        comments = None
+        try:
+            comments = fetch_all_comments(video_id, youtube_api_key)
+        except Exception as e:
+            logging.error(f"Error fetching comments for video ID {video_id}: {e}")
+
+        # Proceed with storing comments if they are available
+        if comments and not dry_run and persist_agent_summaries:
+            store_comments(conn, video_id, comments)
+            
+        step = "final_store_metadata"
         # Ensure weighted_score is not None
-        video['weighted_score'] = video.get('weighted_score', 0)  # Default to 0 if None
+        video['weighted_score'] = video.get('weighted_score', 0)
+
+        # Step 4: Standardize summary and metadata
+        logging.info(f"Standardizing summary and metadata for video {video_id}")
+        standardized_results = await standardizer_agent(video['summary'], video_metadata, openai_api_key)
+        if standardized_results:
+            video['standardized_summary'] = standardized_results['standardized_summary']
+            video['metadata_analysis'] = standardized_results['metadata_analysis']
 
         # Store results if required
         if not dry_run and persist_agent_summaries and conn:
             video['timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            store_video_summary(conn, video)
-
+            store_video_metadata(conn, video)
     except Exception as e:
         logging.error(f"Error processing video {video_id}: {e}")
 
-# Retry-enhanced summarization function
+# Summarization function with retries
 @retry(max_retries=3, delay=2)
 async def summarize_with_retry(transcript, api_key):
     return await gpt_summarizer_agent(transcript, api_key)
 
-# Main video processing pipeline
+# Main processing pipeline for videos
 async def process_videos(keyword, agent_count, top_k, filter_type, youtube_api_key, openai_api_key, db_path, persist_agent_summaries, full_audio_analysis, dry_run, max_n):
     logging.info("Starting video processing pipeline.")
     
@@ -91,37 +117,35 @@ async def process_videos(keyword, agent_count, top_k, filter_type, youtube_api_k
         logging.info("Running in dry_run mode: No API calls will be made, and no data will be persisted.")
     
     conn = init_db(db_path) if not dry_run else None
-    failed_videos = []  # Keep track of videos that failed processing
 
     try:
+        step = "brainstorm_keywords"
         # Step 1: Brainstorm and search keyword variations
         logging.info(f"Brainstorming {max_n} keyword variations with {agent_count} agents.")
         search_results = await multiagent_search(keyword, agent_count, max_n, top_k, youtube_api_key, openai_api_key, dry_run)
         
         if not search_results:
             raise Exception("No search results returned from YouTube API.")
-
-        # Step 2: Filter out valid results from search
+        
+        step = "filter_search_results"
+        # Step 2: Filter valid search results
         valid_search_results = {kw: data for kw, data in search_results.items() if data['videos']}
-
         if not valid_search_results:
             logging.error("No valid search results found with videos.")
             return
 
-        # Step 3: Use critic agent to rank the keywords based on metadata
+        step = "critic_agent_ranking"
+        # Step 3: Critic agent to rank keywords
         logging.info("Starting critic agent to rank topics.")
         best_keyword, keyword_rankings = await critic_agent(valid_search_results, openai_api_key)
-
         if not best_keyword:
             logging.error("Critic agent did not return a valid best keyword.")
             return
 
-        if not dry_run:
-            store_keyword_analysis(conn, keyword_rankings)
-
+        step = "process_videos"
         # Step 4: Process videos under the best keyword
         filtered_videos = filter_videos(valid_search_results[best_keyword]['videos'], filter_type)
-        tasks = [process_single_video(video, openai_api_key, keyword, conn, persist_agent_summaries, full_audio_analysis, dry_run) for video in tqdm(filtered_videos, desc="Processing Videos")]
+        tasks = [process_single_video(video, openai_api_key, keyword, conn, persist_agent_summaries, full_audio_analysis, dry_run, youtube_api_key) for video in tqdm(filtered_videos, desc="Processing Videos")]
 
         await asyncio.gather(*tasks)
 
@@ -130,8 +154,6 @@ async def process_videos(keyword, agent_count, top_k, filter_type, youtube_api_k
     finally:
         if conn:
             conn.close()
-        if failed_videos:
-            logging.warning(f"Failed to process the following videos: {failed_videos}")
         logging.info("Video processing pipeline completed.")
 
 # Main entry point

@@ -3,13 +3,15 @@ import asyncio
 from googleapiclient.errors import HttpError
 from utils.youtube_api import get_youtube_service
 from langchain_openai import OpenAI
+from utils.database import store_ai_interaction
+from datetime import datetime
 
 # Initialize OpenAI API
 def get_openai_service(api_key):
     return OpenAI(api_key=api_key)
 
 # Multi-agent search (Asynchronous) with metadata aggregation
-async def multiagent_search(base_keyword, agent_count, max_n, top_k, youtube_api_key, openai_api_key, dry_run=False):
+async def multiagent_search(base_keyword, agent_count, max_n, top_k, youtube_api_key, openai_api_key, conn=None, dry_run=False):
     logging.info(f"Starting multi-agent search with {agent_count} agents for keyword: {base_keyword}")
     
     if dry_run:
@@ -17,7 +19,7 @@ async def multiagent_search(base_keyword, agent_count, max_n, top_k, youtube_api
         return {}
 
     # Step 1: Generate variations of keywords using OpenAI
-    generated_keywords = await keyword_generator_agent(base_keyword, max_n, openai_api_key)
+    generated_keywords = await keyword_generator_agent(base_keyword, max_n, openai_api_key, conn)
 
     # Ensure the agent count does not exceed the number of generated keywords
     agent_count = min(agent_count, len(generated_keywords))
@@ -42,20 +44,35 @@ async def multiagent_search(base_keyword, agent_count, max_n, top_k, youtube_api
     return search_results
 
 # Agent keyword brainstorming using OpenAI's LLM
-async def keyword_generator_agent(base_keyword, max_n, api_key):
+async def keyword_generator_agent(base_keyword, max_n, api_key, conn=None):
     logging.info(f"Generating {max_n} variations for base keyword: {base_keyword}")
     llm = get_openai_service(api_key)
-    prompt = f"Generate {max_n} relevant variations of the keyword '{base_keyword}' for a YouTube video search."
+    prompt = f"You are a domain expert specializing in professional problem-solving. Generate {max_n} relevant and highly accurate keyword variations for the domain-specific keyword '{base_keyword}' to search for professional YouTube videos."
 
     try:
+        start_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        logging.info(f"Sending prompt to LLM: {prompt}")
+
+        # Generate keyword variations from OpenAI API
         response = await llm.agenerate([prompt])
-        generated_keywords = response.generations[0][0].text.split("\n")
+        generated_keywords = response.generations[0].message['content'].split("\n")
         generated_keywords = list(set(filter(None, [kw.strip() for kw in generated_keywords])))
         logging.info(f"Generated {len(generated_keywords)} keyword variations.")
+
+        # Log AI interaction in the database
+        if conn:
+            store_ai_interaction(
+                conn,
+                prompt,  # Input
+                generated_keywords,  # Output
+                "keyword_generation",  # Type of interaction
+                start_time  # Timestamp when interaction started
+            )
+
         return generated_keywords
     except Exception as e:
         logging.error(f"Error generating keywords with OpenAI: {e}")
-        return [base_keyword]  # 如果失败，返回基础关键字以确保不中断流程
+        return [base_keyword]  # Fallback to the base keyword in case of an error
 
 # YouTube video search function
 async def search_youtube_videos(keyword, youtube_api_key, top_k):
@@ -64,7 +81,7 @@ async def search_youtube_videos(keyword, youtube_api_key, top_k):
 
     try:
         request = youtube.search().list(part="snippet", q=keyword, maxResults=top_k)
-        response = request.execute()  # 注意，这里是同步方法，不能用 await
+        response = request.execute()  # Synchronous method, cannot be awaited
 
         videos = []
         for item in response['items']:
@@ -87,7 +104,7 @@ async def search_youtube_videos(keyword, youtube_api_key, top_k):
         return []
 
 # Function to fetch and aggregate video metadata
-def aggregate_video_metadata(videos, youtube_api_key):
+def aggregate_video_metadata(videos, youtube_api_key, conn=None):
     logging.info("Aggregating video metadata.")
     
     if not videos:
@@ -116,6 +133,16 @@ def aggregate_video_metadata(videos, youtube_api_key):
             total_likes += metadata['like_count']
             total_comments += metadata['comment_count']
 
+            # Log the metadata aggregation process
+            if conn:
+                store_ai_interaction(
+                    conn,
+                    video,  # Input (video data)
+                    metadata,  # Output (aggregated metadata)
+                    "metadata_aggregation",  # Type of interaction
+                    datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # Timestamp
+                )
+
     num_videos = len(video_metadata_list)
     aggregated_metadata = {
         'total_views': total_views,
@@ -134,7 +161,7 @@ def fetch_video_metadata(video_id, youtube_api_key):
     try:
         youtube = get_youtube_service(youtube_api_key)
         request = youtube.videos().list(part="snippet,statistics", id=video_id)
-        response = request.execute()  # 同步方法调用
+        response = request.execute()  # Synchronous method call
 
         if not response['items']:
             logging.warning(f"No metadata found for video ID {video_id}")
@@ -150,7 +177,7 @@ def fetch_video_metadata(video_id, youtube_api_key):
         logging.error(f"Failed to fetch metadata for video ID {video_id}: {e}")
         return None
 
-# 主流程：提取视频并聚合元数据
+# Main process: search and aggregate video data
 async def search_and_aggregate(keyword, top_k, youtube_api_key):
     # Step 1: Search YouTube videos
     videos = await search_youtube_videos(keyword, youtube_api_key, top_k)
