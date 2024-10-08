@@ -86,8 +86,8 @@ async def interpret_transcript(transcript, topic):
         )
 
         # Use OpenAI chat completion API with gpt-4o-mini model
-        response = openai_client.chat.completions.create(
-            model="gpt-4o-mini",  # Use gpt-4o-mini model
+        response = await openai_client.chat.completions.create(
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": system_role_prompt},
                 {"role": "user", "content": transcript}
@@ -96,28 +96,43 @@ async def interpret_transcript(transcript, topic):
             temperature=0.5
         )
 
-        summary = response.choices[0].message["content"].strip()
-        logging.info(f"Transcript interpretation completed: {summary}")
-        return summary
+        # Check if the response is properly structured
+        if response and 'choices' in response and len(response.choices) > 0:
+            # Handle the case where message is present
+            if "message" in response.choices[0]:
+                summary = response.generations[0].message.get("content", "").strip()
+                logging.info(f"Transcript interpretation completed: {summary}")
+                return summary
+            else:
+                logging.error("Response does not contain a valid 'message' key.")
+                return None
+        else:
+            logging.error("Unexpected OpenAI API response structure.")
+            return None
     
     except Exception as e:
         logging.error(f"Failed to interpret transcript: {e}")
         return None
 
-# Main function to process the entire flow: download, transcribe, and interpret
+# Main function to process the entire flow: fetch transcript or fallback to audio, transcribe, and interpret
 async def process_video_transcript(video_id, topic, conn):
     try:
-        # Step 1: Download the audio
-        audio_path = await download_audio(video_id)
-        if not audio_path:
-            logging.error(f"Audio download failed for video ID: {video_id}")
-            return None
-
-        # Step 2: Transcribe the audio to text
-        transcript = await transcribe_audio(audio_path)
+        # Step 1: Attempt to fetch the transcript first
+        transcript = await fetch_transcript(video_id)
+        
         if not transcript:
-            logging.error(f"Transcription failed for video ID: {video_id}")
-            return None
+            logging.warning(f"Transcript not available for video ID {video_id}. Falling back to audio transcription.")
+            
+            # Step 2: Download the audio and transcribe it if no transcript was found
+            audio_path = await download_audio(video_id)
+            if not audio_path:
+                logging.error(f"Audio download failed for video ID: {video_id}")
+                return None
+
+            transcript = await transcribe_audio(audio_path)
+            if not transcript:
+                logging.error(f"Transcription failed for video ID: {video_id}")
+                return None
 
         # Step 3: Interpret the transcript using OpenAI's gpt-4o-mini
         interpreted_summary = await interpret_transcript(transcript, topic)
