@@ -1,9 +1,9 @@
 import asyncio
 import logging
 import os
-from tqdm import tqdm
-from dotenv import load_dotenv
 from datetime import datetime
+from dotenv import load_dotenv
+from tqdm import tqdm
 from utils.database import init_db, store_video_metadata, store_comments, update_video_metadata
 from agents.search_agent import multiagent_search
 from agents.critic_agent import critic_agent
@@ -14,15 +14,13 @@ from agents.audio_agent import transcribe_audio_to_summary
 from agents.standardizer_agent import standardizer_agent
 from utils.youtube_fetcher import fetch_all_comments, fetch_video_metadata
 from utils.helper import retry
+import openai  # 确保导入 openai
 
 # Load environment variables
 load_dotenv()
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-# Initialize OpenAI async client (assuming it's initialized within your agents)
-# Note: If the client is initialized in agents, you don't need to initialize it here
 
 # Retry mechanism wrapper for fetching transcripts
 @retry(max_retries=3, delay=2)
@@ -128,7 +126,7 @@ async def process_single_video(video, openai_api_key, keyword, conn, persist_age
         logging.error(f"Error processing video {video_id} at step {step}: {e}")
 
 # Main function to process multiple videos
-async def process_videos(keyword, agent_count, top_k, filter_type, youtube_api_key, openai_api_key, db_path, persist_agent_summaries, full_audio_analysis, dry_run, max_n):
+async def process_videos(keyword, top_k, filter_type, youtube_api_key, openai_api_key, db_path, persist_agent_summaries, full_audio_analysis, dry_run, max_n):
     logging.info("Starting video processing pipeline.")
 
     if dry_run:
@@ -139,30 +137,42 @@ async def process_videos(keyword, agent_count, top_k, filter_type, youtube_api_k
     try:
         step = "brainstorm_keywords"
         # Step 1: Brainstorm and search keyword variations
-        logging.info(f"Brainstorming {max_n} keyword variations with {agent_count} agents.")
-        search_results = await multiagent_search(keyword, agent_count, max_n, top_k, youtube_api_key, openai_api_key, dry_run)
+        logging.info(f"Brainstorming {max_n} keyword variations.")
+        generated_keywords, search_results = await multiagent_search(
+            base_keyword=keyword,
+            max_n=max_n,
+            top_k=top_k,
+            youtube_api_key=youtube_api_key,
+            openai_api_key=openai_api_key,
+            conn=conn,
+            dry_run=dry_run
+        )
 
         if not search_results:
             raise Exception("No search results returned from YouTube API.")
 
+        # For logging purposes, output the generated keywords
+        logging.info(f"Generated keywords: {generated_keywords}")
+
         step = "filter_search_results"
         # Step 2: Filter valid search results
-        valid_search_results = {kw: data for kw, data in search_results.items() if data['videos']}
-        if not valid_search_results:
+        valid_videos = search_results.get('videos', [])
+        if not valid_videos:
             logging.error("No valid search results found with videos.")
             return
 
         step = "critic_agent_ranking"
-        # Step 3: Rank keywords using critic agent
-        logging.info("Starting critic agent to rank topics.")
-        best_keyword, keyword_rankings = await critic_agent(valid_search_results, openai_api_key)
-        if not best_keyword:
-            logging.error("Critic agent did not return a valid best keyword.")
+        # Step 3: Rank videos using critic agent
+        logging.info("Starting critic agent to rank videos.")
+        ranked_videos = await critic_agent(valid_videos, openai_api_key, conn=conn)
+        if not ranked_videos:
+            logging.error("Critic agent did not return valid video rankings.")
             return
 
         step = "process_videos"
-        # Step 4: Process videos under the best keyword
-        filtered_videos = filter_videos(valid_search_results[best_keyword]['videos'], filter_type)
+        # Process ranked videos
+        filtered_videos = filter_videos(ranked_videos, filter_type)
+
         tasks = [
             process_single_video(
                 video,
@@ -187,12 +197,39 @@ async def process_videos(keyword, agent_count, top_k, filter_type, youtube_api_k
 
 # Main entry point
 if __name__ == "__main__":
+    import os
+    from datetime import datetime
+
+    # Set up logging to file
+    # Create logs directory if it doesn't exist
+    if not os.path.exists('logs'):
+        os.makedirs('logs')
+
+    # Generate filename based on current timestamp
+    timestamp = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+    log_filename = os.path.join('logs', f'{timestamp}.log')
+
+    # Create file handler which logs messages
+    file_handler = logging.FileHandler(log_filename)
+    file_handler.setLevel(logging.INFO)
+
+    # Create formatter and add it to the handler
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    file_handler.setFormatter(formatter)
+
+    # Add the handler to the root logger
+    logging.getLogger().addHandler(file_handler)
+
+    load_dotenv()
     youtube_api_key = os.getenv("YOUTUBE_API_KEY")
     openai_api_key = os.getenv("OPENAI_API_KEY")
     persist_agent_summaries = os.getenv("PERSIST_AGENT_SUMMARIES", "true").lower() == "true"
     full_audio_analysis = os.getenv("FULL_AUDIO_ANALYSIS", "false").lower() == "true"
     dry_run = os.getenv("DRY_RUN", "false").lower() == "true"
     max_n = int(os.getenv("MAX_N", "10"))
+    top_k = int(os.getenv("TOP_K", "150"))
+    filter_type = os.getenv("FILTER_TYPE", "relevance")
+    db_path = "youtube_summaries.db"
 
     if not youtube_api_key or not openai_api_key:
         logging.error("API keys not found. Make sure .env file is set correctly and contains both YOUTUBE_API_KEY and OPENAI_API_KEY.")
@@ -202,12 +239,11 @@ if __name__ == "__main__":
         try:
             asyncio.run(process_videos(
                 keyword="virginia fishing",
-                agent_count=5,
-                top_k=5,
-                filter_type="relevance",
+                top_k=top_k,
+                filter_type=filter_type,
                 youtube_api_key=youtube_api_key,
                 openai_api_key=openai_api_key,
-                db_path="youtube_summaries.db",
+                db_path=db_path,
                 persist_agent_summaries=persist_agent_summaries,
                 full_audio_analysis=full_audio_analysis,
                 dry_run=dry_run,
