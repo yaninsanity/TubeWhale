@@ -72,7 +72,7 @@ async def fetch_transcript(video_id):
         transcript = YouTubeTranscriptApi.get_transcript(video_id)
         return " ".join([entry['text'] for entry in transcript])
     except Exception as e:
-        logging.error(f"Failed to fetch transcript for video {video_id}: {e}")
+        logging.warning(f"Failed to fetch transcript for video {video_id}: {e}")
         return None
 
 # Function to interpret the transcript using OpenAI's LLM (gpt-4o-mini)

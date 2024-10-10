@@ -1,12 +1,12 @@
 import asyncio
 import logging
 import os
+import json  # 导入 json 模块
 from datetime import datetime
 from dotenv import load_dotenv
 from tqdm import tqdm
 from utils.database import init_db, store_video_metadata, store_comments, update_video_metadata
 from agents.search_agent import multiagent_search
-from agents.critic_agent import critic_agent
 from agents.transcript_agent import fetch_transcript
 from agents.summarization_agent import gpt_summarizer_agent, chunk_text_by_tokens
 from agents.filter_agent import filter_videos
@@ -57,26 +57,38 @@ async def process_single_video(video, openai_api_key, keyword, conn, persist_age
 
         # Step 2: Fetch transcript or audio summary
         step = "fetch_transcript_or_audio"
-        transcript = await fetch_transcript_with_retry(video_id)
+        try:
+            transcript = await fetch_transcript_with_retry(video_id)
+        except Exception:
+            transcript = None  # Ensure transcript is None if fetching fails
 
         if transcript:
             video['transcript'] = transcript
             video['llm_summary'] = await summarize_with_retry(transcript)  # Summarization step
             video['summary_source'] = 'transcript'
-        elif full_audio_analysis:
-            logging.info(f"No transcript found, attempting audio summarization for {video_id}.")
-            summary = await transcribe_audio_to_summary(video_id, openai_api_key, keyword)
+            logging.info(f"Transcript and LLM summary generated for video {video_id}.")
+        else:
+            logging.info(f"No transcript available for video {video_id}.")
+
+        if full_audio_analysis:
+            logging.info(f'Full audio analysis enabled: {full_audio_analysis}')
+            logging.info(f"Attempting audio summarization for video ID: {video_id}.")
+            summary = await transcribe_audio_to_summary(video_id, keyword, video_metadata)
 
             if summary:
                 video['audio_summary'] = summary
-                video['summary_source'] = 'audio'
+                # 如果存在LLM summary，也可以合并summary_source
+                if 'summary_source' in video:
+                    video['summary_source'] += ', audio'
+                else:
+                    video['summary_source'] = 'audio'
                 logging.info(f"Audio summary generated successfully for video {video_id}.")
+                logging.info(f'Video audio summary collected: {summary}')
             else:
-                logging.error(f"No transcript or audio available for video {video_id}. Skipping.")
-                return  # Exit early if no transcript or audio
+                logging.error(f"No audio summary available for video {video_id}. Skipping audio summarization.")
+                # 不返回，允许继续处理 transcript
         else:
-            logging.error(f"No transcript available for video {video_id}, and full_audio_analysis is disabled. Skipping.")
-            return
+            logging.info(f"Full audio analysis is disabled, skipping audio summarization for video {video_id}.")
 
         # Step 3: Fetch and store comments
         step = "fetch_comments"
@@ -97,35 +109,60 @@ async def process_single_video(video, openai_api_key, keyword, conn, persist_age
         # Step 5: Standardize summary and analyze metadata
         step = "standardize_summary_metadata"
         logging.info(f"Standardizing summary and metadata for video {video_id}")
+        summary = None
         if 'llm_summary' in video and video['llm_summary']:
             standardized_results = await standardizer_agent(video['llm_summary'])
 
             if standardized_results:
                 video['standardized_summary'] = standardized_results
                 logging.info(f"Standardization completed for video {video_id}.")
+                summary = video['standardized_summary']
             else:
                 logging.error(f"Standardization failed for video {video_id}. Using original summary.")
                 video['standardized_summary'] = video['llm_summary']
+                summary = video['llm_summary']
+            logging.info(f'[STEP 5] Standard agent summary: {summary}')
+        
+        if 'audio_summary' in video and video['audio_summary']:
+            standardized_results = await standardizer_agent(video['audio_summary'])
+
+            if standardized_results:
+                video['standardized_summary'] = standardized_results
+                logging.info(f"Standardization completed for audio summary of video {video_id}.")
+                summary = video['standardized_summary']
+            else:
+                logging.error(f"Standardization failed for audio summary of video {video_id}. Using original audio summary.")
+                video['standardized_summary'] = video['audio_summary']
+                summary = video['audio_summary']
+            logging.info(f'[STEP 5] Standard agent summary: {summary}')
         else:
             logging.error(f"No summary available to standardize for video {video_id}.")
 
         # Step 6: Store final metadata into the database
         if not dry_run and persist_agent_summaries and conn:
             video['timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # Add timestamp
-            logging.info(f"llm summary:{(video['llm_summary'])}")
+
+            # 打印调试信息
+            if 'llm_summary' in video:
+                logging.info(f"LLM Summary: {video['llm_summary']}")
+            if 'audio_summary' in video:
+                logging.info(f"Audio Summary: {video['audio_summary']}")
+
+            # 序列化 audio_summary
+            audio_summary_serialized = json.dumps(video.get('audio_summary', {})) if 'audio_summary' in video else None
+
+            # 调用 update_video_metadata 并传递 audio_summary
             update_video_metadata(
                 conn,
                 video_id,
                 video.get('llm_summary', ''),
                 video.get('transcript', ''),
-                video.get('audio_summary', ''),
+                audio_summary_serialized,  # 序列化后的 audio_summary
             )
             logging.info(f"Metadata updated in the database for video {video_id}.")
-
-    except Exception as e:
-        logging.error(f"Error processing video {video_id} at step {step}: {e}")
-
-# Main function to process multiple videos
+    except Exception as e: 
+        logging.error(f'Error during procee video {video_id}, Exception:{e}')
+    # Main function to process multiple videos
 async def process_videos(keyword, top_k, filter_type, youtube_api_key, openai_api_key, db_path, persist_agent_summaries, full_audio_analysis, dry_run, max_n):
     logging.info("Starting video processing pipeline.")
 
@@ -149,7 +186,7 @@ async def process_videos(keyword, top_k, filter_type, youtube_api_key, openai_ap
         )
 
         if not search_results:
-            raise Exception("No search results returned from YouTube API.")
+            raise Exception("No search results {search_results} returned from YouTube API.")
 
         # For logging purposes, output the generated keywords
         logging.info(f"Generated keywords: {generated_keywords}")
@@ -161,18 +198,21 @@ async def process_videos(keyword, top_k, filter_type, youtube_api_key, openai_ap
             logging.error("No valid search results found with videos.")
             return
 
-        step = "critic_agent_ranking"
-        # Step 3: Rank videos using critic agent
-        logging.info("Starting critic agent to rank videos.")
-        ranked_videos = await critic_agent(valid_videos, openai_api_key, conn=conn)
-        if not ranked_videos:
-            logging.error("Critic agent did not return valid video rankings.")
-            return
+        # **移除Critic Agent的调用**
+        # step = "critic_agent_ranking"
+        # # Step 3: Rank videos using critic agent
+        # logging.info("Starting critic agent to rank videos.")
+        # ranked_videos = await critic_agent(valid_videos, openai_api_key, conn=conn)
+        # if not ranked_videos:
+        #     logging.error("Critic agent did not return valid video rankings.")
+        #     return
 
-        step = "process_videos"
-        # Process ranked videos
-        filtered_videos = filter_videos(ranked_videos, filter_type)
+        # **直接处理所有有效视频**
+        ranked_videos = valid_videos  # 不进行排名，仅处理所有视频
 
+        logging.info(f"Total videos to process: {len(ranked_videos)}")
+
+        # Process all videos
         tasks = [
             process_single_video(
                 video,
@@ -183,13 +223,14 @@ async def process_videos(keyword, top_k, filter_type, youtube_api_key, openai_ap
                 full_audio_analysis,
                 dry_run,
                 youtube_api_key
-            ) for video in tqdm(filtered_videos, desc="Processing Videos")
+            ) for video in tqdm(ranked_videos, desc="Processing Videos")
         ]
 
         await asyncio.gather(*tasks)
 
     except Exception as e:
         logging.error(f"Pipeline failed at step {step}: {e}")
+        logging.exception(e)
     finally:
         if conn:
             conn.close()
@@ -220,15 +261,16 @@ if __name__ == "__main__":
     # Add the handler to the root logger
     logging.getLogger().addHandler(file_handler)
 
+    # Load environment variables
     load_dotenv()
     youtube_api_key = os.getenv("YOUTUBE_API_KEY")
     openai_api_key = os.getenv("OPENAI_API_KEY")
     persist_agent_summaries = os.getenv("PERSIST_AGENT_SUMMARIES", "true").lower() == "true"
-    full_audio_analysis = os.getenv("FULL_AUDIO_ANALYSIS", "false").lower() == "true"
+    full_audio_analysis = os.getenv("FULL_AUDIO_ANALYSIS", "true").lower() == "true"
     dry_run = os.getenv("DRY_RUN", "false").lower() == "true"
-    max_n = int(os.getenv("MAX_N", "10"))
-    top_k = int(os.getenv("TOP_K", "150"))
-    filter_type = os.getenv("FILTER_TYPE", "relevance")
+    max_n = int(os.getenv("MAX_N", "5"))
+    top_k = int(os.getenv("TOP_K", "3"))
+    filter_type = os.getenv("FILTER_TYPE", "view_count")
     db_path = "youtube_summaries.db"
 
     if not youtube_api_key or not openai_api_key:
@@ -251,4 +293,5 @@ if __name__ == "__main__":
             ))
         except Exception as e:
             logging.error(f"An error occurred while running the pipeline: {e}")
+            logging.exception(e)
         logging.info("Script execution finished.")

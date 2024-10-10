@@ -1,16 +1,16 @@
-# audio_agent.py
-
 import os
 import logging
 import asyncio
 from openai import AsyncOpenAI
+
 from yt_dlp import YoutubeDL
 from pydub import AudioSegment
 from io import BytesIO
 import json
 from dotenv import load_dotenv
 import sys
-import aiohttp  # Import aiohttp for HTTP requests
+import aiohttp
+import re
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -19,22 +19,26 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 load_dotenv()
 openai_api_key = os.getenv("OPENAI_API_KEY")
 
+# Initialize OpenAI client
+aclient = AsyncOpenAI(api_key=openai_api_key)
 if not openai_api_key:
     logging.error("OpenAI API key not found. Please set it in your environment variables.")
     sys.exit(1)
-aclient = AsyncOpenAI(api_key=openai_api_key)
 
 # Retry decorator
 def retry(max_retries=3, delay=2):
     def decorator(func):
         async def wrapper(*args, **kwargs):
-            for attempt in range(max_retries):
+            for attempt in range(1, max_retries + 1):
                 try:
                     return await func(*args, **kwargs)
                 except Exception as e:
-                    logging.error(f"Error in {func.__name__}: {e}, retrying {attempt + 1}/{max_retries}...")
-                    await asyncio.sleep(delay)
-            raise Exception(f"Failed to complete {func.__name__} after {max_retries} retries.")
+                    if attempt == max_retries:
+                        logging.error(f"Error in {func.__name__}: {e}. Exceeded maximum retries.")
+                        raise
+                    else:
+                        logging.warning(f"Error in {func.__name__}: {e}. Retrying {attempt}/{max_retries}...")
+                        await asyncio.sleep(delay)
         return wrapper
     return decorator
 
@@ -83,7 +87,7 @@ async def download_audio(video_id):
 # Function to split audio into manageable chunks
 def split_audio(audio_path, max_duration_ms=60000):
     try:
-        logging.info(f"Splitting audio {audio_path} into chunks based on max duration {max_duration_ms} ms.")
+        logging.info(f"Splitting audio {audio_path} into chunks of {max_duration_ms} ms.")
         audio = AudioSegment.from_file(audio_path)
         chunks = [audio[i:i + max_duration_ms] for i in range(0, len(audio), max_duration_ms)]
         logging.info(f"Audio split into {len(chunks)} chunks.")
@@ -110,6 +114,7 @@ async def transcribe_audio_chunk(audio_chunk):
             "Authorization": f"Bearer {openai_api_key}",
         }
 
+        # Since the audio data is in memory, we need to provide a file-like object
         form_data = aiohttp.FormData()
         form_data.add_field('file',
                             audio_file,
@@ -134,16 +139,17 @@ async def transcribe_audio_chunk(audio_chunk):
 
 # Function to summarize text using OpenAI
 @retry(max_retries=3, delay=5)
-async def summarize_text(transcript_text, previous_summary, topic):
+async def summarize_text(transcript_text, previous_summary, topic, metadata):
     try:
         # Define system prompt and user message
         messages = [
             {"role": "system", "content": (
-                f"You are an expert content creator whose goal is to produce actionable summaries for guide production.\n"
+                f"You are an expert content creator whose goal is to produce actionable summaries for guide production from.\n"
                 f"Each chunk of text must be summarized with the following in mind:\n"
                 f"- What are the key takeaways and steps that users should know?\n"
                 f"- What insights, tools, or best practices are mentioned?\n"
                 f"- What are the notable challenges and how are they addressed?\n"
+                f"Now Analyze this youtube video content with this {metadata}"
                 f"Focus on the topic: {topic}\n"
                 f"Use the previous summary to maintain context and ensure no important details are missed."
             )},
@@ -151,10 +157,12 @@ async def summarize_text(transcript_text, previous_summary, topic):
         ]
 
         logging.info("Generating summary using OpenAI ChatCompletion.")
-        response = await aclient.chat.completions.create(model="gpt-4",  # Use "gpt-4" if you have access
-        messages=messages,
-        max_tokens=1024,
-        temperature=0.5)
+        response = await aclient.chat.completions.create(
+            model="gpt-4o",  # Corrected model name
+            messages=messages,
+            max_tokens=1024,
+            temperature=0.5
+        )
 
         summary = response.choices[0].message.content.strip()
         logging.info("Summary generated for transcript chunk.")
@@ -165,14 +173,14 @@ async def summarize_text(transcript_text, previous_summary, topic):
         return None
 
 # Function to recursively summarize chunk summaries
-async def recursive_summarize(summaries, topic):
+async def recursive_summarize(summaries, topic, metadata):
     try:
         while len(summaries) > 1:
             new_summaries = []
             for i in range(0, len(summaries), 2):
                 summaries_to_summarize = summaries[i:i+2]
                 combined_summary = "\n\n".join(summaries_to_summarize)
-                summary = await summarize_text(combined_summary, "", topic)
+                summary = await summarize_text(combined_summary, "", topic, metadata)
                 if summary:
                     new_summaries.append(summary)
                 else:
@@ -196,10 +204,11 @@ async def standardize_summary(summary):
 
     logging.info("Starting standardizer agent.")
 
-    # Standardization prompt
+    # Standardization prompt with enforced JSON format
     standardization_prompt = f"""
     You are an expert at organizing and structuring content.
     Your job is to take the following summary and standardize it into an actionable guide format.
+    Ensure that the response is in valid JSON format.
     Focus on:
     - Main topic of the video
     - Key insights or steps users should follow
@@ -221,36 +230,53 @@ async def standardize_summary(summary):
 
     try:
         logging.info("Standardizing summary using OpenAI ChatCompletion.")
-        response = await aclient.chat.completions.create(model="gpt-4",  # Use "gpt-4" if you have access
-        messages=[{"role": "user", "content": standardization_prompt.strip()}],
-        max_tokens=1024,
-        temperature=0.3)
+        response = await aclient.chat.completions.create(
+            model="gpt-4o",  # Corrected model name
+            messages=[{"role": "user", "content": standardization_prompt.strip()}],
+            max_tokens=1024,
+            temperature=0.3
+        )
 
         standardized_summary_raw = response.choices[0].message.content.strip()
 
-        # Try to parse the output as JSON
+        # Attempt to extract JSON from the response
         try:
-            standardized_summary = json.loads(standardized_summary_raw)
-            logging.info("Standardization completed successfully.")
+            # Use regex to find the JSON block
+            json_match = re.search(r'\{.*\}', standardized_summary_raw, re.DOTALL)
+            if json_match:
+                standardized_summary_json = json_match.group(0)
+                standardized_summary = json.loads(standardized_summary_json)
+                logging.info("Standardization completed successfully.")
 
-            # Ensure all expected keys are present
-            required_fields = ["main_topic", "key_insights", "recommended_tools", "best_practices", "challenges_and_advice"]
-            for field in required_fields:
-                if field not in standardized_summary:
-                    standardized_summary[field] = "N/A"
+                # Ensure all expected keys are present
+                required_fields = ["main_topic", "key_insights", "recommended_tools", "best_practices", "challenges_and_advice"]
+                for field in required_fields:
+                    if field not in standardized_summary:
+                        standardized_summary[field] = "N/A"
 
-            return standardized_summary
-        except json.JSONDecodeError:
-            logging.error("Failed to parse response as JSON. Returning raw text.")
+                return standardized_summary
+            else:
+                logging.error("No JSON found in the response. Returning raw text.")
+                return standardized_summary_raw  # Return raw text if JSON not found
+
+        except json.JSONDecodeError as json_err:
+            logging.error(f"JSON decoding failed: {json_err}. Returning raw text.")
             return standardized_summary_raw  # Return raw text if parsing fails
 
     except Exception as e:
         logging.error(f"Error during standardization: {e}")
         return None
 
-# Main function to process the audio and generate standardized summary
-async def transcribe_audio_to_summary(video_id, topic):
+# Function to process the audio and generate standardized summary
+async def transcribe_audio_to_summary(video_id, topic, metadata=None):
     try:
+        # Step 0: Check if metadata exists
+        if metadata is None:
+            logging.error(f"Metadata is missing for video ID: {video_id}. Skipping processing.")
+            return None
+
+        # You can add more checks on metadata here if needed
+
         # Step 1: Download audio file
         audio_path = await download_audio(video_id)
         if not audio_path or not os.path.exists(audio_path):
@@ -276,7 +302,7 @@ async def transcribe_audio_to_summary(video_id, topic):
                 continue
 
             # Summarize chunk with context from previous summary
-            summary = await summarize_text(transcript, previous_summary, topic)
+            summary = await summarize_text(transcript, previous_summary, topic, metadata)
             if summary:
                 chunk_summaries.append(summary)
                 previous_summary = summary  # Update previous summary for context
@@ -289,7 +315,7 @@ async def transcribe_audio_to_summary(video_id, topic):
 
         # Step 4: Recursively summarize chunk summaries to get a final summary
         logging.info("Combining chunk summaries into final summary.")
-        final_summary = await recursive_summarize(chunk_summaries, topic)
+        final_summary = await recursive_summarize(chunk_summaries, topic, metadata)
         if not final_summary:
             logging.error(f"Failed to generate final summary for video ID: {video_id}")
             return None
@@ -300,8 +326,8 @@ async def transcribe_audio_to_summary(video_id, topic):
             logging.error(f"Failed to standardize summary for video ID: {video_id}")
             return None
 
-        # Step 6: Clean up downloaded audio file
-        # Optionally, you can keep the audio file for caching purposes
+        # Step 6: Clean up downloaded audio file (optional)
+        # Uncomment the following lines if you want to remove the audio file after processing
         # if audio_path and os.path.exists(audio_path):
         #     os.remove(audio_path)
         #     logging.info(f"Removed audio file {audio_path} after processing.")
@@ -314,17 +340,25 @@ async def transcribe_audio_to_summary(video_id, topic):
 
 # Main function for unit testing
 if __name__ == "__main__":
-    # Get video ID and topic from command line arguments
-    if len(sys.argv) < 3:
-        print("Usage: python audio_agent.py <video_id> <topic>")
+    # Get video ID, topic, and metadata from command line arguments
+    if len(sys.argv) < 4:
+        print("Usage: python audio_agent.py <video_id> <topic> <metadata_json>")
+        print("Example: python audio_agent.py s1JZ5zCl1A0 'Virginia fishing tips' '{\"title\": \"How to Fish\", \"description\": \"...\"}'")
         sys.exit(1)
 
     video_id = sys.argv[1]
     topic = sys.argv[2]
+    metadata_json = sys.argv[3]
+
+    # Parse metadata JSON
+    try:
+        metadata = json.loads(metadata_json)
+    except json.JSONDecodeError:
+        logging.error("Invalid metadata JSON provided.")
 
     # Run the main function
     async def main():
-        result = await transcribe_audio_to_summary(video_id, topic)
+        result = await transcribe_audio_to_summary(video_id, topic, metadata)
         if result:
             print("Standardized Summary:")
             print(json.dumps(result, indent=4, ensure_ascii=False))

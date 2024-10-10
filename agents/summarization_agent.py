@@ -46,7 +46,7 @@ def chunk_text_by_tokens(text, max_tokens=3000, overlap=200):
 
 # 带有上下文维护的摘要代理
 @async_retry(max_retries=3, delay=2)
-async def gpt_summarizer_agent(long_text, *, model="gpt-4"):
+async def gpt_summarizer_agent(long_text, *, model="gpt-4o-mini"):
     logging.info("Starting summarization agent.")
 
     # 将文本分割为可管理的块
@@ -102,7 +102,7 @@ async def gpt_summarizer_agent(long_text, *, model="gpt-4"):
 
 # 用于结构化指南输出的标准化代理
 @async_retry(max_retries=3, delay=2)
-async def standardizer_agent(summary, *, model="gpt-4"):
+async def standardizer_agent(summary, *, model="gpt-4o-mini"):
     if not summary:
         logging.error("Summary is missing. Skipping standardization.")
         return None
