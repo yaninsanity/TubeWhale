@@ -1,12 +1,20 @@
-# TubeWhale
+# TubeWhale 
+
+### Project Status: 🟢
+
+Currently the pipeline is runable, however there is still a handful of engineering works to be addressed to ensure the robustness of the pipeline.
+
+
 ![Logo](logo.png)
+
+![star-history](star-history-2024109.png)
+
 ### TubeWhale – An Enhanced AI Product Documentation for Multi-Agent Keyword Brainstorming and Video Analysis
 
 ## 1. Introduction:
 TubeWhale is an open-source AI-powered multi-agent video processing system designed to search for and analyze YouTube videos efficiently. By leveraging keyword brainstorming, video metadata collection, and multimodal analysis (including audio transcription), the system provides intelligent summaries and insights into video content. It is especially suited for research and use cases where automatic topic generation and summarization are essential.
 
-Key Differentiator: The system uses multiple agents to brainstorm topic keywords and searches for YouTube videos based on those keywords. The number of videos analyzed is controlled by the user, ensuring precision and flexibility.
-
+Key Differentiator: TubeWhale employs multiple AI agents to brainstorm topic keywords and searches for YouTube videos based on those keywords. Users have control over the number of videos analyzed, ensuring precision and flexibility tailored to their specific needs.
 
 ### Flow Chart
 ![flow-chart](flow-chart.png)
@@ -24,84 +32,124 @@ Example keyword: **"Virginia fishing"** – this example will be used throughout
 When running the system, the user can customize various parameters that control how the pipeline operates:
 
 ```bash
-python3 main.py --keyword="virginia fishing" --agent_count=5 --max_n=10 --top_k=5 --filter_type="relevance" --full_audio_analysis=true --dry_run=false
+python3 main.py 
 ```
 
-## Parameter Explanations:
---keyword: (Required)
-The base search keyword input by the user. The system uses this keyword as a starting point for brainstorming variations.
-Example: "virginia fishing".
+You will receive a database with max top_K * max_n videos. This videos list will be deduplicated.
 
---agent_count: (Required)
-Defines the number of agents that will actively brainstorm keyword variations. Each agent can generate multiple keyword ideas based on different strategies.
-Relation to max_n: agent_count should always be less than or equal to max_n, as each agent will brainstorm a subset of the total topics.
-Example: If agent_count=5, the system will select 5 agents to generate keyword variations.
+## Key Concepts and Configuration & Parameter Explanations:
 
---max_n: (Required)
-This is the total number of keyword topics brainstormed across all agents combined. It controls the size of the keyword pool from which the system selects the best topics.
-Relation to agent_count: The system will distribute the generation of these max_n keywords among agent_count agents. Each agent is responsible for brainstorming a portion of these topics.
-Example: max_n=10 means the system will generate 10 keyword topics across all agents.
+### TubeWhale is highly configurable through environment variables. Below are the key parameters and their explanations to help you tailor the system to your requirements.
 
---top_k: (Required)
-Specifies the number of YouTube videos to retrieve and analyze for each selected keyword topic. These are the top k videos based on criteria like relevance or views.
-Example: With top_k=5, the system will analyze the top 5 videos for each brainstormed keyword.
+Environment Variable Configuration
+Create a .env file in the project root directory and populate it with the necessary configurations:
+```bash
+# .env file
+YOUTUBE_API_KEY=<your-api-key>
+OPENAI_API_KEY=<your-api-key>
+FULL_AUDIO_ANALYSIS=true
+KEYWORD='Arizona Fishing'
+PERSIST_AGENT_SUMMARIES=true
+DRY_RUN=false
+MAX_N=10
+TOP_K=5
+FILTER_TYPE="view_count"
+DB_PATH="youtube_summaries.db"
 
---filter_type: (Optional, Default="relevance")
+```
+
+## System Env Breakdown:
+
+Parameter Explanations
+
+### KEYWORD (Required)
+Description:
+The base search keyword input by the user. TubeWhale uses this keyword as a starting point to generate keyword variations.
+Example:
+KEYWORD='Arizona Fishing'
+
+### MAX_N (Required)
+Description:
+The total number of keyword variations to generate.
+Example:
+MAX_N=10 means TubeWhale will generate 10 keyword variations.
+
+### TOP_K (Required)
+Description:
+Specifies the number of YouTube videos to retrieve and analyze for each selected keyword topic.
+Example:
+TOP_K=5 means the system will analyze the top 5 videos for each brainstormed keyword.
+
+### FILTER_TYPE (Optional, Default="relevance") --❌ only support views for now [🙋need to fix]
+Description:
 Controls the filtering method applied to the YouTube search results before they are passed for further analysis.
-Values: "relevance", "views", "likes", etc.
-Example: If filter_type="relevance", the top-k videos are selected based on YouTube's relevance algorithm.
+Values:
+"relevance", "views", "likes", etc.
+Example:
+FILTER_TYPE="relevance" selects videos based on YouTube's relevance algorithm.
 
---full_audio_analysis: (Optional, Default=false)
-This flag controls whether the system will automatically use audio transcription if no transcript is available for a video.
-true: The system will attempt to transcribe the video's audio using Whisper if no transcript is found.
-false: Only transcripts will be used, and if a transcript is missing, the video will be skipped.
-Example: full_audio_analysis=true ensures that audio transcription is used if no transcript exists.
+### FULL_AUDIO_ANALYSIS (Optional, Default=true)
+Description:
+Determines whether the system will attempt to transcribe the video's audio using Whisper if no transcript is available.
+Values:
+true, false
+Example:
+FULL_AUDIO_ANALYSIS=true ensures that audio transcription is used if no transcript exists.
 
---dry_run: (Optional, Default=false)
-This flag controls whether the system will actually make API calls or just simulate the process.
-true: The system runs without contacting external APIs (YouTube, OpenAI). This is useful for testing configurations without incurring costs or API limits.
-false: The system makes full API calls and persists data.
-Example: dry_run=true means the system will simulate the pipeline but won't interact with APIs or store data.
+### DRY_RUN (Optional, Default=false)
+Description:
+Controls whether the system will actually make API calls or just simulate the process.
+Values:
+true, false
+Example:
+DRY_RUN=true simulates the pipeline without interacting with APIs or storing data.
 
---persist_agent_summaries: (Optional, Default=true)
-This flag controls whether the system should store both transcript-based summaries and agent-based summaries (e.g., audio-based summaries).
-true: The system will persist all generated summaries (both transcript and agent-based).
-false: Only transcript-based summaries will be persisted.
-Example: With persist_agent_summaries=false, only transcript-based summaries will be stored.
+### PERSIST_AGENT_SUMMARIES (Optional, Default=true)
+Description:
+Determines whether the system should store both transcript-based summaries and agent-based summaries (e.g., audio-based summaries).
+Values:
+true, false
+Example:
+PERSIST_AGENT_SUMMARIES=false stores only transcript-based summaries.
+
+### DB_PATH (Optional, Default="youtube_summaries.db")
+
+Description:
+The path to the SQLite database file where data will be stored.
+Example:
+DB_PATH="youtube_summaries.db"
 
 
 ## 2. Environment Setup
 Requirements
 Python Version >=3.11.x
 ```bash
+git clone https://github.com/yaninsanity/TubeWhale.git
+cd TubeWhale
 python3.11 -m venv venv
 source venv/bin/activate
 pip install pip --upgrade
 pip install -r requirements.txt
 python3 main.py
 ```
-brew install ffmpeg  # or apt install ffmpeg for Linux  <todo:unsure if needed yet>
+brew install ffmpeg  
+# sudo apt install ffmpeg      --  for Linux user
  
-Make sure to set up the `.env` file with your YouTube and OpenAI API keys:
+Make sure to set up the `.env` file with your YouTube and OpenAI API keys and System Param:
 ```bash
 YOUTUBE_API_KEY=<your-youtube-api-key>
 OPENAI_API_KEY=<your-openai-api-key>
+TOP_K=<how-many-videos-under-under-the-keyword-list>
+MAX_N=<how-many-topic-variations-you-want-system-helps-to-brainstorm>
 ```
 
- Usage Example
+# Usage Example
 To run the system with your desired parameters:
 ```bash
-python3 main.py --keyword="virginia fishing" --agent_count=5 --max_n=10 --top_k=5 --filter_type="relevance" --full_audio_analysis=true --dry_run=false
+python3 main.py 
 ```
 
-Example Breakdown:
---keyword="virginia fishing": The search keyword provided by the user.
---agent_count=5: Five agents will brainstorm topic variations.
---max_n=10: A total of 10 keyword variations will be brainstormed.
---top_k=5: For each brainstormed keyword, the top 5 YouTube videos will be analyzed.
---filter_type="relevance": YouTube search results will be filtered by relevance.
---full_audio_analysis=true: The system will attempt to transcribe audio if no transcript is available.
---dry_run=false: The system will fully execute and persist the results, including API interactions.
+
 
 ## 4. Additional Features
 Brainstorming Agent: Agents collaborate to brainstorm keyword variations based on the initial keyword.
@@ -120,13 +168,32 @@ The database schema includes several tables:
 ## 6. Contributing
 We welcome contributions from the open-source community. Here’s how you can contribute:
 
-Reporting Bugs:
-If you encounter any issues while using TubeWhale, please open an issue on GitHub with a clear description of the bug and steps to reproduce it.
+### Reporting Bugs[🪲]:
+If you encounter any issues while using TubeWhale, please open an issue on GitHub with following:
+- a clear description of the bug and steps to reproduce it.
+- The way you think which module goes wrong. Any traceback?
 
-Pull Requests:
-Fork the repository.
-Create a new branch for your feature or bugfix.
+### Pull Requests:
+Fork the repository and create a new branch for your feature [🚩] or bugfix [🪲🔫] .
+
 Commit your changes with clear and descriptive messages.
 Push your branch to your forked repository.
-Open a pull request describing the changes made.
-Please ensure all code passes existing tests and includes new tests as necessary.
+Open a pull request describing the changes made. I will review when if I have the time 👀
+
+## 7. Donation Polygon
+
+###  😊 I will apprecatie if you show your love or just buy me a cup of coffee ☕️.  
+![Polygon](image.png)
+
+
+# 8. License
+This project is licensed under the [MIT](https://mit-license.org/) License.
+
+# 9. Contact
+For any inquiries or support, please contact: admin@jl-blog.com
+with following header format: [TubeWhale]「Support/Question」______
+
+# 10. Citing TubeWhale
+
+If you use TubeWhale in your research or data collection, please consider citing our project to acknowledge our efforts. Proper citation helps support the continued development and maintenance of open-source tools.
+

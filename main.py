@@ -263,7 +263,8 @@ if __name__ == "__main__":
 
     # Load environment variables
     load_dotenv()
-    youtube_api_key = os.getenv("YOUTUBE_API_KEY")
+    keyword=os.getenv("KEYWORD")
+    youtube_api_key = os.getenv("YOUTUBE_API_KEY") 
     openai_api_key = os.getenv("OPENAI_API_KEY")
     persist_agent_summaries = os.getenv("PERSIST_AGENT_SUMMARIES", "true").lower() == "true"
     full_audio_analysis = os.getenv("FULL_AUDIO_ANALYSIS", "true").lower() == "true"
@@ -280,7 +281,7 @@ if __name__ == "__main__":
         logging.info("Starting the video processing script...")
         try:
             asyncio.run(process_videos(
-                keyword="virginia fishing",
+                keyword=keyword,
                 top_k=top_k,
                 filter_type=filter_type,
                 youtube_api_key=youtube_api_key,
