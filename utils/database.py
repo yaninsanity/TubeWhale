@@ -86,7 +86,7 @@ def store_video_metadata(conn, video_metadata):
     video_metadata['comment_count'] = int(video_metadata.get('comment_count', 0)) or 0
 
     # 计算 weighted_score：这里的公式可以自定义
-    video_metadata['weighted_score'] = (video_metadata['view_count'] * 0.1) + (video_metadata['like_count'] * 0.5) + (video_metadata['comment_count'] * 0.4)
+    video_metadata['weighted_score'] = round((video_metadata['view_count'] * 0.1) + (video_metadata['like_count'] * 0.5) + (video_metadata['comment_count'] * 0.4), 2)
 
     logging.info(f"Storing metadata for video ID: {video_metadata['id']}")
     try:
