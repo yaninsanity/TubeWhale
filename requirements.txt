@@ -12,3 +12,4 @@ whisper
 youtube_dl
 yt-dlp
 pydub
+aiolimiter

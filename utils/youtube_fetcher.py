@@ -57,7 +57,6 @@ def fetch_video_metadata(video_id, youtube_api_key):
 
 # 抓取所有评论，包括回复
 @retry(max_retries=5, delay=2)
-@retry(max_retries=5, delay=2)
 def fetch_all_comments(video_id, youtube_api_key):
     youtube = get_youtube_service(youtube_api_key)
     logging.info(f"Fetching comments for video ID: {video_id}")
