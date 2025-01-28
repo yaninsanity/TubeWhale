@@ -2,6 +2,7 @@
 
 import logging
 import asyncio
+import ssl
 from openai import AsyncOpenAI
 from googleapiclient.errors import HttpError
 from utils.youtube_api import get_youtube_service
@@ -37,23 +38,53 @@ if not openai_api_key:
     logging.error("OpenAI API key not found. Please set OPENAI_API_KEY in your environment variables.")
     sys.exit(1)
 
+# -- SSL Self-Healing Globals --
+openai_unverified = False
+youtube_unverified = False
+
 # Initialize OpenAI client
 aclient = AsyncOpenAI(api_key=openai_api_key)
 
-# Initialize single YouTube Data API client
+# Initialize single YouTube Data API client (may rebuild on SSL error)
 youtube_service = get_youtube_service(youtube_api_key)
 
-# Initialize ThreadPoolExecutor with a limited number of workers to prevent excessive concurrency
+# Initialize ThreadPoolExecutor with a limited number of workers
 executor = ThreadPoolExecutor(max_workers=3)  # Adjust based on your system
 
 # Semaphore to limit concurrency
 semaphore = Semaphore(3)  # Adjust based on your system and API rate limits
 
-# Rate limiter: e.g., max 15 requests per second
+# Rate limiter (e.g., max 15 requests per second)
 rate_limiter = AsyncLimiter(max_rate=15, time_period=1)
 
 # Flag to indicate if quota is exceeded
 quota_exceeded = False
+
+# ------------------
+# Helper: Build an unverified YouTube service for SSL fallback
+# ------------------
+from googleapiclient.discovery import build
+from googleapiclient.http import build_http
+
+def build_unverified_youtube_service(api_key):
+    # WARNING: disabling SSL verification is insecure.
+    # Only use as a last resort fallback.
+    unverified_context = ssl._create_unverified_context()
+    http = build_http()
+    http.ssl_context = unverified_context
+    logging.warning("Using unverified SSL context for YouTube. This is insecure.")
+    return build("youtube", "v3", developerKey=api_key, http=http)
+
+# ------------------
+# Helper: Turn off OpenAI SSL verification (Insecure fallback)
+# ------------------
+import openai
+
+def disable_openai_ssl_verification():
+    global openai_unverified
+    openai.verify_ssl = False
+    openai_unverified = True
+    logging.warning("Disabled OpenAI SSL verification. This is insecure.")
 
 # Retry decorator with exponential backoff
 def retry(max_retries=3, delay=2, backoff_factor=2, exceptions=(Exception,)):
@@ -96,6 +127,8 @@ async def keyword_generator_agent(base_keyword, max_n, api_key, conn=None):
     """
     logging.info(f"Generating up to {max_n} variations for base keyword: '{base_keyword}'")
 
+    global openai_unverified
+
     try:
         # Define system prompt and user message
         messages = [
@@ -111,12 +144,25 @@ async def keyword_generator_agent(base_keyword, max_n, api_key, conn=None):
 
         logging.info(f"Sending prompt to OpenAI API for keyword generation.")
 
-        response = await aclient.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=messages,
-            max_tokens=150,
-            temperature=0.7
-        )
+        # Local fallback attempt if we get SSLError
+        attempt_done = False
+        while not attempt_done:
+            try:
+                response = await aclient.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=messages,
+                    max_tokens=150,
+                    temperature=0.7
+                )
+                attempt_done = True
+            except SSLError as ssl_err:
+                logging.error(f"SSL error when communicating with OpenAI: {ssl_err}")
+                # If we haven't disabled SSL yet for openAI, do so and retry
+                if not openai_unverified:
+                    disable_openai_ssl_verification()
+                else:
+                    # Already disabled, still failing -> raise
+                    raise
 
         content = response.choices[0].message.content.strip()
         generated_keywords = content.split("\n")
@@ -157,7 +203,7 @@ async def search_youtube_videos(keyword, youtube_api_key, top_k, timeout=30):
     Returns:
         list: List of video details dictionaries.
     """
-    global quota_exceeded
+    global quota_exceeded, youtube_service, youtube_unverified
     if quota_exceeded:
         logging.error("Quota has been exceeded. Skipping further YouTube searches.")
         return []
@@ -192,10 +238,19 @@ async def search_youtube_videos(keyword, youtube_api_key, top_k, timeout=30):
                 )
             except asyncio.TimeoutError as e:
                 logging.warning(f"Timeout during search request for keyword '{keyword}': {e}")
+                logging.warning("This may be related to network issues or SSL certificate problems.")
                 raise e  # Will be caught by retry decorator
             except SSLError as e:
                 logging.error(f"SSL error during search request for keyword '{keyword}': {e}")
-                raise e  # Will be caught by retry decorator
+                logging.error("Attempting a fallback to an unverified SSL context.")
+                if not youtube_unverified:
+                    youtube_service = build_unverified_youtube_service(youtube_api_key)
+                    youtube_unverified = True
+                    youtube = youtube_service
+                    # Re-do this iteration immediately:
+                    continue
+                else:
+                    raise e
             except HttpError as e:
                 error_content = e.content.decode('utf-8') if e.content else 'No content'
                 if 'quotaExceeded' in str(e):
@@ -256,7 +311,7 @@ async def get_videos_statistics(youtube_api_key, video_ids, timeout=30):
     Returns:
         dict: Mapping of video IDs to their statistics.
     """
-    global quota_exceeded
+    global quota_exceeded, youtube_service, youtube_unverified
     if quota_exceeded:
         logging.error("Quota has been exceeded. Skipping fetching video statistics.")
         return {}
@@ -268,7 +323,8 @@ async def get_videos_statistics(youtube_api_key, video_ids, timeout=30):
         statistics_map = {}
         batch_size = 50  # YouTube API limit per request
 
-        for i in range(0, len(video_ids), batch_size):
+        i = 0
+        while i < len(video_ids):
             batch_ids = video_ids[i:i + batch_size]
 
             def make_videos_request():
@@ -284,10 +340,18 @@ async def get_videos_statistics(youtube_api_key, video_ids, timeout=30):
                 )
             except asyncio.TimeoutError as e:
                 logging.warning(f"Timeout during videos.list request for batch {batch_ids}: {e}")
+                logging.warning("This may be related to network issues or SSL certificate problems.")
                 raise e  # Will be caught by retry decorator
             except SSLError as e:
                 logging.error(f"SSL error during videos.list request for batch {batch_ids}: {e}")
-                raise e  # Will be caught by retry decorator
+                logging.error("Attempting fallback to unverified SSL context.")
+                if not youtube_unverified:
+                    youtube_service = build_unverified_youtube_service(youtube_api_key)
+                    youtube_unverified = True
+                    youtube = youtube_service
+                    continue  # re-try this batch
+                else:
+                    raise e
             except HttpError as e:
                 error_content = e.content.decode('utf-8') if e.content else 'No content'
                 if 'quotaExceeded' in str(e):
@@ -296,14 +360,17 @@ async def get_videos_statistics(youtube_api_key, video_ids, timeout=30):
                     raise e  # Stop further processing
                 elif 'videoNotFound' in str(e):
                     logging.error(f"One or more videos not found during videos.list request: {error_content}")
-                    continue  # Skip this batch
+                    i += batch_size  # skip this batch
+                    continue
                 else:
                     logging.error(f"HTTP Error during videos.list request: {error_content}")
-                    continue  # Skip this batch
+                    i += batch_size  # skip this batch
+                    continue
             except Exception as e:
                 logging.error(f"Unexpected error during videos.list request for batch {batch_ids}: {e}")
                 logging.exception(e)
-                continue  # Skip this batch
+                i += batch_size  # skip this batch
+                continue
 
             # Parse videos_response
             for video in videos_response.get('items', []):
@@ -321,6 +388,8 @@ async def get_videos_statistics(youtube_api_key, video_ids, timeout=30):
                     logging.error(f"ValueError while parsing statistics for video '{vid}': {ve}")
                 except Exception as ex:
                     logging.error(f"Unexpected error while parsing statistics for video '{vid}': {ex}")
+
+            i += batch_size
 
         logging.info(f"Fetched statistics for {len(statistics_map)} videos.")
         return statistics_map
@@ -473,6 +542,7 @@ if __name__ == "__main__":
             logging.error(f"HTTP Error encountered in main: {e}")
         except SSLError as e:
             logging.error(f"SSL Error encountered in main: {e}")
+            logging.error("Please ensure your certificates are installed correctly or update them.")
         except Exception as e:
             logging.error(f"Unexpected error encountered in main: {e}")
 
