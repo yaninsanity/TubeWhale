@@ -35,7 +35,9 @@ async def log_api_response(func, *args, **kwargs):
 
 def print_startup_banner():
     banner = r"""
-tubewhale
+Author Github: @Yaninsanity 
+Follow me: https://github.com/yaninsanity/
+Produced by Eclipzion Tech Squad 2025®
 ╔════╗╔╗╔╗╔══╗─╔═══╗╔╗╔╗╔╗╔╗╔╗╔══╗╔╗──╔═══╗
 ╚═╗╔═╝║║║║║╔╗║─║╔══╝║║║║║║║║║║║╔╗║║║──║╔══╝
 ──║║──║║║║║╚╝╚╗║╚══╗║║║║║║║╚╝║║╚╝║║║──║╚══╗
