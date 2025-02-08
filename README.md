@@ -128,11 +128,14 @@ git clone https://github.com/yaninsanity/TubeWhale.git
 cd TubeWhale
 python3.11 -m venv venv
 source venv/bin/activate
+# install torch cpu 
+pip3 install --pre torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/nightly/cpu
 pip install pip --upgrade
 pip install -r requirements.txt
 python3 main.py
 ```
 brew install ffmpeg  
+
 # sudo apt install ffmpeg      --  for Linux user
  
 Make sure to set up the `.env` file with your YouTube and OpenAI API keys and System Param:

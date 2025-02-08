@@ -18,7 +18,7 @@ from agents.filter_agent import filter_videos
 from agents.audio_agent import transcribe_audio_to_summary
 from agents.standardizer_agent import standardizer_agent
 from utils.youtube_fetcher import fetch_all_comments, fetch_video_metadata
-from utils.helper import retry
+from utils.helper import retry, print_startup_banner
 import openai
 
 # -------------------------------------------------------------------------------
@@ -42,32 +42,36 @@ file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 file_handler.setFormatter(file_formatter)
 logging.getLogger().addHandler(file_handler)
 
-# 限制并发量
-semaphore = asyncio.Semaphore(1)
+# 全局信号量（默认值，稍后由 CLI 参数覆盖）
+semaphore = None
 
 # -------------------------------------------------------------------------------
-# 命令行参数解析函数（可选）
+# 命令行参数解析函数
 # -------------------------------------------------------------------------------
 def parse_cli_arguments():
     """
-    如果不想用命令行参数覆盖 .env，可删除此函数或不用它。
+    解析命令行参数，可用于覆盖 .env 中的默认值。
     """
     import argparse
-    parser = argparse.ArgumentParser(description="YouTube Summarization Pipeline")
+    parser = argparse.ArgumentParser(
+        description="YouTube Summarization Pipeline",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
 
     parser.add_argument("--keyword", type=str, help="基础搜索关键词；若不提供则使用 .env 中 KEYWORD")
-    parser.add_argument("--top_k", type=int, help="每个关键词变体要抓取的视频数量，默认从 .env 中读取TOP_K")
-    parser.add_argument("--filter_type", type=str, help="过滤和排序搜索结果的方式（如view_count）")
-    parser.add_argument("--youtube_api_key", type=str, help="YouTube Data API Key；若不提供则从 .env 中读取YOUTUBE_API_KEY")
-    parser.add_argument("--openai_api_key", type=str, help="OpenAI API Key；若不提供则从 .env 中读取OPENAI_API_KEY")
+    parser.add_argument("--top_k", type=int, help="每个关键词变体要抓取的视频数量，默认从 .env 中读取 TOP_K")
+    parser.add_argument("--filter_type", type=str, help="过滤和排序搜索结果的方式（如 view_count）")
+    parser.add_argument("--youtube_api_key", type=str, help="YouTube Data API Key；若不提供则从 .env 中读取 YOUTUBE_API_KEY")
+    parser.add_argument("--openai_api_key", type=str, help="OpenAI API Key；若不提供则从 .env 中读取 OPENAI_API_KEY")
     parser.add_argument("--db_path", type=str, help="数据库路径；默认从 .env 中读取 DB_PATH")
-    parser.add_argument("--persist_agent_summaries", action="store_true", help="是否持久化存储agent结果；若加上此标志则为True")
-    parser.add_argument("--no_persist_agent_summaries", action="store_true", help="若加上此标志则显式设为False（优先级高于--persist_agent_summaries）")
-    parser.add_argument("--full_audio_analysis", action="store_true", help="是否对音频进行完整分析；若加上此标志则为True")
-    parser.add_argument("--no_full_audio_analysis", action="store_true", help="若加上此标志则显式设为False（优先级高于--full_audio_analysis）")
-    parser.add_argument("--dry_run", action="store_true", help="若加上此标志，则跳过外部API并不写数据库")
-    parser.add_argument("--no_dry_run", action="store_true", help="显式设dry_run为False（优先级高于--dry_run）")
-    parser.add_argument("--max_n", type=int, help="多智能体生成多少个关键词变体；默认从 .env 中读取MAX_N")
+    parser.add_argument("--persist_agent_summaries", action="store_true", help="是否持久化存储 agent 结果；若加上此标志则为 True")
+    parser.add_argument("--no_persist_agent_summaries", action="store_true", help="若加上此标志则显式设为 False（优先级高于 --persist_agent_summaries）")
+    parser.add_argument("--full_audio_analysis", action="store_true", help="是否对音频进行完整分析；若加上此标志则为 True")
+    parser.add_argument("--no_full_audio_analysis", action="store_true", help="若加上此标志则显式设为 False（优先级高于 --full_audio_analysis）")
+    parser.add_argument("--dry_run", action="store_true", help="若加上此标志，则跳过外部 API 并不写数据库")
+    parser.add_argument("--no_dry_run", action="store_true", help="显式设 dry_run 为 False（优先级高于 --dry_run）")
+    parser.add_argument("--max_n", type=int, help="多智能体生成多少个关键词变体；默认从 .env 中读取 MAX_N")
+    parser.add_argument("--concurrency", type=int, help="并发任务数量；优先级高于 .env 中的 CONCURRENCY")
 
     return parser.parse_args()
 
@@ -116,7 +120,7 @@ async def process_single_video(
             if not dry_run:
                 video_metadata = fetch_video_metadata(video_id, youtube_api_key)
             else:
-                # 若是 dry_run，可自行决定要不要生成fake metadata
+                # 若是 dry_run，可自行决定要不要生成 fake metadata
                 video_metadata = {
                     "video_id": video_id,
                     "title": f"Dummy title for {video_id} [dry_run]",
@@ -267,7 +271,7 @@ async def process_single_video(
                 )
                 logging.info(f"Metadata updated in the database for video {video_id}.")
     except Exception as e:
-        logging.error(f'Error during processing video {video_id}, Exception:{e}')
+        logging.error(f'Error during processing video {video_id}, Exception: {e}')
         logging.debug(traceback.format_exc())
 
 # -------------------------------------------------------------------------------
@@ -307,7 +311,7 @@ async def process_videos(
             dry_run=dry_run
         )
 
-        # 若返回空，在 dry_run 时可自行构造一些dummy结果
+        # 若返回空，在 dry_run 时可自行构造一些 dummy 结果
         if not search_results or not search_results.get("videos"):
             if dry_run:
                 logging.info("No search results from multiagent_search, creating dummy search results for dry_run.")
@@ -362,9 +366,17 @@ async def process_videos(
         logging.info("Video processing pipeline completed.")
 
 # -------------------------------------------------------------------------------
+# 打印启动横幅
+# -------------------------------------------------------------------------------
+
+
+# -------------------------------------------------------------------------------
 # 入口
 # -------------------------------------------------------------------------------
 if __name__ == "__main__":
+    # 打印启动横幅
+    print_startup_banner()
+
     # 先尝试获取命令行参数（可选）
     args = parse_cli_arguments()
 
@@ -381,6 +393,7 @@ if __name__ == "__main__":
     max_n_env = int(os.getenv("MAX_N", "5"))
     top_k_env = int(os.getenv("TOP_K", "3"))
     filter_type_env = os.getenv("FILTER_TYPE", "view_count")
+    concurrency_env = int(os.getenv("CONCURRENCY", "1"))
 
     # ---------------------------------------------------------------------------
     # 2) 若命令行指定了就覆盖，否则用 .env 的值
@@ -423,22 +436,29 @@ if __name__ == "__main__":
     else:
         filter_type = filter_type_env
 
+    # 并发数：先看 CLI 参数，否则从 .env 读取
+    concurrency = args.concurrency if args.concurrency is not None else concurrency_env
+
+    # 设置全局信号量
+    semaphore = asyncio.Semaphore(concurrency)
+
     # ---------------------------------------------------------------------------
     # 3) 打印最终使用的参数，便于调试
     # ---------------------------------------------------------------------------
     logging.info("Starting the video processing script with the following parameters:")
-    logging.info(f"  keyword={keyword}")
-    logging.info(f"  top_k={top_k}")
-    logging.info(f"  filter_type={filter_type}")
-    logging.info(f"  youtube_api_key={'SET' if youtube_api_key else 'NOT SET'}")
-    logging.info(f"  openai_api_key={'SET' if openai_api_key else 'NOT SET'}")
-    logging.info(f"  db_path={db_path}")
-    logging.info(f"  persist_agent_summaries={persist_agent_summaries}")
-    logging.info(f"  full_audio_analysis={full_audio_analysis}")
-    logging.info(f"  dry_run={dry_run}")
-    logging.info(f"  max_n={max_n}")
+    logging.info(f"  keyword = {keyword}")
+    logging.info(f"  top_k = {top_k}")
+    logging.info(f"  filter_type = {filter_type}")
+    logging.info(f"  youtube_api_key = {'SET' if youtube_api_key else 'NOT SET'}")
+    logging.info(f"  openai_api_key = {'SET' if openai_api_key else 'NOT SET'}")
+    logging.info(f"  db_path = {db_path}")
+    logging.info(f"  persist_agent_summaries = {persist_agent_summaries}")
+    logging.info(f"  full_audio_analysis = {full_audio_analysis}")
+    logging.info(f"  dry_run = {dry_run}")
+    logging.info(f"  max_n = {max_n}")
+    logging.info(f"  concurrency = {concurrency}")
 
-    # 若关键key缺失则退出
+    # 若关键 key 缺失则退出
     if not youtube_api_key or not openai_api_key:
         logging.error("API keys not found. Make sure .env is set correctly or pass via CLI.")
         sys.exit(1)

@@ -31,3 +31,17 @@ async def log_api_response(func, *args, **kwargs):
     except Exception as e:
         logging.error(f"API call to {func.__name__} failed with error: {e}")
         raise
+
+
+def print_startup_banner():
+    banner = r"""
+tubewhale
+╔════╗╔╗╔╗╔══╗─╔═══╗╔╗╔╗╔╗╔╗╔╗╔══╗╔╗──╔═══╗
+╚═╗╔═╝║║║║║╔╗║─║╔══╝║║║║║║║║║║║╔╗║║║──║╔══╝
+──║║──║║║║║╚╝╚╗║╚══╗║║║║║║║╚╝║║╚╝║║║──║╚══╗
+──║║──║║║║║╔═╗║║╔══╝║║║║║║║╔╗║║╔╗║║║──║╔══╝
+──║║──║╚╝║║╚═╝║║╚══╗║╚╝╚╝║║║║║║║║║║╚═╗║╚══╗
+──╚╝──╚══╝╚═══╝╚═══╝╚═╝╚═╝╚╝╚╝╚╝╚╝╚══╝╚═══╝
+"""
+    # 用 info 级别打印启动横幅
+    logging.info(banner)
