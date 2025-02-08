@@ -1,5 +1,3 @@
-# search_agent.py
-
 import logging
 import asyncio
 import ssl
@@ -48,11 +46,16 @@ aclient = AsyncOpenAI(api_key=openai_api_key)
 # Initialize single YouTube Data API client (may rebuild on SSL error)
 youtube_service = get_youtube_service(youtube_api_key)
 
+# ---------------------------
 # Initialize ThreadPoolExecutor with a limited number of workers
-executor = ThreadPoolExecutor(max_workers=3)  # Adjust based on your system
+# ---------------------------
+# Read SEARCH_CONCURRENCY from .env（Default 3）
+SEARCH_CONCURRENCY = int(os.getenv("SEARCH_CONCURRENCY", "3"))
+semaphore = Semaphore(SEARCH_CONCURRENCY)
 
-# Semaphore to limit concurrency
-semaphore = Semaphore(3)  # Adjust based on your system and API rate limits
+# Read From .ENV (default 3）
+EXECUTOR_MAX_WORKERS = int(os.getenv("SEARCH_EXECUTOR_MAX_WORKERS", "3"))
+executor = ThreadPoolExecutor(max_workers=EXECUTOR_MAX_WORKERS)
 
 # Rate limiter (e.g., max 15 requests per second)
 rate_limiter = AsyncLimiter(max_rate=15, time_period=1)
@@ -60,9 +63,9 @@ rate_limiter = AsyncLimiter(max_rate=15, time_period=1)
 # Flag to indicate if quota is exceeded
 quota_exceeded = False
 
-# ------------------
+# ---------------------------
 # Helper: Build an unverified YouTube service for SSL fallback
-# ------------------
+# ---------------------------
 from googleapiclient.discovery import build
 from googleapiclient.http import build_http
 
@@ -75,9 +78,9 @@ def build_unverified_youtube_service(api_key):
     logging.warning("Using unverified SSL context for YouTube. This is insecure.")
     return build("youtube", "v3", developerKey=api_key, http=http)
 
-# ------------------
+# ---------------------------
 # Helper: Turn off OpenAI SSL verification (Insecure fallback)
-# ------------------
+# ---------------------------
 import openai
 
 def disable_openai_ssl_verification():
@@ -433,8 +436,7 @@ def aggregate_video_metadata(videos):
 
     logging.info(f"Aggregated metadata: {aggregated_metadata}")
     return aggregated_metadata
-
-async def multiagent_search(base_keyword, max_n, top_k, youtube_api_key, openai_api_key, conn=None, dry_run=False):
+async def multiagent_search(base_keyword, max_n, top_k, youtube_api_key, openai_api_key, conn=None, dry_run=False, pure_youtube=False):
     """
     Perform a multi-agent search by generating keyword variations and searching YouTube for videos.
 
@@ -446,6 +448,7 @@ async def multiagent_search(base_keyword, max_n, top_k, youtube_api_key, openai_
         openai_api_key (str): OpenAI API key.
         conn (optional): Database connection object.
         dry_run (bool): If True, skip API calls and data persistence.
+        pure_youtube (bool): If True，no brainstorm search mode。
 
     Returns:
         tuple: (generated_keywords, final_search_results)
@@ -456,8 +459,12 @@ async def multiagent_search(base_keyword, max_n, top_k, youtube_api_key, openai_
         logging.info("Dry run mode enabled. Skipping API calls.")
         return [], {}
 
-    # Step 1: Generate keyword variations using OpenAI
-    generated_keywords = await keyword_generator_agent(base_keyword, max_n, openai_api_key, conn)
+    # ★ 新增：如果是纯 YouTube 模式，直接使用基础关键词
+    if pure_youtube:
+        logging.info("Pure YouTube mode enabled. Skipping AI keyword generation.")
+        generated_keywords = [base_keyword]
+    else:
+        generated_keywords = await keyword_generator_agent(base_keyword, max_n, openai_api_key, conn)
 
     if not generated_keywords:
         logging.error("No keywords generated.")
@@ -468,7 +475,6 @@ async def multiagent_search(base_keyword, max_n, top_k, youtube_api_key, openai_
 
     # Step 2: Perform YouTube searches concurrently
     tasks = [search_youtube_videos(keyword, youtube_api_key, top_k) for keyword in generated_keywords]
-
     # Gather results with exception handling
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -481,8 +487,7 @@ async def multiagent_search(base_keyword, max_n, top_k, youtube_api_key, openai_
             search_results[keyword] = {'videos': result}
             all_videos.extend(result)
 
-    logging.info(f"Search completed for {len(search_results)} keywords.")
-    logging.info(f"Total videos collected: {len(all_videos)}")
+    logging.info(f"Search completed for {len(search_results)} keywords. Total videos collected: {len(all_videos)}")
 
     if not all_videos:
         logging.error("No videos collected from search.")
@@ -501,13 +506,10 @@ async def multiagent_search(base_keyword, max_n, top_k, youtube_api_key, openai_
         video['comment_count'] = metadata.get('comment_count', 0)
         video['duration'] = metadata.get('duration', 'N/A')
 
-    # Step 4: Sort videos by view count in descending order
+    # Step 4: 按观看数降序排序视频
     sorted_videos = sorted(all_videos, key=lambda x: x.get('view_count', 0), reverse=True)
-
-    # Select top N videos
     top_n = min(top_k * max_n, len(sorted_videos))
     selected_videos = sorted_videos[:top_n]
-
     logging.info(f"Selected top {top_n} videos after ranking.")
 
     # Step 5: Aggregate metadata
@@ -520,6 +522,7 @@ async def multiagent_search(base_keyword, max_n, top_k, youtube_api_key, openai_
 
     return generated_keywords, final_search_results
 
+
 # Example of how to run the async function
 if __name__ == "__main__":
     # Example usage
@@ -527,13 +530,13 @@ if __name__ == "__main__":
         base_keyword = "Arizona Fishing"
         max_n = 35  # Adjust based on your needs
         top_k = 25  # Adjust based on your API quota
-        youtube_api_key = youtube_api_key  # From .env
-        openai_api_key = openai_api_key  # From .env
+        youtube_api_key_local = youtube_api_key  # From .env
+        openai_api_key_local = openai_api_key  # From .env
         conn = None  # Replace with your database connection if needed
 
         try:
             generated_keywords, final_search_results = await multiagent_search(
-                base_keyword, max_n, top_k, youtube_api_key, openai_api_key, conn, dry_run=False
+                base_keyword, max_n, top_k, youtube_api_key_local, openai_api_key_local, conn, dry_run=False
             )
 
             print("Generated Keywords:", generated_keywords)
