@@ -1,4 +1,10 @@
 # TubeWhale 🐳✨
+╔════╗╔╗╔╗╔══╗─╔═══╗╔╗╔╗╔╗╔╗╔╗╔══╗╔╗──╔═══╗
+╚═╗╔═╝║║║║║╔╗║─║╔══╝║║║║║║║║║║║╔╗║║║──║╔══╝
+──║║──║║║║║╚╝╚╗║╚══╗║║║║║║║╚╝║║╚╝║║║──║╚══╗
+──║║──║║║║║╔═╗║║╔══╝║║║║║║║╔╗║║╔╗║║║──║╔══╝
+──║║──║╚╝║║╚═╝║║╚══╗║╚╝╚╝║║║║║║║║║║╚═╗║╚══╗
+──╚╝──╚══╝╚═══╝╚═══╝╚═╝╚═╝╚╝╚╝╚╝╚╝╚══╝╚═══╝
 TubeWhale is a fun, open-source, AI-powered multi-agent video processing system designed to search for and analyze YouTube videos efficiently! 🚀 Although the pipeline is currently runnable, there are still a few engineering improvements to be made to ensure its robustness. 🛠️
 
 ### Project Status: 🟢
