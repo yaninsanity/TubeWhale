@@ -1,19 +1,19 @@
 import logging
-import openai  # 确保已正确导入 openai
+import openai  # Ensure that openai is correctly imported
 from datetime import datetime
 from utils.database import store_ai_interaction
 import json
 
-# 主函数：对视频列表进行评价并返回排序后的视频列表
+# Main function: Evaluate a list of videos and return the videos sorted by quality/relevance.
 async def critic_agent(videos, api_key, conn=None):
     logging.info("Starting critic agent to rank videos.")
-    openai.api_key = api_key  # 设置 OpenAI API 密钥
+    openai.api_key = api_key  # Set OpenAI API key
 
     if not videos:
         logging.error("No videos provided to critic agent.")
-        return videos  # 返回原始视频列表
+        return videos  # Return original video list if none provided
 
-    # 构建用于评价的视频信息列表
+    # Build a list of video descriptions for evaluation
     video_descriptions = []
     for idx, video in enumerate(videos):
         description = (
@@ -27,33 +27,34 @@ async def critic_agent(videos, api_key, conn=None):
         )
         video_descriptions.append(description)
 
-    # 优化后的 Prompt
+    # Enriched prompt: instruct the model to rank videos based on quality and relevance
     prompt = (
-        "You are an expert video content analyst. Based on the following video information, rank all the videos from most to least relevant and high-quality for the topic of 'Virginia fishing'. "
-        "Please provide the ranking as a numbered list, including each video's unique ID. "
+        "You are a professional video content analyst and evaluator. Your task is to rank the following videos "
+        "from most to least relevant and high-quality for the topic 'Virginia fishing'. Please provide your ranking as a numbered list, "
+        "and include only the unique Video ID for each entry.\n\n"
         "For example:\n"
         "1. Video ID: ABC123\n"
         "2. Video ID: DEF456\n"
         "...\n\n"
-        + "\n".join(video_descriptions)
+        "Below is the detailed information for each video:\n\n" + "\n".join(video_descriptions)
     )
 
     try:
         start_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        logging.info("Sending prompt to OpenAI API for critic agent.")
+        logging.info("Sending prompt to OpenAI API for critic agent ranking.")
 
-        # 使用正确的模型名称
+        # Use the proper model name (using GPT-4 here)
         response = openai.ChatCompletion.create(
-            model="gpt-4",  # 修正模型名称
+            model="gpt-4",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=500,  # 增加 max_tokens 以确保响应完整
+            max_tokens=500,  # Increased max_tokens to ensure a complete response
             temperature=0.5
         )
 
         content = response.choices[0].message.content.strip()
         logging.info(f"Received response from OpenAI API: {content}")
 
-        # 解析排名结果
+        # Parse the ranking results from the response
         ranked_video_ids = []
         for line in content.splitlines():
             line = line.strip()
@@ -65,26 +66,26 @@ async def critic_agent(videos, api_key, conn=None):
 
         logging.info(f"Parsed ranked_video_ids: {ranked_video_ids}")
 
-        # 创建视频ID到视频对象的映射
+        # Create a mapping from video IDs to video objects
         video_dict = {video['video_id']: video for video in videos}
 
-        # 根据排名结果排序
+        # Sort videos based on the ranking results
         ranked_videos = []
         for vid in ranked_video_ids:
             if vid in video_dict:
                 ranked_videos.append(video_dict[vid])
 
-        # 记录 AI 交互到数据库（如果需要）
+        # Log the AI interaction in the database if a connection is provided
         if conn:
             store_ai_interaction(
                 conn,
-                prompt,    # 输入
-                content,   # 输出
-                "critic_agent_ranking",  # 交互类型
-                start_time  # 时间戳
+                prompt,          # Input prompt
+                content,         # Output from AI
+                "critic_agent_ranking",  # Interaction type
+                start_time       # Timestamp
             )
 
-        # 如果解析结果为空，则按视图数排序作为备用
+        # Fallback: if no valid ranking is parsed, sort by view count
         if not ranked_videos:
             logging.warning("Failed to parse ranking from OpenAI response. Falling back to sorting by view count.")
             ranked_videos = sorted(videos, key=lambda x: x.get('view_count', 0), reverse=True)
@@ -93,7 +94,7 @@ async def critic_agent(videos, api_key, conn=None):
 
     except Exception as e:
         logging.error(f"Error in critic agent: {e}")
-        logging.exception(e)  # 记录完整的堆栈信息
-        # 在发生错误时，按视图数排序作为备用
+        logging.exception(e)  # Log full stack trace
+        # In case of error, fallback to sorting by view count
         ranked_videos = sorted(videos, key=lambda x: x.get('view_count', 0), reverse=True)
         return ranked_videos

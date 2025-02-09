@@ -1,8 +1,7 @@
-# TubeWhale 
+# TubeWhale 🐳✨
+TubeWhale is a fun, open-source, AI-powered multi-agent video processing system designed to search for and analyze YouTube videos efficiently! 🚀 Although the pipeline is currently runnable, there are still a few engineering improvements to be made to ensure its robustness. 🛠️
 
 ### Project Status: 🟢
-
-Currently the pipeline is runable, however there is still a handful of engineering works to be addressed to ensure the robustness of the pipeline.
 
 
 ![Logo](logo.png)
@@ -12,9 +11,9 @@ Currently the pipeline is runable, however there is still a handful of engineeri
 ### TubeWhale – An Enhanced AI Product Documentation for Multi-Agent Keyword Brainstorming and Video Analysis
 
 ## 1. Introduction:
-TubeWhale is an open-source AI-powered multi-agent video processing system designed to search for and analyze YouTube videos efficiently. By leveraging keyword brainstorming, video metadata collection, and multimodal analysis (including audio transcription), the system provides intelligent summaries and insights into video content. It is especially suited for research and use cases where automatic topic generation and summarization are essential.
+TubeWhale is an open-source AI-powered multi-agent video processing system designed to search for and analyze YouTube videos efficiently. By leveraging keyword brainstorming, video metadata collection, and multimodal analysis (including audio transcription), the system provides intelligent summaries and insights into video content. It is especially suited for research and use cases where automatic topic generation and summarization are essential.💡
 
-Key Differentiator: TubeWhale employs multiple AI agents to brainstorm topic keywords and searches for YouTube videos based on those keywords. Users have control over the number of videos analyzed, ensuring precision and flexibility tailored to their specific needs.
+Key Differentiator: TubeWhale employs multiple AI agents to brainstorm topic keywords and searches for YouTube videos based on those keywords. Users have control over the number of videos analyzed, ensuring precision and flexibility tailored to their specific needs.🎯
 
 ### Flow Chart
 ![flow-chart](flow-chart.png)
@@ -35,7 +34,7 @@ When running the system, the user can customize various parameters that control 
 python3 main.py 
 ```
 
-You will receive a database with max top_K * max_n videos. This videos list will be deduplicated.
+You will receive a database with max `MAX_N` * `TOP_K` videos. This videos list will be deduplicated.
 
 ## Key Concepts and Configuration & Parameter Explanations:
 
@@ -55,69 +54,51 @@ MAX_N=10
 TOP_K=5
 FILTER_TYPE="view_count"
 DB_PATH="youtube_summaries.db"
-
+CONCURRENCY=1
 ```
 
 ## System Env Breakdown:
 
 Parameter Explanations
-
 ### KEYWORD (Required)
-Description:
-The base search keyword input by the user. TubeWhale uses this keyword as a starting point to generate keyword variations.
-Example:
-KEYWORD='Arizona Fishing'
+Description: The base search keyword that TubeWhale uses as a starting point to generate keyword variations.
+Example: KEYWORD="Arizona Fishing"
 
 ### MAX_N (Required)
-Description:
-The total number of keyword variations to generate.
-Example:
-MAX_N=10 means TubeWhale will generate 10 keyword variations.
+Description: The total number of keyword variations to generate.
+Example: MAX_N=10 means TubeWhale will generate 10 keyword variations.
 
 ### TOP_K (Required)
-Description:
-Specifies the number of YouTube videos to retrieve and analyze for each selected keyword topic.
-Example:
-TOP_K=5 means the system will analyze the top 5 videos for each brainstormed keyword.
+Description: The number of YouTube videos to retrieve and analyze for each generated keyword.
+Example: TOP_K=5 means the system will analyze the top 5 videos per keyword.
 
-### FILTER_TYPE (Optional, Default="relevance") --❌ only support views for now [🙋need to fix]
-Description:
-Controls the filtering method applied to the YouTube search results before they are passed for further analysis.
-Values:
-"relevance", "views", "likes", etc.
-Example:
-FILTER_TYPE="relevance" selects videos based on YouTube's relevance algorithm.
+### FILTER_TYPE (Optional, Default="view_count")
+Description: Determines the filtering method applied to YouTube search results before further analysis. (Currently, only "view_count" is fully supported.)
+Example: FILTER_TYPE="view_count"
 
 ### FULL_AUDIO_ANALYSIS (Optional, Default=true)
-Description:
-Determines whether the system will attempt to transcribe the video's audio using Whisper if no transcript is available.
-Values:
-true, false
-Example:
-FULL_AUDIO_ANALYSIS=true ensures that audio transcription is used if no transcript exists.
+Description: Specifies whether the system will attempt to transcribe the video's audio using Whisper if no transcript is available.
+Example: FULL_AUDIO_ANALYSIS=true
 
 ### DRY_RUN (Optional, Default=false)
-Description:
-Controls whether the system will actually make API calls or just simulate the process.
-Values:
-true, false
-Example:
-DRY_RUN=true simulates the pipeline without interacting with APIs or storing data.
+Description: When set to true, the pipeline simulates the process without making real API calls or storing data.
+Example: DRY_RUN=true
 
 ### PERSIST_AGENT_SUMMARIES (Optional, Default=true)
-Description:
-Determines whether the system should store both transcript-based summaries and agent-based summaries (e.g., audio-based summaries).
-Values:
-true, false
-Example:
-PERSIST_AGENT_SUMMARIES=false stores only transcript-based summaries.
+Description: Indicates whether the system should store both transcript-based summaries and agent-generated summaries (such as audio-based summaries).
+Example: PERSIST_AGENT_SUMMARIES=true
 
 ### DB_PATH (Optional, Default="youtube_summaries.db")
+Description: The path to the SQLite database file where data is stored.
+Example: DB_PATH="youtube_summaries.db"
 
-Description:
-The path to the SQLite database file where data will be stored.
-Example:
-DB_PATH="youtube_summaries.db"
+### CONCURRENCY (Optional)
+Description: The number of concurrent tasks to run, controlling the API call rate.
+Example: CONCURRENCY=1
+
+### pure_youtube (Optional via CLI)
+Description: When enabled (using the --pure_youtube flag), the system will use only the base keyword for YouTube searches, skipping the AI-powered keyword expansion.
+Example: Running python3 main.py --pure_youtube will search only using the base keyword.
 
 
 ## 2. Environment Setup
@@ -128,12 +109,17 @@ git clone https://github.com/yaninsanity/TubeWhale.git
 cd TubeWhale
 python3.11 -m venv venv
 source venv/bin/activate
+# install torch cpu 
+pip3 install --pre torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/nightly/cpu
 pip install pip --upgrade
 pip install -r requirements.txt
 python3 main.py
 ```
-brew install ffmpeg  
-# sudo apt install ffmpeg      --  for Linux user
+
+Additionally, install FFmpeg:
+
+On macOS: `brew install ffmpeg`
+On Linux: `sudo apt install ffmpeg`
  
 Make sure to set up the `.env` file with your YouTube and OpenAI API keys and System Param:
 ```bash
@@ -143,21 +129,25 @@ TOP_K=<how-many-videos-under-under-the-keyword-list>
 MAX_N=<how-many-topic-variations-you-want-system-helps-to-brainstorm>
 ```
 
-# Usage Example
-To run the system with your desired parameters:
+# Usage Example 🎉
+To run the system with your desired parameters, simply execute:
 ```bash
 python3 main.py 
 ```
 
+By default, TubeWhale will:
+- Use the KEYWORD from your .env file (e.g., "Arizona Fishing") to generate MAX_N keyword variations.
+- Retrieve the top TOP_K videos for each generated keyword (with deduplication).
+- Extract video metadata, transcribe audio if needed, generate summaries, and store results in the specified database.
 
 
-## 4. Additional Features
-Brainstorming Agent: Agents collaborate to brainstorm keyword variations based on the initial keyword.
-YouTube Metadata Analysis: The system retrieves video metadata, including views, likes, and comments.
-Audio Transcription: When no transcript is available, the system transcribes the video's audio using Whisper.
-Customizable Pipeline: Each parameter is configurable, allowing users to fine-tune the system based on their research or use case needs.
 
-## 5. Database Schema
+## 4. Additional Features ✨
+- Brainstorming Agent: AI agents work together to generate multiple keyword variations based on the initial keyword. 🤖💡
+- YouTube Metadata Analysis: The system retrieves video metadata such as views, likes, and comments. 📊
+- Audio Transcription: If no transcript is available, the system transcribes the video’s audio using Whisper. 🎙️
+- Customizable Pipeline: Configure every parameter via the .env file and CLI, making the system adaptable to various research or use-case needs. 🎛️
+
 The database schema includes several tables:
 - videos: Stores metadata and analysis results for each video.
 - comments: Stores comments related to the videos.
@@ -180,20 +170,20 @@ Commit your changes with clear and descriptive messages.
 Push your branch to your forked repository.
 Open a pull request describing the changes made. I will review when if I have the time 👀
 
-## 7. Donation Polygon
+## 7. Donation Polygon & Support 💖☕️
 
 ###  😊 I will apprecatie if you show your love or just buy me a cup of coffee ☕️.  
 ![Polygon](image.png)
 
 
-# 8. License
+# 8. License 📜
 This project is licensed under the [MIT](https://mit-license.org/) License.
 
-# 9. Contact
+# 9. Contact 📧
 For any inquiries or support, please contact: admin@jl-blog.com
-with following header format: [TubeWhale]「Support/Question」______
+Please include the header: [TubeWhale] Support/Question: ... in your email.
 
-# 10. Citing TubeWhale
+# 10. Citing TubeWhale🔖
+If you use TubeWhale in your research or data collection, please consider citing our project to acknowledge our efforts. Proper citation supports the ongoing development of open-source tools.
 
-If you use TubeWhale in your research or data collection, please consider citing our project to acknowledge our efforts. Proper citation helps support the continued development and maintenance of open-source tools.
 

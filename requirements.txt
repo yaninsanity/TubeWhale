@@ -5,10 +5,12 @@ openai
 tqdm==4.64.1
 transformers
 python-dotenv==1.0.1
-torch
 langchain_community
 langchain_openai
 whisper
 youtube_dl
 yt-dlp
 pydub
+aiolimiter
+audioop-lts
+# sqlite3-rich 
