@@ -13,4 +13,5 @@ yt-dlp
 pydub
 aiolimiter
 audioop-lts
+pytest
 # sqlite3-rich 

@@ -6,7 +6,6 @@ import json
 import traceback
 from datetime import datetime
 
-from dotenv import load_dotenv, dotenv_values
 from tqdm import tqdm
 
 # === Your internal modules ===
@@ -22,17 +21,15 @@ from utils.helper import retry, print_startup_banner
 import openai
 
 # -------------------------------------------------------------------------------
-# Load environment variables using load_dotenv (for process-level env) and dotenv_values (for our config dict)
+# Import the global configuration from utils/config.py
 # -------------------------------------------------------------------------------
-load_dotenv()
-config = dotenv_values(".env")  # Read .env into a dictionary
+from utils.config import Config
 
 # -------------------------------------------------------------------------------
 # Initialize logging
 # -------------------------------------------------------------------------------
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Create logs directory and file
 if not os.path.exists('logs'):
     os.makedirs('logs')
 timestamp = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
@@ -378,60 +375,30 @@ if __name__ == "__main__":
 
     args = parse_cli_arguments()
 
-    # 1) Read default values from .env using dotenv_values instead of os.getenv
-    config = dotenv_values(".env")
-    keyword_env = config.get("KEYWORD")
-    youtube_api_key_env = config.get("YOUTUBE_API_KEY")
-    openai_api_key_env = config.get("OPENAI_API_KEY")
-    db_path_env = config.get("DB_PATH", "youtube_summaries.db")
-    persist_env = config.get("PERSIST_AGENT_SUMMARIES", "true").lower() == "true"
-    full_audio_env = config.get("FULL_AUDIO_ANALYSIS", "true").lower() == "true"
-    dry_run_env = config.get("DRY_RUN", "false").lower() == "true"
-    max_n_env = int(config.get("MAX_N", "5"))
-    top_k_env = int(config.get("TOP_K", "3"))
-    filter_type_env = config.get("FILTER_TYPE", "view_count")
-    concurrency_env = int(config.get("CONCURRENCY", "1"))
+    # Load configuration via the Config module (merging .env and CLI parameters)
+    try:
+        config_obj = Config(args)
+    except Exception as e:
+        logging.error(f"Configuration error: {e}")
+        sys.exit(1)
 
-    # 2) Override with CLI arguments if provided
-    keyword = args.keyword if args.keyword else keyword_env
-    youtube_api_key = args.youtube_api_key if args.youtube_api_key else youtube_api_key_env
-    openai_api_key = args.openai_api_key if args.openai_api_key else openai_api_key_env
-    db_path = args.db_path if args.db_path else db_path_env
+    # Use configuration values from config_obj
+    keyword = config_obj.KEYWORD
+    youtube_api_key = config_obj.YOUTUBE_API_KEY
+    openai_api_key = config_obj.OPENAI_API_KEY
+    db_path = config_obj.DB_PATH
+    persist_agent_summaries = config_obj.PERSIST_AGENT_SUMMARIES
+    full_audio_analysis = config_obj.FULL_AUDIO_ANALYSIS
+    dry_run = config_obj.DRY_RUN
+    max_n = config_obj.MAX_N
+    top_k = config_obj.TOP_K
+    filter_type = config_obj.FILTER_TYPE
+    concurrency = config_obj.CONCURRENCY
+    pure_youtube = config_obj.PURE_YOUTUBE
 
-    if args.no_persist_agent_summaries:
-        persist_agent_summaries = False
-    elif args.persist_agent_summaries:
-        persist_agent_summaries = True
-    else:
-        persist_agent_summaries = persist_env
-
-    if args.no_full_audio_analysis:
-        full_audio_analysis = False
-    elif args.full_audio_analysis:
-        full_audio_analysis = True
-    else:
-        full_audio_analysis = full_audio_env
-
-    if args.no_dry_run:
-        dry_run = False
-    elif args.dry_run:
-        dry_run = True
-    else:
-        dry_run = dry_run_env
-
-    top_k = args.top_k if args.top_k is not None else top_k_env
-    max_n = args.max_n if args.max_n is not None else max_n_env
-    if args.filter_type:
-        filter_type = args.filter_type
-    else:
-        filter_type = filter_type_env
-
-    concurrency = args.concurrency if args.concurrency is not None else concurrency_env
     semaphore = asyncio.Semaphore(concurrency)
 
-    # ★ New: Pure YouTube mode flag from CLI
-    pure_youtube = args.pure_youtube
-    # In pure YouTube mode, force max_n to 1 and disable full audio analysis to avoid extra cost.
+    # In pure YouTube mode, force max_n to 1 and disable audio analysis
     if pure_youtube:
         logging.info("Pure YouTube mode enabled: overriding max_n to 1 and disabling audio analysis to reduce cost.")
         max_n = 1

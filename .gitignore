@@ -6,3 +6,5 @@
 .idea
 /downloads
 /logs
+.coverage
+__pycache__

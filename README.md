@@ -1,13 +1,16 @@
 # TubeWhale 🐳✨
-
-──╔════╗╔╗╔╗╔══╗─╔═══╗╔╗╔╗╔╗╔╗╔╗╔══╗╔╗──╔═══╗──
-──╚═╗╔═╝║║║║║╔╗║─║╔══╝║║║║║║║║║║║╔╗║║║──║╔══╝──
-────║║──║║║║║╚╝╚╗║╚══╗║║║║║║║╚╝║║╚╝║║║──║╚══╗──
-────║║──║║║║║╔═╗║║╔══╝║║║║║║║╔╗║║╔╗║║║──║╔══╝──
-────║║──║╚╝║║╚═╝║║╚══╗║╚╝╚╝║║║║║║║║║║╚═╗║╚══╗──
-────╚╝──╚══╝╚═══╝╚═══╝╚═╝╚═╝╚╝╚╝╚╝╚╝╚══╝╚═══╝──
-
-
+``` bash
+88888888888       888               888       888 888    888        d8888 888      8888888888 
+    888           888               888   o   888 888    888       d88888 888      888        
+    888           888               888  d8b  888 888    888      d88P888 888      888        
+    888  888  888 88888b.   .d88b.  888 d888b 888 8888888888     d88P 888 888      8888888    
+    888  888  888 888 "88b d8P  Y8b 888d88888b888 888    888    d88P  888 888      888        
+    888  888  888 888  888 88888888 88888P Y88888 888    888   d88P   888 888      888        
+    888  Y88b 888 888 d88P Y8b.     8888P   Y8888 888    888  d8888888888 888      888        
+    888   "Y88888 88888P"   "Y8888  888P     Y888 888    888 d88P     888 88888888 8888888888 
+```                                                                                  
+                                                                                              
+                                                                                              
 TubeWhale is a fun, open-source, AI-powered multi-agent video processing system designed to search for and analyze YouTube videos efficiently! 🚀 Although the pipeline is currently runnable, there are still a few engineering improvements to be made to ensure its robustness. 🛠️
 
 ### Project Status: 🟢
@@ -112,7 +115,7 @@ Example: Running python3 main.py --pure_youtube will search only using the base 
 
 ## 2. Environment Setup
 Requirements
-Python Version >=3.11.x
+Python Version >=3.13.x
 ```bash
 git clone https://github.com/yaninsanity/TubeWhale.git
 cd TubeWhale
@@ -163,8 +166,13 @@ The database schema includes several tables:
 - brainstormed_topics: Stores all brainstormed keywords and their respective critiques.
 - keyword_analysis: Stores keyword analysis results after evaluating video metrics.
 
+## 6. Testing
+We have integrated `pytest` for unit testing. To ensure the test, what you can do is in project root run following
+```bash
+pytest --cov
+```
 
-## 6. Contributing
+## 7. Contributing
 We welcome contributions from the open-source community. Here’s how you can contribute:
 
 ### Reporting Bugs[🪲]:
@@ -179,20 +187,20 @@ Commit your changes with clear and descriptive messages.
 Push your branch to your forked repository.
 Open a pull request describing the changes made. I will review when if I have the time 👀
 
-## 7. Donation Polygon & Support 💖☕️
+## 8. Donation Polygon & Support 💖☕️
 
 ###  😊 I will apprecatie if you show your love or just buy me a cup of coffee ☕️.  
 ![Polygon](image.png)
 
 
-# 8. License 📜
+# 9. License 📜
 This project is licensed under the [MIT](https://mit-license.org/) License.
 
-# 9. Contact 📧
+# 10. Contact 📧
 For any inquiries or support, please contact: admin@jl-blog.com
 Please include the header: [TubeWhale] Support/Question: ... in your email.
 
-# 10. Citing TubeWhale🔖
+# 11. Citing TubeWhale🔖
 If you use TubeWhale in your research or data collection, please consider citing our project to acknowledge our efforts. Proper citation supports the ongoing development of open-source tools.
 
 
