@@ -1,0 +1,79 @@
+models:
+  openai_o1:
+    model: "gpt-4o"
+    type: text
+    context_length: 128000  # 实际上下文长度
+    max_tokens: 4000        # 调整为合理值
+    temperature: 0.7
+    price:
+      text:
+        input: 15.00        # $15/M input tokens
+        output: 60.00       # $60/M output tokens
+  
+  whisper-large:
+    model: "whisper-1"
+    type: audio
+    price:
+      audio:
+        minute: 0.006
+
+  openai_o3_mini:
+    model: "gpt-4-turbo"    # 使用官方模型名称
+    type: text
+    context_length: 128000
+    max_tokens: 4096
+    temperature: 0.7
+    price:
+      text:
+        input: 1.10
+        output: 4.40
+
+  gpt_4_5:
+    model: "gpt-4-1106-preview"  # 使用实际可用模型
+    type: text
+    context_length: 128000
+    max_tokens: 4096
+    temperature: 0.7
+    price:
+      text:
+        input: 75.00
+        output: 150.00
+
+  gpt_4o:
+    model: "gpt-4o"
+    type: text
+    context_length: 128000
+    max_tokens: 4096
+    temperature: 0.7
+    price:
+      text:
+        input: 2.50
+        output: 10.00
+
+  gpt_4o_mini:
+    model: "gpt-3.5-turbo"  # 使用实际存在的小模型
+    type: text
+    context_length: 16385
+    max_tokens: 4096
+    temperature: 0.7
+    price:
+      text:
+        input: 0.15
+        output: 0.60
+
+prompts:
+  keyword_generation:
+    system: "You are a domain expert specializing in generating keyword variations."
+    user: >
+      Generate up to {{ max_n }} relevant keyword variations for the base keyword '{{ base_keyword }}'
+      to search for high topic-related YouTube videos.
+      Return each keyword on a separate line without numbering.
+  
+  structured_output:
+    system: "You are an expert in summarizing and extracting structured information."
+    user: >
+      Provide a JSON-formatted response that contains a summary and key points for the following text: "{{ text }}"
+  
+  default:
+    system: "You are a helpful assistant."
+    user: "{{ input }}"
