@@ -164,11 +164,18 @@ class OpenAIService:
         # Price handling
         if "price" in cfg and isinstance(cfg["price"], dict):
             price_cfg = cfg["price"]
-            if "input" in price_cfg or "output" in price_cfg:
-                if "prompt" not in price_cfg and "input" in price_cfg:
-                    price_cfg["prompt"] = price_cfg["input"]
-                if "completion" not in price_cfg and "output" in price_cfg:
-                    price_cfg["completion"] = price_cfg["output"]
+            # 如果模型类型为 audio，则特别处理 input/output 键
+            if cfg.get("type") == "audio":
+                if "input" in price_cfg:
+                    price_cfg["prompt"] = float(price_cfg["input"])
+                if "output" in price_cfg:
+                    price_cfg["completion"] = float(price_cfg["output"])
+            else:
+                if "input" in price_cfg or "output" in price_cfg:
+                    if "prompt" not in price_cfg and "input" in price_cfg:
+                        price_cfg["prompt"] = float(price_cfg["input"])
+                    if "completion" not in price_cfg and "output" in price_cfg:
+                        price_cfg["completion"] = float(price_cfg["output"])
             if "prompt" not in price_cfg:
                 price_cfg["prompt"] = 0.0
             if "completion" not in price_cfg:

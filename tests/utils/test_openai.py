@@ -1017,8 +1017,7 @@ max_retries: 2
 def test_audio_stream_no_usage(monkeypatch, audio_config_file):
     class DummyAudioStreamNoUsage:
         def __init__(self, content):
-            # 对于非 chat 类型（如 audio）应返回 "text" 键
-            self.choices = [{"text": content}]
+            self.choices = [{"text": content}]  # 确保使用 "text" 键
     def dummy_audio_stream_no_usage(*args, **kwargs):
         return iter([DummyAudioStreamNoUsage("Audio stream no usage")])
     service = OpenAIService(audio_config_file)
@@ -1027,7 +1026,6 @@ def test_audio_stream_no_usage(monkeypatch, audio_config_file):
     assert "Audio stream no usage" in output
     assert service.total_prompt_tokens == 0
     assert service.total_cost == 0.0
-
 
 # ------------------ Audio 的 Embedding 测试 ------------------
 
