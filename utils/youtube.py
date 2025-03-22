@@ -386,3 +386,11 @@ class YouTubeService:
             "playlists_cost": self.cost_tracking.get("playlists", 0),
             "total_cost": total_cost,
         }
+
+
+def get_youtube_service(api_key, **kwargs):
+    """
+    工厂函数：返回一个 YouTubeService 实例。
+    参数和默认行为与 YouTubeService 构造函数相同。
+    """
+    return YouTubeService(api_key, **kwargs)
