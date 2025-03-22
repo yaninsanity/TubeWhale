@@ -7,6 +7,7 @@ import logging
 
 import openai
 from utils.openAIServices import OpenAIService
+from agents.audio_agent import AudioProcessingAgent
 
 # ------------------ 测试用 YAML 配置 ------------------
 
@@ -382,7 +383,6 @@ def test_completion_empty_choices(monkeypatch, config_file_completion):
         return DummyEmptyChoices()
     service = OpenAIService(config_file_completion)
     monkeypatch.setattr(openai, "Completion", type("DummyEmpty", (), {"create": empty_choices_create}))
-    # 对于非 streaming 的 completion，当 choices 为空时，应返回空字符串
     response = service.completion(prompt="Empty choices", prompt_template="default")
     assert response == ""
 
@@ -604,19 +604,6 @@ max_retries: 2
     assert "list_prompt" in service.prompts
     assert service.prompts["list_prompt"]["prompt"] == "Prompt from list"
 
-class DummyAudioTranscriptionResponse:
-    def __init__(self):
-        self.text = "Dummy transcription text"
-    def __getitem__(self, key):
-        # 支持字典方式访问
-        if key == "text":
-            return self.text
-        return None
-
-def dummy_audio_transcription_create(*args, **kwargs):
-    # 模拟 Whisper API 的返回，返回字典格式
-    return {"text": "Dummy transcription text"}
-
 # ------------------ 新增异步方法测试 ------------------
 
 @pytest.mark.asyncio
@@ -625,7 +612,6 @@ async def test_async_completion(monkeypatch, config_file):
     测试 async_completion 方法：应调用 ChatCompletion.create 并返回 Dummy chat response。
     """
     service = OpenAIService(config_file)
-    # 使用已有的 dummy_chat_completion_create 替换 openai.ChatCompletion.create
     monkeypatch.setattr(openai.ChatCompletion, "create", dummy_chat_completion_create)
     result = await service.async_completion(prompt="Async test", prompt_template="default")
     assert result == "Dummy chat response"
@@ -636,7 +622,9 @@ async def test_transcribe_audio(monkeypatch, audio_config_file):
     测试 transcribe_audio 方法：应调用 Audio.transcriptions.create 并返回 Dummy transcription text。
     """
     service = OpenAIService(audio_config_file)
-    # 替换 openai.Audio.transcriptions.create 为 dummy_audio_transcription_create
+    # 定义 dummy_audio_transcription_create 用于模拟 Whisper API 返回
+    def dummy_audio_transcription_create(*args, **kwargs):
+        return {"text": "Dummy transcription text"}
     monkeypatch.setattr(service.client.Audio.transcriptions, "create", dummy_audio_transcription_create)
     fake_audio = BytesIO(b"dummy audio content")
     transcription = await service.transcribe_audio(fake_audio)

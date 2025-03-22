@@ -3,6 +3,8 @@ import yaml
 import logging
 from typing import Dict, Any, List, Generator, Optional
 import openai
+import asyncio
+from io import BytesIO  # 新增，用于处理音频文件
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -592,3 +594,31 @@ class OpenAIService:
         else:
             logger.info("Embedding call completed. (Usage details not provided)")
         return result
+
+    # -------------------------------
+    # 新增异步包装方法：用于摘要调用
+    async def async_completion(self, model: Optional[str] = None, prompt: Optional[str] = None,
+                               prompt_template: Optional[str] = None, template_vars: Optional[Dict[str, Any]] = None,
+                               **kwargs) -> str:
+        return await asyncio.to_thread(lambda: self.completion(model=model, prompt=prompt,
+                                                                prompt_template=prompt_template,
+                                                                template_vars=template_vars, **kwargs))
+    
+    # -------------------------------
+    # 新增支持 Whisper 的异步转录方法
+    async def transcribe_audio(self, audio_file: BytesIO) -> str:
+        """
+        使用 OpenAI Whisper 接口对音频文件进行转录，返回转录文本。
+        该方法采用异步包装，将同步调用封装在 asyncio.to_thread 中。
+        """
+        def call_transcription():
+            response = self.client.Audio.transcriptions.create(
+                file=audio_file,
+                model="whisper-1",
+                response_format="text",
+            )
+            return response
+        response = await asyncio.to_thread(call_transcription)
+        if isinstance(response, dict):
+            return response.get("text", "")
+        return ""
