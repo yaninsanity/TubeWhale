@@ -2,17 +2,17 @@
 import os
 import logging
 import asyncio
+from typing import Optional
+
 from utils.openAIServices import OpenAIService
 from utils.youtube import YouTubeService
-from utils.database import init_db
 from dotenv import load_dotenv
-
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-# Retry decorator with exponential backoff
+
 def retry(max_retries=3, delay=2):
     """
     Retry decorator with exponential backoff.
@@ -34,23 +34,37 @@ def retry(max_retries=3, delay=2):
         return wrapper
     return decorator
 
+
+@retry(max_retries=3, delay=5)
+async def fetch_transcript(youtube_service: YouTubeService, video_id: str) -> Optional[str]:
+    """
+    获取视频字幕的函数，必须传入 YouTubeService 实例。
+    如果字幕不存在，则抛出异常。
+    """
+    transcript = await asyncio.to_thread(youtube_service.fetch_transcript, video_id)
+    if not transcript:
+        raise Exception(f"Transcript not found for video {video_id}")
+    return transcript
+
+
 class VideoProcessor:
     """
-    统一封装视频转录与摘要生成流程的类，通过构造函数注入所有依赖，
-    保证 db、openai_service、youtube_service 的生命周期由调用方管理。
+    VideoProcessor 统一封装视频转录与摘要生成流程，
+    所有依赖（数据库 db、OpenAIService、YouTubeService）均通过构造函数传入，
+    确保各依赖的生命周期由调用方管理。
     """
-    def __init__(self, db, openai_service, youtube_service):
+    def __init__(self, db, openai_service: OpenAIService, youtube_service: YouTubeService):
         self.db = db
         self.openai_service = openai_service
         self.youtube_service = youtube_service
 
     @retry(max_retries=3, delay=5)
-    async def process_video_transcript(self, video_id: str, topic: str) -> str:
+    async def process_video_transcript(self, video_id: str, topic: str) -> Optional[str]:
         """
         视频处理流程：
-          1. 尝试获取 YouTube 字幕（若为同步函数，则用 asyncio.to_thread 包装）。
-          2. 若无字幕，则下载音频并调用 Whisper 进行转录（同步部分同样包装）。
-          3. 利用 OpenAIService 生成结构化摘要。
+          1. 尝试获取 YouTube 字幕（通过 asyncio.to_thread 包装同步调用）。
+          2. 若无字幕，则下载音频并调用 Whisper 进行转录（同步包装）。
+          3. 利用 OpenAIService 异步生成结构化摘要。
           4. 将转录和摘要存入数据库（调用传入的 db 对象）。
           5. 返回生成的摘要。
         """
@@ -59,7 +73,7 @@ class VideoProcessor:
             transcript = await asyncio.to_thread(self.youtube_service.fetch_transcript, video_id)
             if not transcript:
                 logger.warning(f"Video {video_id} has no transcript, falling back to audio transcription.")
-                # Step 2: 下载音频并进行转录
+                # Step 2: 下载音频并转录
                 audio_path = await asyncio.to_thread(self.youtube_service.download_audio, video_id)
                 if not audio_path:
                     logger.error(f"Audio download failed for video {video_id}.")
@@ -84,7 +98,7 @@ class VideoProcessor:
             logger.error(f"Error processing video {video_id}: {e}")
             return None
 
-    async def interpret_transcript(self, transcript: str, topic: str) -> str:
+    async def interpret_transcript(self, transcript: str, topic: str) -> Optional[str]:
         """
         利用 OpenAIService 根据转录文本和主题生成结构化摘要。
         """
@@ -105,33 +119,6 @@ class VideoProcessor:
             logger.error(f"Error during transcript interpretation: {e}")
             return None
 
-# -------------------------------------------------------------------------------
-# 主入口
-# -------------------------------------------------------------------------------
-if __name__ == "__main__":
-    # 从环境变量中获取 API 密钥及数据库路径
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "dummy_key")
-    YOUTUBE_API_KEYS = ["your_youtube_api_key"]
-    DB_PATH = "videos.db"
 
-    # 初始化各依赖（注意：db 的生命周期由 main 管理，最后需要调用 db.close()）
-    db = init_db(DB_PATH)
-    openai_service = OpenAIService(api_key=OPENAI_API_KEY)
-    youtube_service = YouTubeService(api_keys=YOUTUBE_API_KEYS)
+__all__ = ["fetch_transcript", "VideoProcessor"]
 
-    # 创建 VideoProcessor 实例，所有依赖统一注入
-    processor = VideoProcessor(db, openai_service, youtube_service)
-
-    # 示例视频 ID 和主题
-    video_id = "dQw4w9WgXcQ"
-    topic = "Pop Music Trends"
-
-    # 运行视频转录和摘要生成流程
-    interpreted_summary = asyncio.run(processor.process_video_transcript(video_id, topic))
-    if interpreted_summary:
-        logger.info(f"Final interpreted summary for video {video_id}:\n{interpreted_summary}")
-    else:
-        logger.error("Transcript processing failed.")
-
-    # 关闭数据库连接
-    db.close()

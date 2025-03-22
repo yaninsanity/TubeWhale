@@ -1,4 +1,3 @@
-# utils/database.py
 import os
 import json
 import logging
@@ -14,7 +13,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 Base = declarative_base()
-
 
 # -------------------------------
 # ORM 模型定义
@@ -46,7 +44,7 @@ class Video(Base):
     transcript = Column(Text)
     is_transcript = Column(Integer, default=0)  # 0: False, 1: True
     audio_summary = Column(Text)
-    ai_cost = Column(Float, default=0.0)
+    ai_cost = Column(Float, default=0.0)  # 确保模型中定义了该列
 
     # 关联评论与转录记录
     comments = relationship("Comment", back_populates="video", cascade="all, delete")
@@ -115,25 +113,31 @@ class BrainstormedTopic(Base):
 # -------------------------------
 # Database 类封装
 # -------------------------------
-
 class Database:
     """
     数据库封装类，负责初始化数据库及所有数据的存储和更新操作。
 
     表设计说明：
-      - videos 表：扁平化存储所有视频相关元数据，包括 AI 生成的摘要、转录、音频摘要及累计的 OpenAI 调用费用。
-      - ai_interactions 表：记录所有 AI 接口调用交互的详细信息（输入、输出、交互类型、token 使用、费用）。
+      - videos 表：存储视频相关元数据，包括 AI 生成的摘要、转录、音频摘要及累计的 OpenAI 调用费用。
+      - ai_interactions 表：记录所有 AI 接口调用交互的详细信息。
       - comments 表：存储视频评论数据，与 videos 表通过 video_id 关联。
       - keyword_analysis 表：存储关键词分析结果。
-      - transcripts 表：存储每次生成的转录和摘要历史记录。
+      - transcripts 表：存储转录和摘要历史记录。
       - brainstormed_topics 表：存储头脑风暴产生的话题和评分。
 
     更新控制：
       如果某视频在指定周期（默认为 7 天）内已更新，则更新操作将被跳过。
+    
+    注意：如果你遇到 "no such column: videos.ai_cost" 的错误，
+          请确保删除旧的数据库文件或在开发阶段设置 recreate=True，
+          以便重新创建数据库模式。生产环境建议使用 Alembic 进行迁移管理。
     """
-    def __init__(self, db_path: str):
+    def __init__(self, db_path: str, recreate: bool = False):
         logger.info("Initializing database with path: %s", db_path)
         self.engine = create_engine(f"sqlite:///{db_path}", echo=False, future=True)
+        if recreate:
+            logger.info("Recreating database: dropping all tables.")
+            Base.metadata.drop_all(self.engine)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine, future=True)
         logger.info("Database tables created.")
@@ -146,9 +150,6 @@ class Database:
         logger.info("Database closed (engine will be disposed on program exit).")
 
     def should_update_video_metadata(self, video_id: str, period_days: int = 7) -> bool:
-        """
-        如果视频在 period_days 内已更新则返回 False，否则返回 True。
-        """
         session = self.get_session()
         try:
             video = session.query(Video).filter(Video.video_id == video_id).first()
@@ -162,10 +163,6 @@ class Database:
             session.close()
 
     def store_video_metadata(self, video_metadata: dict):
-        """
-        存储或更新视频元数据到 videos 表。
-        video_metadata 中必须包含 'id'、'snippet' 与 'contentDetails' 子字典。
-        """
         session = self.get_session()
         try:
             video_metadata['view_count'] = int(video_metadata.get('view_count', 0)) or 0
@@ -215,10 +212,6 @@ class Database:
 
     def update_video_metadata(self, video_id: str, llm_summary: str, transcript: str,
                               audio_summary: str = None, ai_cost: float = 0.0):
-        """
-        更新指定视频的 AI 摘要、转录、音频摘要和 AI 调用成本。
-        如果视频在指定周期内已更新，则跳过更新。
-        """
         if not self.should_update_video_metadata(video_id):
             logger.info("Skipping update for video %s (updated recently).", video_id)
             return
@@ -244,9 +237,6 @@ class Database:
             session.close()
 
     def store_comments(self, video_id: str, comments: List[Dict[str, Any]]):
-        """
-        存储视频评论数据到 comments 表。
-        """
         session = self.get_session()
         try:
             for comment in comments:
@@ -272,9 +262,6 @@ class Database:
             session.close()
 
     def store_brainstormed_topics(self, topics: List[str], critique: str, topic_score: float):
-        """
-        存储头脑风暴话题数据到 brainstormed_topics 表。
-        """
         if not topics:
             logger.error("Topics list is empty or invalid.")
             return
@@ -299,9 +286,6 @@ class Database:
             session.close()
 
     def store_transcript_summary(self, video_id: str, transcript: str, summary: str):
-        """
-        存储视频的转录和 AI 生成的摘要到 transcripts 表。
-        """
         if not video_id or not transcript.strip() or not summary.strip():
             logger.error("Invalid input for transcript and summary storage.")
             return
@@ -326,9 +310,6 @@ class Database:
     def store_ai_interaction(self, input_data: Dict[str, Any], output_data: Dict[str, Any],
                              interaction_type: str, tokens_used: int = 0, cost: float = 0.0,
                              timestamp: Optional[str] = None):
-        """
-        存储 AI 交互记录到 ai_interactions 表。
-        """
         session = self.get_session()
         try:
             new_interaction = AIInteraction(
@@ -350,9 +331,6 @@ class Database:
             session.close()
 
     def store_keyword_analysis(self, keyword_analysis: List[Dict[str, Any]]):
-        """
-        存储关键词分析结果到 keyword_analysis 表。
-        """
         session = self.get_session()
         try:
             for analysis in keyword_analysis:
@@ -375,12 +353,9 @@ class Database:
             session.close()
 
     def store_data(self, table_name: str, data_dict: Dict[str, Any]):
-        """
-        通用存储函数，用于插入任意表的数据。
-        """
         session = self.get_session()
         try:
-            # 利用 SQLAlchemy 的 MetaData 反射获得表对象
+            from sqlalchemy import MetaData  # 延迟导入
             metadata = MetaData()
             metadata.reflect(bind=self.engine)
             if table_name not in metadata.tables:
@@ -398,7 +373,4 @@ class Database:
             session.close()
 
 
-# 导出接口
-__all__ = [
-    "Database",
-]
+__all__ = ["Database"]
