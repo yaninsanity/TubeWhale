@@ -1,65 +1,71 @@
 models:
   openai_o1:
-    model: "gpt-4o"
-    type: text
+    model_name: "gpt-4o"
+    type: "text"
     context_length: 128000  # 实际上下文长度
     max_tokens: 4000        # 调整为合理值
     temperature: 0.7
     price:
-      text:
-        input: 15.00        # $15/M input tokens
-        output: 60.00       # $60/M output tokens
+      prompt: 15.00        # $15/M input tokens
+      completion: 60.00     # $60/M output tokens
   
   whisper-large:
-    model: "whisper-1"
-    type: audio
+    model_name: "whisper-1"
+    type: "audio"
     price:
-      audio:
-        minute: 0.006
-
+      prompt: 0.006        # 每分钟收费 0.006
+      completion: 0.0
+  
   openai_o3_mini:
-    model: "gpt-4-turbo"    # 使用官方模型名称
-    type: text
+    model_name: "gpt-4-turbo"    # 使用官方模型名称
+    type: "text"
     context_length: 128000
     max_tokens: 4096
     temperature: 0.7
     price:
-      text:
-        input: 1.10
-        output: 4.40
-
+      prompt: 1.10
+      completion: 4.40
+  
   gpt_4_5:
-    model: "gpt-4-1106-preview"  # 使用实际可用模型
-    type: text
+    model_name: "gpt-4-1106-preview"  # 使用实际可用模型
+    type: "text"
     context_length: 128000
     max_tokens: 4096
     temperature: 0.7
     price:
-      text:
-        input: 75.00
-        output: 150.00
-
+      prompt: 75.00
+      completion: 150.00
+  
   gpt_4o:
-    model: "gpt-4o"
-    type: text
+    model_name: "gpt-4o"
+    type: "text"
     context_length: 128000
     max_tokens: 4096
     temperature: 0.7
     price:
-      text:
-        input: 2.50
-        output: 10.00
-
+      prompt: 2.50
+      completion: 10.00
+  
   gpt_4o_mini:
-    model: "gpt-3.5-turbo"  # 使用实际存在的小模型
-    type: text
+    model_name: "gpt-3.5-turbo"  # 使用实际存在的小模型
+    type: "text"
     context_length: 16385
     max_tokens: 4096
     temperature: 0.7
     price:
-      text:
-        input: 0.15
-        output: 0.60
+      prompt: 0.15
+      completion: 0.60
+
+  test-image:
+    model_name: "image-model-001"
+    type: "image"
+    context_length: 512
+    max_tokens: 0
+    temperature: 0.0
+    price:
+      prompt: 0.0
+      completion: 0.0
+    api_key: "dummy_api_key_image"
 
 prompts:
   keyword_generation:
