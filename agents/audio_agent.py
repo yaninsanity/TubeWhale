@@ -56,7 +56,7 @@ class AudioProcessingAgent:
         self.db = db
         os.makedirs(self.download_dir, exist_ok=True)
         if youtube_service is None:
-            # 这里示例中使用默认 API key "default_key"，实际请替换为正确的配置或从环境变量中读取
+            # 此处使用默认 API key "default_key"，实际请替换为正确的配置或从环境变量中读取
             self.youtube_service = get_youtube_service("default_key")
         else:
             self.youtube_service = youtube_service
@@ -70,9 +70,10 @@ class AudioProcessingAgent:
         audio_path = await loop.run_in_executor(None, self.youtube_service.download_audio, video_id)
         if audio_path:
             logger.info(f"Audio file downloaded: {audio_path}")
-            # 可记录下载日志到数据库
+            # 如果有数据库对象，记录下载日志
             if self.db:
                 try:
+                    from datetime import datetime
                     record = {
                         "process": "download_audio",
                         "video_id": video_id,
@@ -110,6 +111,7 @@ class AudioProcessingAgent:
             audio_file = BytesIO()
             audio_chunk.export(audio_file, format="mp3")
             audio_file.seek(0)  # 重置文件指针
+
             logger.info("Transcribing audio chunk via OpenAIService's Whisper interface.")
             transcript_text = await self.openai_service.transcribe_audio(audio_file)
             if transcript_text:
@@ -189,9 +191,9 @@ class AudioProcessingAgent:
             if summary:
                 chunk_summaries.append(summary)
                 previous_summary = summary
-                # 记录每个片段摘要到数据库（如果 db 存在）
                 if self.db:
                     try:
+                        from datetime import datetime
                         record = {
                             "process": "audio_chunk_summary",
                             "video_id": video_id,
@@ -216,9 +218,9 @@ class AudioProcessingAgent:
             logger.error(f"Recursive summary generation failed for video {video_id}.")
             return None
 
-        # 记录最终摘要到数据库
         if self.db:
             try:
+                from datetime import datetime
                 final_record = {
                     "process": "final_audio_summary",
                     "video_id": video_id,
@@ -230,9 +232,8 @@ class AudioProcessingAgent:
             except Exception as db_e:
                 logger.error(f"Failed to record final audio summary for video {video_id}: {db_e}")
         return final_summary
-        
 
-# 工厂函数
+
 def get_audio_processing_agent(openai_service: OpenAIService, youtube_service: Optional[YouTubeService] = None,
                                download_dir: str = "downloads", max_duration_ms: int = 60000, debug_mode: bool = False,
                                db: Optional[Any] = None) -> AudioProcessingAgent:

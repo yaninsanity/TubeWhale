@@ -12,6 +12,8 @@ import googleapiclient.discovery  # 避免在模块级别导入 build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import build_http
 
+from utils.helper import retry
+
 # YouTube API 的 Discovery URL
 DISCOVERY_URL = "https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest"
 
@@ -19,8 +21,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 # ================= Dummy Service（仅供内部测试时使用，不建议在生产中使用） =================
-# 这里我们不将 DummyService 放入产品代码中，只用于测试环境通过 monkeypatch 替换 _build_service
-
 class _DummyResource:
     def __init__(self, call_type):
         self.call_type = call_type
@@ -43,7 +43,6 @@ class _DummyService:
         return _DummyResource("playlistItems")
 
 # ================= YouTubeService 模块 =================
-
 class YouTubeService:
     """
     YouTubeService 封装了 YouTube Data API 的调用，包括搜索、视频详情、评论、播放列表等接口，
@@ -53,24 +52,12 @@ class YouTubeService:
       - 重试机制与指数退避（含随机短延迟，模拟人类行为）。
       - 当 quota 超出时自动轮换 API key。
       - 请求重建，处理不可复用的 request 对象。
-      - 日志记录中加入可爱的 emoji 表示状态（✅、😬、😢 等）。
-      - 初始化时可选择检查所有 API key 的可用性，并只保留可用的 key（通过 skip_key_check 参数控制）。
-      - 新增 fetch_transcript 方法：调用 YouTubeTranscriptApi 获取视频字幕，默认英文。
-      - 支持代理与自定义 User-Agent，用于 yt-dlp 下载，以降低被识别为机器人的风险。
-      - 成本跟踪：对每种调用累计一定“成本”，便于后续成本分析与报警（未来可扩展为 quota 检查）。
+      - 日志记录中加入 emoji 表示状态（✅、😬、😢）。
+      - 支持代理与自定义 User-Agent，用于 yt-dlp 下载。
+      - 新增 fetch_transcript 方法：调用 YouTubeTranscriptApi 获取视频字幕（默认英文），并对每个条目的 'text' 使用 str() 转换防止类型错误。
     """
-    
     def __init__(self, api_keys, unverified=False, max_retries=3, backoff_factor=1,
                  skip_key_check: bool = False, proxy: Optional[str] = None, user_agent: Optional[str] = None):
-        """
-        :param api_keys: API key 列表或单个 key（字符串）。
-        :param unverified: 是否使用未验证的 SSL 上下文（不推荐，除非特殊需求）。
-        :param max_retries: 每个 API 请求的最大重试次数。
-        :param backoff_factor: 指数退避因子（秒）。
-        :param skip_key_check: 如果 True，则跳过 API key 检查（适用于测试环境）。
-        :param proxy: 可选代理地址，用于 yt-dlp 下载。
-        :param user_agent: 可选自定义 User-Agent 字符串，用于 yt-dlp 下载。
-        """
         if isinstance(api_keys, str):
             api_keys = [api_keys]
         if not api_keys:
@@ -94,24 +81,16 @@ class YouTubeService:
         self.service = self._build_service(current_key, unverified)
     
     def check_api_keys(self):
-        """
-        检查传入的 API key 是否可用，方式为调用 videos().list 查询示例视频，
-        并记录日志。只保留可用的 key。
-        """
         available_keys = []
-        test_video_id = "dQw4w9WgXcQ"  # 示例视频 ID
+        test_video_id = "dQw4w9WgXcQ"
         for key in self.api_keys:
-            # 特殊处理 "dummy_key"（测试用，不进行真实请求）
             if key.strip().lower() == "dummy_key":
                 available_keys.append(key)
                 logger.info(f"API key {key} ✅ is available (dummy).")
                 continue
             try:
                 service = self._build_service(key, self.unverified)
-                request = service.videos().list(
-                    part="snippet",
-                    id=test_video_id
-                )
+                request = service.videos().list(part="snippet", id=test_video_id)
                 request.execute()
                 available_keys.append(key)
                 logger.info(f"API key {key} ✅ is available.")
@@ -139,7 +118,6 @@ class YouTubeService:
             return new_key
     
     def _build_service(self, api_key, unverified=False):
-        # 如果传入的 key 为 "dummy_key"，返回一个简单的模拟服务对象
         if str(api_key).strip().lower() == "dummy_key":
             logger.info("Using dummy service for API key 'dummy_key'.")
             return _DummyService()
@@ -151,27 +129,15 @@ class YouTubeService:
                     setattr(http, "request", lambda *args, **kwargs: None)
                 http.ssl_context = ssl._create_unverified_context()
                 service = googleapiclient.discovery.build(
-                    "youtube",
-                    "v3",
-                    developerKey=api_key,
-                    http=http,
-                    credentials=None,
-                    cache_discovery=False,
-                    discoveryServiceUrl=DISCOVERY_URL,
-                )
+                    "youtube", "v3", developerKey=api_key, http=http,
+                    credentials=None, cache_discovery=False, discoveryServiceUrl=DISCOVERY_URL)
             else:
                 service = googleapiclient.discovery.build(
-                    "youtube",
-                    "v3",
-                    developerKey=api_key,
-                    credentials=None,
-                    cache_discovery=False,
-                    discoveryServiceUrl=DISCOVERY_URL,
-                )
+                    "youtube", "v3", developerKey=api_key, credentials=None,
+                    cache_discovery=False, discoveryServiceUrl=DISCOVERY_URL)
             logger.info("YouTube service initialized successfully. 😊")
             return service
         except Exception as e:
-            # 针对特定测试 key 返回模拟服务（仅在测试时使用，不应在生产中使用）
             if api_key in {"key1", "key2"}:
                 logger.info("Returning dummy service in _build_service for testing.")
                 return _DummyService()
@@ -183,8 +149,7 @@ class YouTubeService:
         while attempts < self.max_retries:
             try:
                 if call_type in self.cost_tracking:
-                    self.cost_tracking[call_type] += 100  # 累计成本
-                # 随机延迟，模拟人类行为，降低被封风险
+                    self.cost_tracking[call_type] += 100
                 time.sleep(random.uniform(0.1, 0.5))
                 logger.info(f"Executing {call_type} request, attempt {attempts + 1}.")
                 response = request.execute()
@@ -439,8 +404,9 @@ class YouTubeService:
         }
         if self.proxy:
             ydl_opts['proxy'] = self.proxy
-        if self.user_agent:
-            ydl_opts.setdefault('http_headers', {})['User-Agent'] = self.user_agent
+        # 始终设置 HTTP headers，防止被识别为机器人
+        ydl_opts.setdefault('http_headers', {})['User-Agent'] = self.user_agent or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+        ydl_opts.setdefault('http_headers', {})['Referer'] = "https://www.youtube.com/"
         
         def download():
             with YoutubeDL(ydl_opts) as ydl:
@@ -470,51 +436,28 @@ class YouTubeService:
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, download_func)
     
-    def fetch_transcript(self, video_id, languages: Optional[List[str]] = None) -> Optional[str]:
+    @retry(max_retries=2, delay=3)
+    async def fetch_transcript(self, video_id: str) -> Optional[str]:
         """
-        尝试通过多种方案获取视频字幕，默认使用英文字幕。
-
-        方案：
-        1. 使用 YouTubeTranscriptApi 获取字幕。如果抛出 NoTranscriptFound 异常（表示视频禁用了字幕或不存在），则直接返回 None。
-        2. 如果其他异常，则作为备用方案使用 pytube 尝试获取字幕（仅当可用时）。
-
-        如果所有方案均失败，则返回 None。
+        获取视频字幕的函数。
+        若字幕被禁用或获取失败，则直接返回 None。
+        对每个条目的 'text' 转换为字符串再拼接，防止类型错误。
         """
-        languages = languages or ["en"]
-        # 方案 1：使用 YouTubeTranscriptApi 获取字幕
         try:
             from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound
-            transcript_entries = YouTubeTranscriptApi.get_transcript(video_id, languages=languages)
-            text = " ".join([entry['text'] for entry in transcript_entries])
+            transcript_entries = YouTubeTranscriptApi.get_transcript(video_id, languages=["en"])
+            text = " ".join([str(entry.get('text', '')) for entry in transcript_entries])
             logger.info(f"Transcript fetched for video {video_id} via YouTubeTranscriptApi. 😊")
             return text
         except Exception as e:
-            # 如果是 NoTranscriptFound，则说明视频没有开启字幕，不再尝试其他方案
-            from youtube_transcript_api import NoTranscriptFound
-            if isinstance(e, NoTranscriptFound):
+            error_str = str(e).lower()
+            if "no transcript" in error_str or "captions are disabled" in error_str or "no subtitles" in error_str:
                 logger.info(f"Video {video_id} has captions disabled. 🌼")
                 return None
             else:
                 logger.warning(f"Primary transcript fetch failed for video {video_id}: {e} 😢")
-        
-        # 方案 2：使用 pytube 尝试提取字幕（仅支持部分视频）
-        try:
-            from pytube import YouTube
-            yt_url = f"https://www.youtube.com/watch?v={video_id}"
-            yt = YouTube(yt_url)
-            caption = yt.captions.get('en')
-            if caption:
-                text = caption.generate_srt_captions()
-                logger.info(f"Transcript fetched for video {video_id} via pytube. 😊")
-                return text
-            else:
-                logger.info(f"No captions available via pytube for video {video_id}. 🌸")
-        except Exception as e:
-            logger.warning(f"Fallback transcript fetch via pytube failed for video {video_id}: {e} 🌸")
-        
         logger.info(f"No transcript available for video {video_id}. 🌼")
         return None
-
 
 
 def get_youtube_service(api_key, **kwargs):
