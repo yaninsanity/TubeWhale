@@ -78,8 +78,19 @@ prompts:
   structured_output:
     system: "You are an expert in summarizing and extracting structured information."
     user: >
-      Provide a JSON-formatted response that contains a summary and key points for the following text: "{{ text }}"
+      Provide a JSON-formatted response that contains a standardized summary with the following keys:
+      "main_topic", "key_insights", "recommended_tools", "best_practices", "challenges_and_advice".
+      Use the input text to generate an actionable guide.
+      Text: "{{ text }}"
   
+  summarization:
+    system: "You are an expert content creator and summarizer."
+    user: >
+      Your goal is to produce a concise, actionable summary for guide production.
+      Focus on key takeaways, important insights, and actionable steps.
+      Previous Summary: "{{ previous_summary }}"
+      Text: "{{ text }}"
+
   default:
     system: "You are a helpful assistant."
     user: "{{ input }}"
