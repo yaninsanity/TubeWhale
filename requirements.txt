@@ -16,3 +16,4 @@ audioop-lts
 pytest
 # sqlite3-rich 
 pytest-asyncio
+sqlalchemy
