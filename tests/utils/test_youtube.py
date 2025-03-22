@@ -1,17 +1,18 @@
-import pytest
+import os
 import time
 import threading
+import pytest
 import logging
 from googleapiclient.errors import HttpError
-from utils.youtube import YouTubeService
+from utils.youtube import YouTubeService, get_youtube_service
 
-# DummyResponse：用于模拟 HttpError 中的响应对象
+# ------------------ DummyResponse 与 DummyRequest ------------------
+
 class DummyResponse:
     def __init__(self, reason="quotaExceeded", status=403):
         self.reason = reason
         self.status = status
 
-# DummyRequest：用于模拟 request.execute() 行为
 class DummyRequest:
     def __init__(self, response=None, error=False, error_text="", uri="dummy_uri?q=test&maxResults=25&type=video&videoEmbeddable=true&videoSyndicated=true"):
         self.response = response
@@ -21,11 +22,11 @@ class DummyRequest:
 
     def execute(self):
         if self.error:
-            dummy_resp = DummyResponse(reason=self.error_text, status=403)
-            raise HttpError(resp=dummy_resp, content=self.error_text.encode("utf-8"))
+            raise HttpError(resp=DummyResponse(reason=self.error_text), content=self.error_text.encode("utf-8"))
         return self.response
 
-# DummyResource：根据传入的 call_type 调用对应的行为函数
+# ------------------ DummyResource 与 DummyService ------------------
+
 class DummyResource:
     def __init__(self, call_type, behavior):
         self.call_type = call_type
@@ -37,14 +38,8 @@ class DummyResource:
             raise Exception(f"Unsupported call type: {self.call_type}")
         return func(kwargs)
 
-# DummyService：为不同资源返回独立的 DummyResource
 class DummyService:
     def __init__(self, behavior):
-        """
-        :param behavior: dict, key 为调用类型
-         ("search", "videos_list", "commentThreads", "playlists", "playlistItems")
-         value 为一个函数，输入参数 kwargs 返回 DummyRequest 对象
-        """
         self.behavior = behavior
 
     def search(self):
@@ -62,11 +57,11 @@ class DummyService:
     def playlistItems(self):
         return DummyResource("playlistItems", self.behavior)
 
-# Dummy 模拟函数：成功返回搜索结果（视频）
+# ------------------ Dummy 模拟函数 ------------------
+
 def dummy_search_success(kwargs):
     return DummyRequest(response={"items": [{"id": {"videoId": "test_video"}}]})
 
-# Dummy 模拟函数：成功返回视频详情
 def dummy_videos_success(kwargs):
     return DummyRequest(response={
         "items": [{
@@ -76,7 +71,6 @@ def dummy_videos_success(kwargs):
         }]
     })
 
-# Dummy 模拟函数：成功返回单页评论（无 nextPageToken）
 def dummy_comments_success(kwargs):
     return DummyRequest(response={
         "items": [{
@@ -96,7 +90,6 @@ def dummy_comments_success(kwargs):
         }]
     })
 
-# Dummy 模拟函数：返回两页评论
 def dummy_comments_multi_page(kwargs):
     if kwargs.get("pageToken") is None:
         return DummyRequest(response={
@@ -136,7 +129,6 @@ def dummy_comments_multi_page(kwargs):
             }]
         })
 
-# Dummy 模拟函数：成功返回播放列表元数据
 def dummy_playlists_success(kwargs):
     return DummyRequest(response={
         "items": [{
@@ -147,7 +139,6 @@ def dummy_playlists_success(kwargs):
         }]
     })
 
-# Dummy 模拟函数：成功返回播放列表项（单页）
 def dummy_playlistItems_success(kwargs):
     return DummyRequest(response={
         "items": [{
@@ -156,7 +147,6 @@ def dummy_playlistItems_success(kwargs):
         }]
     })
 
-# Dummy 模拟函数：返回两页播放列表项
 def dummy_playlistItems_multi_page(kwargs):
     if kwargs.get("pageToken") is None:
         return DummyRequest(response={
@@ -174,15 +164,12 @@ def dummy_playlistItems_multi_page(kwargs):
             }]
         })
 
-# Dummy 模拟函数：返回空视频详情（items 为空）
 def dummy_videos_empty(kwargs):
     return DummyRequest(response={"items": []})
 
-# Dummy 模拟函数：评论接口抛出非 quotaExceeded 错误
 def dummy_comments_error(kwargs):
     return DummyRequest(error=True, error_text="some other error", uri="dummy_uri")
 
-# 使用闭包生成 fresh_quota_then_success 函数，避免跨测试状态共享
 def make_quota_then_success():
     call_count = {'count': 0}
     def inner(kwargs):
@@ -193,7 +180,6 @@ def make_quota_then_success():
             return DummyRequest(response={"items": [{"id": {"videoId": "test_video"}}]}, uri="dummy_uri")
     return inner
 
-# 以下为额外补充的重建请求模拟函数，记录传入参数
 def dummy_rebuild_search(kwargs):
     req = DummyRequest(response={"rebuilt": True})
     req.rebuilt_params = kwargs
@@ -219,7 +205,13 @@ def dummy_rebuild_playlistItems(kwargs):
     req.rebuilt_params = kwargs
     return req
 
-# Fixture：返回一个正常的 DummyService（包含所有功能）
+# ------------------ 全局 fixture：替换 googleapiclient.discovery.build --------------
+@pytest.fixture(autouse=True)
+def dummy_build_service(monkeypatch):
+    monkeypatch.setattr("googleapiclient.discovery.build", lambda *args, **kwargs: DummyService({}))
+
+# ------------------ Fixture ------------------
+
 @pytest.fixture
 def dummy_service_success():
     behavior = {
@@ -231,7 +223,6 @@ def dummy_service_success():
     }
     return DummyService(behavior)
 
-# Fixture：构造 YouTubeService，并将 _build_service 方法替换为返回 dummy_service_success
 @pytest.fixture
 def youtube_service(monkeypatch, dummy_service_success):
     def dummy_build_service(self, api_key, unverified):
@@ -240,15 +231,48 @@ def youtube_service(monkeypatch, dummy_service_success):
     service = YouTubeService(api_keys=["key1", "key2"], unverified=True, max_retries=2, backoff_factor=0)
     return service
 
-# ------------------------------
-# 原有测试用例
-# 测试搜索视频成功
+# ------------------------------ 测试下载音频（下载及提取逻辑） ------------------------------
+
+# 定义一个 DummyYDL 类用于模拟 YoutubeDL 下载行为
+class DummyYDL:
+    def __init__(self, opts):
+        self.opts = opts
+    def __enter__(self):
+        return self
+    def __exit__(self, exc_type, exc, tb):
+        pass
+    def download(self, urls):
+        with open(self.opts["download_path"], "wb") as f:
+            f.write(b"dummy audio content")
+
+def test_download_audio_integration(tmp_path, monkeypatch):
+    # 切换当前工作目录到 tmp_path
+    monkeypatch.chdir(tmp_path)
+    # 正常创建 downloads 目录
+    downloads_dir = tmp_path / "downloads"
+    downloads_dir.mkdir()
+    video_id = "video_integration"
+    # 计算绝对路径，用于后续比较
+    audio_path = os.path.abspath(str(downloads_dir / f"{video_id}.mp3"))
+    # 替换 utils.youtube 模块中的 YoutubeDL 为 DummyYDL，
+    # 注意这里 target 为 "utils.youtube.YoutubeDL" 而非 "yt_dlp.YoutubeDL"
+    monkeypatch.setattr("utils.youtube.YoutubeDL", lambda opts: DummyYDL({**opts, "download_path": audio_path}))
+    # 让 time.sleep 正常调用（也可以不覆盖）
+    service = YouTubeService(api_keys=["dummy_key"])
+    result = service.download_audio(video_id)
+    # 检查返回的路径是否正确
+    assert result == audio_path
+    # 检查文件内容
+    with open(result, "rb") as f:
+        content = f.read()
+    assert content == b"dummy audio content"
+
+# ------------------------------ 以下为其他 API 接口测试（保持不变） ------------------------------
 def test_search_videos_success(youtube_service):
     response = youtube_service.search_videos("test")
     assert "items" in response
     assert youtube_service.cost_tracking["search"] >= 100
 
-# 测试搜索频道成功
 def test_search_channels_success(youtube_service, monkeypatch):
     def dummy_channels_success(kwargs):
         return DummyRequest(response={"items": [{"id": {"channelId": "channel1"}, "snippet": {"title": "Test Channel"}}]})
@@ -266,7 +290,6 @@ def test_search_channels_success(youtube_service, monkeypatch):
     assert "items" in response
     assert response["items"][0]["id"].get("channelId") == "channel1"
 
-# 测试搜索播放列表成功
 def test_search_playlists_success(youtube_service, monkeypatch):
     def dummy_playlists_search(kwargs):
         return DummyRequest(response={"items": [{"id": {"playlistId": "playlist1"}, "snippet": {"title": "Test Playlist"}}]})
@@ -284,13 +307,11 @@ def test_search_playlists_success(youtube_service, monkeypatch):
     assert "items" in response
     assert response["items"][0]["snippet"]["title"] == "Test Playlist"
 
-# 测试通用搜索接口附加过滤参数
 def test_generic_search_with_filters(youtube_service):
     filters = {"order": "viewCount", "regionCode": "US"}
     response = youtube_service.search("test query", max_results=10, page_token="token123", resource_type="video", filters=filters)
     assert "items" in response
 
-# 测试获取视频详情成功
 def test_fetch_video_metadata_success(youtube_service):
     metadata = youtube_service.fetch_video_metadata("test_video")
     assert metadata["id"] == "test_video"
@@ -298,7 +319,6 @@ def test_fetch_video_metadata_success(youtube_service):
     assert metadata["view_count"] == 1000
     assert youtube_service.cost_tracking["videos_list"] >= 100
 
-# 测试获取空视频详情返回 None
 def test_fetch_video_metadata_empty(monkeypatch):
     behavior = {
         "videos_list": dummy_videos_empty,
@@ -313,13 +333,11 @@ def test_fetch_video_metadata_empty(monkeypatch):
     metadata = service.fetch_video_metadata("test_video")
     assert metadata is None
 
-# 测试获取单页评论成功
 def test_fetch_all_comments_success(youtube_service):
     comments = youtube_service.fetch_all_comments("test_video")
     assert len(comments) == 1
     assert comments[0]["comment_id"] == "c1"
 
-# 测试获取多页评论成功
 def test_fetch_all_comments_multi_page(monkeypatch):
     behavior = {
         "commentThreads": dummy_comments_multi_page,
@@ -337,7 +355,6 @@ def test_fetch_all_comments_multi_page(monkeypatch):
     assert comments[0]["comment_id"] == "c1"
     assert comments[1]["comment_id"] == "c2"
 
-# 测试获取播放列表元数据成功
 def test_fetch_playlist_metadata_success(youtube_service, monkeypatch):
     behavior = {
         "playlists": dummy_playlists_success,
@@ -354,7 +371,6 @@ def test_fetch_playlist_metadata_success(youtube_service, monkeypatch):
     assert response["snippet"]["title"] == "Test Playlist"
     assert response["contentDetails"]["itemCount"] == 5
 
-# 测试获取单页播放列表项成功
 def test_fetch_playlist_items_success(monkeypatch):
     behavior = {
         "playlistItems": dummy_playlistItems_success,
@@ -370,7 +386,6 @@ def test_fetch_playlist_items_success(monkeypatch):
     assert len(items) == 1
     assert items[0]["snippet"]["title"] == "Playlist Item 1"
 
-# 测试获取多页播放列表项成功
 def test_fetch_playlist_items_multi_page(monkeypatch):
     behavior = {
         "playlistItems": dummy_playlistItems_multi_page,
@@ -388,7 +403,6 @@ def test_fetch_playlist_items_multi_page(monkeypatch):
     assert items[0]["snippet"]["title"] == "Playlist Item 1"
     assert items[1]["snippet"]["title"] == "Playlist Item 2"
 
-# 测试 quotaExceeded 错误下的 API key 轮换
 def test_quota_exceeded_key_rotation(monkeypatch):
     fresh_quota = make_quota_then_success()
     behavior = {
@@ -404,10 +418,8 @@ def test_quota_exceeded_key_rotation(monkeypatch):
     service = YouTubeService(api_keys=["key1", "key2"], unverified=True, max_retries=2, backoff_factor=0)
     response = service.search_videos("test")
     assert "items" in response
-    # 验证轮换后的 key为 key2
     assert service.get_current_key() == "key2"
 
-# 测试达到最大重试次数后抛出异常
 def test_max_retries_exceeded(monkeypatch):
     def always_quota(kwargs):
         return DummyRequest(error=True, error_text="quotaExceeded", uri="dummy_uri")
@@ -425,12 +437,10 @@ def test_max_retries_exceeded(monkeypatch):
     with pytest.raises(Exception, match="Max retries exceeded"):
         service.search_videos("test")
 
-# 测试未提供 API key 时抛出异常
 def test_empty_api_keys():
     with pytest.raises(ValueError, match="No YouTube API keys provided."):
         YouTubeService(api_keys=[], unverified=True)
 
-# 测试 quota_usage 属性返回正确累计成本
 def test_quota_usage(youtube_service):
     youtube_service.search_videos("test")
     youtube_service.fetch_video_metadata("test_video")
@@ -438,7 +448,6 @@ def test_quota_usage(youtube_service):
     expected_total = youtube_service.cost_tracking["search"] + youtube_service.cost_tracking["videos_list"]
     assert quota["total_cost"] == expected_total
 
-# 测试评论接口抛出非 quotaExceeded 错误时异常能正确冒泡
 def test_fetch_all_comments_unexpected_error(monkeypatch):
     behavior = {
         "commentThreads": dummy_comments_error,
@@ -453,17 +462,14 @@ def test_fetch_all_comments_unexpected_error(monkeypatch):
     with pytest.raises(HttpError, match="some other error"):
         service.fetch_all_comments("test_video")
 
-# ------------------------------
-# 以下为补充的改进测试，最小风险保证
+# ------------------------------ 以下为补充的改进测试 ------------------------------
 
-# 测试 _rebuild_request 缺少 uri 属性时抛出异常
 def test_rebuild_request_without_uri(youtube_service):
     class NoUri:
         pass
-    with pytest.raises(Exception, match="无法重建请求对象，因为缺少 uri 属性。请在实际实现中保存请求参数。"):
+    with pytest.raises(Exception, match="缺少 uri"):
         youtube_service._rebuild_request(NoUri(), "search")
 
-# 测试 _rebuild_request 对 search 请求的重建
 def test_rebuild_request_for_search(monkeypatch, youtube_service):
     dummy_uri = "dummy_uri?q=test_query&maxResults=10&type=video&videoEmbeddable=true&videoSyndicated=true&pageToken=ptoken"
     old_request = DummyRequest(response={"items": []}, uri=dummy_uri)
@@ -477,7 +483,6 @@ def test_rebuild_request_for_search(monkeypatch, youtube_service):
     assert params.get("videoSyndicated") == "true"
     assert params.get("pageToken") == "ptoken"
 
-# 测试 _rebuild_request 对 videos_list 请求的重建
 def test_rebuild_request_for_videos_list(monkeypatch, youtube_service):
     dummy_uri = "dummy_uri?id=test_video"
     old_request = DummyRequest(response={"items": []}, uri=dummy_uri)
@@ -487,7 +492,6 @@ def test_rebuild_request_for_videos_list(monkeypatch, youtube_service):
     assert params.get("id") == "test_video"
     assert params.get("part") == "snippet,statistics,contentDetails"
 
-# 测试 _rebuild_request 对 commentThreads 请求的重建
 def test_rebuild_request_for_commentThreads(monkeypatch, youtube_service):
     dummy_uri = "dummy_uri?videoId=test_video&maxResults=50&pageToken=token123"
     old_request = DummyRequest(response={"items": []}, uri=dummy_uri)
@@ -500,7 +504,6 @@ def test_rebuild_request_for_commentThreads(monkeypatch, youtube_service):
     assert params.get("part") == "snippet,replies"
     assert params.get("textFormat") == "plainText"
 
-# 测试 _rebuild_request 对 playlists 请求的重建
 def test_rebuild_request_for_playlists(monkeypatch, youtube_service):
     dummy_uri = "dummy_uri?id=playlist1&channelId=UC123"
     old_request = DummyRequest(response={"items": []}, uri=dummy_uri)
@@ -511,7 +514,6 @@ def test_rebuild_request_for_playlists(monkeypatch, youtube_service):
     assert params.get("channelId") == "UC123"
     assert params.get("part") == "snippet,contentDetails,status"
 
-# 测试 _rebuild_request 对 playlistItems 请求的重建
 def test_rebuild_request_for_playlistItems(monkeypatch, youtube_service):
     dummy_uri = "dummy_uri?playlistId=playlist1&maxResults=50&pageToken=token456"
     old_request = DummyRequest(response={"items": []}, uri=dummy_uri)
@@ -523,7 +525,6 @@ def test_rebuild_request_for_playlistItems(monkeypatch, youtube_service):
     assert params.get("pageToken") == "token456"
     assert params.get("part") == "snippet,contentDetails"
 
-# 测试 fetch_all_comments 能正确处理回复（replies）情况
 def test_fetch_all_comments_with_replies(monkeypatch):
     def dummy_comments_with_replies(kwargs):
         return DummyRequest(response={
@@ -580,27 +581,22 @@ def test_fetch_all_comments_with_replies(monkeypatch):
     monkeypatch.setattr(YouTubeService, "_build_service", lambda self, api_key, unverified: dummy_service)
     service = YouTubeService(api_keys=["key1"], unverified=True, max_retries=1, backoff_factor=0)
     comments = service.fetch_all_comments("test_video")
-    # 期望有 1 条顶层评论和 2 条回复，共 3 条评论
     assert len(comments) == 3
     top_comment = comments[0]
     assert top_comment["comment_id"] == "c1"
     assert top_comment["parent_id"] is None
     reply1 = comments[1]
-    # 对于 id 为 "c1.1"，应分割为 parent_id "c1" 和 child_id "1"
     assert reply1["comment_id"] == "1"
     assert reply1["parent_id"] == "c1"
     reply2 = comments[2]
-    # 对于 id "r2"，没有点，则 parent_id 为顶层评论的 id
     assert reply2["comment_id"] == "r2"
     assert reply2["parent_id"] == "c1"
 
-# 测试当只有一个 API key 时调用 rotate_key 抛出异常
 def test_rotate_key_single_key():
     service = YouTubeService(api_keys=["only_key"], unverified=True, max_retries=1, backoff_factor=0)
     with pytest.raises(Exception, match="All API keys have been exhausted"):
         service.rotate_key()
 
-# 测试多线程下调用 rotate_key 的线程安全性
 def test_concurrent_rotate_key(monkeypatch):
     service = YouTubeService(api_keys=["key1", "key2"], unverified=True, max_retries=1, backoff_factor=0)
     def rotate():
@@ -613,10 +609,8 @@ def test_concurrent_rotate_key(monkeypatch):
         t.start()
     for t in threads:
         t.join()
-    # 最终使用的 key 应在提供的 key 列表中
     assert service.get_current_key() in ["key1", "key2"]
 
-# 测试 _build_service 的 unverified 分支（检查日志警告和返回值）
 def test_build_service_unverified(monkeypatch, caplog):
     from googleapiclient.http import build_http
     dummy_http = type("DummyHTTP", (), {})()
@@ -630,7 +624,6 @@ def test_build_service_unverified(monkeypatch, caplog):
     assert service.service == "dummy_service"
     assert any("Building YouTube service with unverified SSL context" in record.message for record in caplog.records)
 
-# 测试 _execute_request 遇到非 quotaExceeded 的意外异常时能正确冒泡（例如 ValueError）
 def test_execute_request_unexpected_exception(monkeypatch, youtube_service):
     class DummyRequestUnexpected:
         uri = "dummy_uri"
@@ -639,9 +632,14 @@ def test_execute_request_unexpected_exception(monkeypatch, youtube_service):
     with pytest.raises(ValueError, match="Unexpected error"):
         youtube_service._execute_request(DummyRequestUnexpected(), "search")
 
-# 测试传入单个字符串 API key 时能正确转换为列表
 def test_api_key_single_string(monkeypatch):
     monkeypatch.setattr(YouTubeService, "_build_service", lambda self, api_key, unverified: DummyService({"search": dummy_search_success}))
     service = YouTubeService(api_keys="single_key", unverified=True, max_retries=1, backoff_factor=0)
     assert isinstance(service.api_keys, list)
     assert service.api_keys[0] == "single_key"
+
+def test_get_youtube_service():
+    service = get_youtube_service("dummy_key")
+    assert isinstance(service, YouTubeService)
+    assert service.get_current_key() == "dummy_key"
+

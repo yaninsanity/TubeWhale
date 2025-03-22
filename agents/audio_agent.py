@@ -3,13 +3,10 @@ import logging
 import asyncio
 import random
 from io import BytesIO
-import json
 from typing import Any, Dict, List, Optional
-from yt_dlp import YoutubeDL
 from pydub import AudioSegment
-import re
-
 from utils.helper import retry
+from utils.youtube import YouTubeService, get_youtube_service  # 引入我们改进后的 YouTubeService
 
 # -------------------------------
 # 配置日志
@@ -32,52 +29,43 @@ class AudioProcessingAgent:
         "challenges_and_advice": "N/A"
     }
 
-    def __init__(self, openai_service, download_dir: str = "downloads", max_duration_ms: int = 60000, debug_mode: bool = False):
+    def __init__(self, openai_service, youtube_service: Optional[YouTubeService] = None,
+                 download_dir: str = "downloads", max_duration_ms: int = 60000, debug_mode: bool = False):
+        """
+        :param openai_service: 提供转录与文本摘要能力的 OpenAIService 实例
+        :param youtube_service: 可选的 YouTubeService 实例，用于下载视频音频；如果未提供，将使用默认配置创建
+        :param download_dir: 下载音频存放目录
+        :param max_duration_ms: 音频分割时每段的最大时长（毫秒）
+        :param debug_mode: 是否开启调试模式
+        """
         self.openai_service = openai_service
         self.download_dir = download_dir
         self.max_duration_ms = max_duration_ms
         self.debug_mode = debug_mode
         os.makedirs(self.download_dir, exist_ok=True)
+        # 如果未传入 youtube_service，则创建默认的实例（这里可根据实际情况传入 API key）
+        if youtube_service is None:
+            # 假设从配置或环境中获取 API key，这里以 "default_key" 为示例
+            self.youtube_service = get_youtube_service("default_key")
+        else:
+            self.youtube_service = youtube_service
 
     # -------------------------------
-    # 下载音频
+    # 下载音频（委托给 YouTubeService）
     # -------------------------------
     async def download_audio(self, video_id: str) -> Optional[str]:
         """
-        下载 YouTube 视频音频文件。
+        使用 YouTubeService 下载 YouTube 视频音频文件，返回文件路径。
+        本方法采用异步包装调用同步的 YouTubeService.download_audio 方法。
         """
-        audio_path = os.path.join(self.download_dir, f"{video_id}.mp3")
-        if os.path.exists(audio_path):
-            logging.info(f"Audio file {audio_path} already exists. Skipping download.")
-            return audio_path
-
-        logging.info(f"Downloading audio for video ID: {video_id}")
-        ydl_opts = {
-            'format': 'bestaudio/best',
-            'outtmpl': os.path.join(self.download_dir, f"{video_id}.%(ext)s"),
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }],
-            'quiet': True,
-            'no_warnings': True,
-        }
-
-        def download():
-            with YoutubeDL(ydl_opts) as ydl:
-                video_url = f"https://www.youtube.com/watch?v={video_id}"
-                ydl.download([video_url])
-
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, download)
-
-        if os.path.exists(audio_path):
-            logging.info(f"Audio downloaded successfully for video ID {video_id}.")
-            return audio_path
+        loop = asyncio.get_running_loop()
+        # 使用 run_in_executor 包装调用 download_audio（该方法内部已处理异步逻辑）
+        audio_path = await loop.run_in_executor(None, self.youtube_service.download_audio, video_id)
+        if audio_path:
+            logging.info(f"Audio file downloaded: {audio_path}")
         else:
-            logging.error(f"Audio file {audio_path} not found after download.")
-            return None
+            logging.error(f"Failed to download audio for video {video_id}")
+        return audio_path
 
     # -------------------------------
     # 分割音频
@@ -110,7 +98,6 @@ class AudioProcessingAgent:
             audio_file.seek(0)  # 重置文件指针
 
             logging.info("Transcribing audio chunk via OpenAIService's Whisper interface.")
-            # 调用 OpenAIService 提供的异步语音转录方法
             transcript_text = await self.openai_service.transcribe_audio(audio_file)
             if transcript_text:
                 logging.info("Transcription completed for audio chunk.")
@@ -134,7 +121,6 @@ class AudioProcessingAgent:
                 "text": transcript_text,
                 "previous_summary": previous_summary
             })
-            # 修改为 await 调用异步方法
             response_text = await self.openai_service.async_completion(prompt=prompt)
             summary = response_text.strip()
             logging.info("Summary generated for transcript chunk.")
@@ -171,7 +157,7 @@ class AudioProcessingAgent:
     async def process_video_audio(self, video_id: str, topic: str, metadata: Dict[str, Any], model: str = "gpt-4") -> Optional[Dict[str, Any]]:
         """
         综合处理单个视频音频，生成标准化摘要，流程：
-          1. 下载音频
+          1. 下载音频（调用 YouTubeService）
           2. 分割音频
           3. 对每个音频片段转录并生成摘要（支持上下文传递）
           4. 递归合并所有片段摘要
