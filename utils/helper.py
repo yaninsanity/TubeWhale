@@ -1,11 +1,13 @@
-import logging
-import asyncio
 import os
+import asyncio
 import yaml
+import logging
+from datetime import datetime
 
 def retry(max_retries=3, delay=2, backoff_factor=2):
     """
-    重试装饰器，支持指数退避
+    重试装饰器，支持指数退避。
+    如果被装饰的异步函数连续失败，则等待一段时间后重试，最多重试 max_retries 次。
     """
     def decorator(func):
         async def wrapper(*args, **kwargs):
@@ -23,14 +25,29 @@ def retry(max_retries=3, delay=2, backoff_factor=2):
 
 def setup_logging(log_level=logging.INFO):
     """
-    设置日志格式
+    设置日志格式。
+    为确保每次调用都重新配置日志（便于单元测试捕获），先清空 root logger 的所有 handlers，
+    然后添加一个新的 StreamHandler，并立即刷新所有 handler。
     """
-    logging.basicConfig(level=log_level, format='%(asctime)s - %(levelname)s - %(message)s')
-    logging.info("Logging is set up with level: %s", log_level)
-
+    root_logger = logging.getLogger()
+    # 清除已有的所有 handler，但保留 caplog 的处理器
+    for handler in root_logger.handlers[:]:
+        if not isinstance(handler, type(logging.StreamHandler())):
+            root_logger.removeHandler(handler)
+    # 创建一个新的 StreamHandler
+    stream_handler = logging.StreamHandler()
+    stream_handler.setLevel(log_level)
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    stream_handler.setFormatter(formatter)
+    root_logger.addHandler(stream_handler)
+    root_logger.setLevel(log_level)
+    root_logger.info("Logging is set up with level: %s", log_level)
+    for handler in root_logger.handlers:
+        handler.flush()
+        
 def load_yaml(path: str) -> dict:
     """
-    加载 YAML 文件并返回字典
+    加载 YAML 文件并返回字典，如果文件不存在或加载错误则返回空字典。
     """
     if not os.path.exists(path):
         logging.error(f"YAML file not found at: {path}")
@@ -45,6 +62,10 @@ def load_yaml(path: str) -> dict:
         return {}
 
 def print_startup_banner():
+    """
+    打印启动横幅，将横幅内容写入日志（INFO 级别）。
+    横幅中包含关键字 "Yaninsanity" 以便测试检测。
+    """
     banner = r"""
 Author Github: @Yaninsanity 
 Follow me: https://github.com/yaninsanity/
@@ -60,3 +81,5 @@ Produced by Eclipzion Tech Squad 2025®
     888   "Y88888 88888P"   "Y8888  888P     Y888 888    888 d88P     888 88888888 8888888888             
 """
     logging.info(banner)
+    for handler in logging.getLogger().handlers:
+        handler.flush()
