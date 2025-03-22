@@ -2,8 +2,8 @@ models:
   openai_o1:
     model_name: "gpt-4o"
     type: "text"
-    context_length: 128000  # 实际上下文长度
-    max_tokens: 4000        # 调整为合理值
+    context_length: 128000
+    max_tokens: 4000
     temperature: 0.7
     price:
       prompt: 15.00        # $15/M input tokens
@@ -17,7 +17,7 @@ models:
       completion: 0.0
   
   openai_o3_mini:
-    model_name: "gpt-4-turbo"    # 使用官方模型名称
+    model_name: "gpt-4-turbo"
     type: "text"
     context_length: 128000
     max_tokens: 4096
@@ -27,7 +27,7 @@ models:
       completion: 4.40
   
   gpt_4_5:
-    model_name: "gpt-4-1106-preview"  # 使用实际可用模型
+    model_name: "gpt-4-1106-preview"
     type: "text"
     context_length: 128000
     max_tokens: 4096
@@ -47,7 +47,7 @@ models:
       completion: 10.00
   
   gpt_4o_mini:
-    model_name: "gpt-3.5-turbo"  # 使用实际存在的小模型
+    model_name: "gpt-3.5-turbo"
     type: "text"
     context_length: 16385
     max_tokens: 4096
