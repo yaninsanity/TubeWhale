@@ -345,18 +345,16 @@ class YouTubeService:
     # 新增下载视频音频并提取为 MP3 的方法
     def download_audio(self, video_id):
         """
-        使用 YoutubeDL 下载视频音频并提取为 MP3 文件，返回生成的文件的绝对路径（采用异步方式）。
+        使用 yt-dlp 下载视频音频并提取为 MP3 文件，返回生成的文件的绝对路径。
         """
         downloads_dir = "downloads"
         os.makedirs(downloads_dir, exist_ok=True)
-        # 返回绝对路径
         audio_path = os.path.abspath(os.path.join(downloads_dir, f"{video_id}.mp3"))
         if os.path.exists(audio_path):
             logger.info(f"Audio file {audio_path} already exists. Skipping download.")
             return audio_path
 
         logger.info(f"Downloading audio for video ID: {video_id}")
-        # 确保 outtmpl 也是绝对路径
         outtmpl = os.path.abspath(os.path.join(downloads_dir, f"{video_id}.%(ext)s"))
         ydl_opts = {
             'format': 'bestaudio/best',
@@ -377,19 +375,17 @@ class YouTubeService:
                 ydl.download([video_url])
                 logger.info(f"Download finished for video ID: {video_id}")
 
-        async def _download():
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, download)
-
+        # 如果当前有运行中的事件循环，则使用线程方式执行下载
         try:
-            # 尝试使用 asyncio.run()（适用于没有运行中 event loop 的场景）
-            asyncio.run(_download())
+            loop = asyncio.get_running_loop()
+            logger.info("Running within existing event loop; using threading for download.")
+            thread = threading.Thread(target=download)
+            thread.start()
+            thread.join(timeout=60)
         except RuntimeError:
-            # 如果当前已有运行中的 event loop，则使用当前 loop 调度任务完成
-            logger.info("Using existing event loop for download.")
-            loop = asyncio.get_event_loop()
-            task = loop.create_task(_download())
-            loop.run_until_complete(task)
+            # 没有运行中的事件循环，使用 asyncio.run()
+            logger.info("No running event loop; using asyncio.run for download.")
+            asyncio.run(self._download_wrapper(download))
 
         if os.path.exists(audio_path):
             logger.info(f"Audio downloaded and extracted successfully for video ID {video_id}.")
@@ -397,6 +393,10 @@ class YouTubeService:
         else:
             logger.error(f"Audio file {audio_path} not found after download.")
             return None
+
+    async def _download_wrapper(self, download_func):
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, download_func)
 
 def get_youtube_service(api_key, **kwargs):
     """
