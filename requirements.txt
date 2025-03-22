@@ -17,3 +17,4 @@ pytest
 # sqlite3-rich 
 pytest-asyncio
 sqlalchemy
+pytube

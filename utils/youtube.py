@@ -470,18 +470,52 @@ class YouTubeService:
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, download_func)
     
-    # 新增 fetch_transcript 方法：使用 YouTubeTranscriptApi 获取字幕，默认英文
     def fetch_transcript(self, video_id, languages: Optional[List[str]] = None) -> Optional[str]:
+        """
+        尝试通过多种方案获取视频字幕，默认使用英文字幕。
+
+        方案：
+        1. 使用 YouTubeTranscriptApi 获取字幕。如果抛出 NoTranscriptFound 异常（表示视频禁用了字幕或不存在），则直接返回 None。
+        2. 如果其他异常，则作为备用方案使用 pytube 尝试获取字幕（仅当可用时）。
+
+        如果所有方案均失败，则返回 None。
+        """
+        languages = languages or ["en"]
+        # 方案 1：使用 YouTubeTranscriptApi 获取字幕
         try:
-            from youtube_transcript_api import YouTubeTranscriptApi
-            languages = languages or ["en"]
+            from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound
             transcript_entries = YouTubeTranscriptApi.get_transcript(video_id, languages=languages)
             text = " ".join([entry['text'] for entry in transcript_entries])
-            logger.info(f"Transcript fetched for video {video_id}. ✅")
+            logger.info(f"Transcript fetched for video {video_id} via YouTubeTranscriptApi. 😊")
             return text
         except Exception as e:
-            logger.warning(f"Failed to fetch transcript for video {video_id}: {e} ❌")
-            return None
+            # 如果是 NoTranscriptFound，则说明视频没有开启字幕，不再尝试其他方案
+            from youtube_transcript_api import NoTranscriptFound
+            if isinstance(e, NoTranscriptFound):
+                logger.info(f"Video {video_id} has captions disabled. 🌼")
+                return None
+            else:
+                logger.warning(f"Primary transcript fetch failed for video {video_id}: {e} 😢")
+        
+        # 方案 2：使用 pytube 尝试提取字幕（仅支持部分视频）
+        try:
+            from pytube import YouTube
+            yt_url = f"https://www.youtube.com/watch?v={video_id}"
+            yt = YouTube(yt_url)
+            caption = yt.captions.get('en')
+            if caption:
+                text = caption.generate_srt_captions()
+                logger.info(f"Transcript fetched for video {video_id} via pytube. 😊")
+                return text
+            else:
+                logger.info(f"No captions available via pytube for video {video_id}. 🌸")
+        except Exception as e:
+            logger.warning(f"Fallback transcript fetch via pytube failed for video {video_id}: {e} 🌸")
+        
+        logger.info(f"No transcript available for video {video_id}. 🌼")
+        return None
+
+
 
 def get_youtube_service(api_key, **kwargs):
     """
