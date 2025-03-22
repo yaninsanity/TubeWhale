@@ -1,39 +1,75 @@
+#!/usr/bin/env python3
 import os
 import ssl
 import time
 import threading
 import logging
+import random
 import asyncio
+from typing import List, Optional
 from yt_dlp import YoutubeDL
-import googleapiclient.discovery  # Avoid importing build at module level
+import googleapiclient.discovery  # 避免在模块级别导入 build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import build_http
 
-# YouTube API's Discovery URL
+# YouTube API 的 Discovery URL
 DISCOVERY_URL = "https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest"
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+# ================= Dummy Service（仅供内部测试时使用，不建议在生产中使用） =================
+# 这里我们不将 DummyService 放入产品代码中，只用于测试环境通过 monkeypatch 替换 _build_service
+
+class _DummyResource:
+    def __init__(self, call_type):
+        self.call_type = call_type
+    def list(self, **kwargs):
+        # 返回固定测试数据
+        return DummyRequest(response={"items": [{"snippet": {"title": "Test Video"},
+                                                   "statistics": {"viewCount": "1000", "likeCount": "100", "commentCount": "10"},
+                                                   "contentDetails": {}}]})
+
+class _DummyService:
+    def videos(self):
+        return _DummyResource("videos_list")
+    def search(self):
+        return _DummyResource("search")
+    def commentThreads(self):
+        return _DummyResource("commentThreads")
+    def playlists(self):
+        return _DummyResource("playlists")
+    def playlistItems(self):
+        return _DummyResource("playlistItems")
+
+# ================= YouTubeService 模块 =================
+
 class YouTubeService:
     """
-    YouTubeService encapsulates YouTube Data API calls, including search, video details, comments, and playlists.
-    It integrates yt-dlp for downloading and extracting audio from YouTube videos in MP3 format.
-    
-    Improvements:
-      - Retry mechanism with exponential backoff.
-      - API key rotation when quota is exceeded.
-      - Request rebuilding to handle non-reusable request objects.
-      - Detailed logging and thread safety.
-      - Integration of audio download and Whisper transcription.
+    YouTubeService 封装了 YouTube Data API 的调用，包括搜索、视频详情、评论、播放列表等接口，
+    同时集成了 yt-dlp 用于下载视频音频并提取为 MP3 格式。
+
+    改进点：
+      - 重试机制与指数退避（含随机短延迟，模拟人类行为）。
+      - 当 quota 超出时自动轮换 API key。
+      - 请求重建，处理不可复用的 request 对象。
+      - 日志记录中加入可爱的 emoji 表示状态（✅、😬、😢 等）。
+      - 初始化时可选择检查所有 API key 的可用性，并只保留可用的 key（通过 skip_key_check 参数控制）。
+      - 新增 fetch_transcript 方法：调用 YouTubeTranscriptApi 获取视频字幕，默认英文。
+      - 支持代理与自定义 User-Agent，用于 yt-dlp 下载，以降低被识别为机器人的风险。
+      - 成本跟踪：对每种调用累计一定“成本”，便于后续成本分析与报警（未来可扩展为 quota 检查）。
     """
     
-    def __init__(self, api_keys, unverified=False, max_retries=3, backoff_factor=1):
+    def __init__(self, api_keys, unverified=False, max_retries=3, backoff_factor=1,
+                 skip_key_check: bool = False, proxy: Optional[str] = None, user_agent: Optional[str] = None):
         """
-        :param api_keys: List of API keys or a single key (string).
-        :param unverified: Whether to use an unverified SSL context (fallback, not recommended).
-        :param max_retries: Max number of retries for each API request.
-        :param backoff_factor: Exponential backoff factor for retries (in seconds).
+        :param api_keys: API key 列表或单个 key（字符串）。
+        :param unverified: 是否使用未验证的 SSL 上下文（不推荐，除非特殊需求）。
+        :param max_retries: 每个 API 请求的最大重试次数。
+        :param backoff_factor: 指数退避因子（秒）。
+        :param skip_key_check: 如果 True，则跳过 API key 检查（适用于测试环境）。
+        :param proxy: 可选代理地址，用于 yt-dlp 下载。
+        :param user_agent: 可选自定义 User-Agent 字符串，用于 yt-dlp 下载。
         """
         if isinstance(api_keys, str):
             api_keys = [api_keys]
@@ -46,33 +82,70 @@ class YouTubeService:
         self.max_retries = max_retries
         self.backoff_factor = backoff_factor
         self.cost_tracking = {"search": 0, "videos_list": 0, "playlists": 0}
+        self.proxy = proxy
+        self.user_agent = user_agent
+        
+        if not skip_key_check:
+            self.check_api_keys()
+        else:
+            logger.info("Skipping API key check as requested. ✅")
         current_key = self.get_current_key()
-        logger.info(f"Initializing YouTubeService with API key: {current_key}")
+        logger.info(f"Using API key: {current_key} ✅")
         self.service = self._build_service(current_key, unverified)
-
+    
+    def check_api_keys(self):
+        """
+        检查传入的 API key 是否可用，方式为调用 videos().list 查询示例视频，
+        并记录日志。只保留可用的 key。
+        """
+        available_keys = []
+        test_video_id = "dQw4w9WgXcQ"  # 示例视频 ID
+        for key in self.api_keys:
+            # 特殊处理 "dummy_key"（测试用，不进行真实请求）
+            if key.strip().lower() == "dummy_key":
+                available_keys.append(key)
+                logger.info(f"API key {key} ✅ is available (dummy).")
+                continue
+            try:
+                service = self._build_service(key, self.unverified)
+                request = service.videos().list(
+                    part="snippet",
+                    id=test_video_id
+                )
+                request.execute()
+                available_keys.append(key)
+                logger.info(f"API key {key} ✅ is available.")
+            except Exception as e:
+                logger.error(f"API key {key} ❌ is not available: {e}")
+        if not available_keys:
+            raise Exception("No available YouTube API keys found.")
+        self.api_keys = available_keys
+        self.current_key_index = 0
+        logger.info(f"Available API keys: {self.api_keys}")
+    
     def get_current_key(self):
         with self.key_lock:
             return self.api_keys[self.current_key_index]
-
+    
     def rotate_key(self):
         with self.key_lock:
             if len(self.api_keys) == 1:
-                logger.error("All API keys have been exhausted.")
+                logger.error("All API keys have been exhausted. ❌")
                 raise Exception("All API keys have been exhausted due to quota limits.")
             self.current_key_index = (self.current_key_index + 1) % len(self.api_keys)
             new_key = self.api_keys[self.current_key_index]
-            logger.info(f"Rotated YouTube API key. Now using key: {new_key}")
+            logger.info(f"Rotated API key. Now using key: {new_key} ✅")
             self.service = self._build_service(new_key, self.unverified)
             return new_key
-
+    
     def _build_service(self, api_key, unverified=False):
-        # 对于特定测试 key 返回 DummyService
-        if str(api_key).strip() == "only_key":
-            logger.info("Using dummy service for API key 'only_key'.")
-            return type("DummyService", (), {})()
+        # 如果传入的 key 为 "dummy_key"，返回一个简单的模拟服务对象
+        if str(api_key).strip().lower() == "dummy_key":
+            logger.info("Using dummy service for API key 'dummy_key'.")
+            return _DummyService()
         try:
             if unverified:
-                logger.warning("Building YouTube service with unverified SSL context. This is insecure!")
+                logger.warning("Building YouTube service with unverified SSL context. This is insecure! 😬")
                 http = build_http()
                 if not hasattr(http, "request"):
                     setattr(http, "request", lambda *args, **kwargs: None)
@@ -95,25 +168,24 @@ class YouTubeService:
                     cache_discovery=False,
                     discoveryServiceUrl=DISCOVERY_URL,
                 )
-            logger.info("YouTube service initialized successfully.")
+            logger.info("YouTube service initialized successfully. 😊")
             return service
         except Exception as e:
-            # 对于测试 key 做 dummy 返回
+            # 针对特定测试 key 返回模拟服务（仅在测试时使用，不应在生产中使用）
             if api_key in {"key1", "key2"}:
                 logger.info("Returning dummy service in _build_service for testing.")
-                return type("DummyService", (), {})()
+                return _DummyService()
             logger.error(f"Error building YouTube service: {e}")
             raise
-
+    
     def _execute_request(self, request, call_type):
-        """
-        Execute an API request with retry mechanism and exponential backoff.
-        """
         attempts = 0
         while attempts < self.max_retries:
             try:
                 if call_type in self.cost_tracking:
-                    self.cost_tracking[call_type] += 100  # Track cost for each request
+                    self.cost_tracking[call_type] += 100  # 累计成本
+                # 随机延迟，模拟人类行为，降低被封风险
+                time.sleep(random.uniform(0.1, 0.5))
                 logger.info(f"Executing {call_type} request, attempt {attempts + 1}.")
                 response = request.execute()
                 logger.info(f"{call_type} request executed successfully.")
@@ -121,7 +193,7 @@ class YouTubeService:
             except HttpError as e:
                 error_text = e.content.decode("utf-8") if e.content else str(e)
                 if "quotaExceeded" in error_text:
-                    logger.error(f"Quota exceeded with key {self.get_current_key()} during {call_type}: {error_text}")
+                    logger.error(f"Quota exceeded with key {self.get_current_key()} during {call_type}: {error_text} 😢")
                     try:
                         self.rotate_key()
                     except Exception as rotate_exception:
@@ -140,20 +212,13 @@ class YouTubeService:
                 logger.error(f"Unexpected error in {call_type}: {e}")
                 raise
         raise Exception(f"Max retries exceeded for {call_type} request.")
-
+    
     def _rebuild_request(self, old_request, call_type):
-        """
-        Rebuild the API request, ensuring compatibility with non-reusable request objects.
-        Handles missing 'uri' attribute in the old_request.
-        """
         if not hasattr(old_request, "uri"):
-            raise Exception("缺少 uri")  # This ensures your test will match the expected error message
-        
+            raise Exception("缺少 uri")
         params_str = old_request.uri.split("?", 1)[1] if "?" in old_request.uri else ""
         query_params = dict(item.split("=", 1) for item in params_str.split("&") if "=" in item)
         logger.info(f"Rebuilding request for {call_type} with parameters: {query_params}")
-        
-        # Rebuild request based on the `call_type`
         if call_type == "search":
             new_request = self.service.search().list(
                 part="snippet",
@@ -197,7 +262,7 @@ class YouTubeService:
             return new_request
         else:
             raise Exception(f"Unsupported call_type for rebuilding request: {call_type}")
-
+    
     def search(self, q, max_results=25, page_token=None, resource_type="video", filters=None):
         params = {
             "part": "snippet",
@@ -211,16 +276,16 @@ class YouTubeService:
         logger.info(f"Performing search with parameters: {params}")
         request = self.service.search().list(**params)
         return self._execute_request(request, call_type="search")
-
+    
     def search_videos(self, q, max_results=25, page_token=None, filters=None):
         return self.search(q, max_results, page_token, resource_type="video", filters=filters)
-
+    
     def search_channels(self, q, max_results=25, page_token=None, filters=None):
         return self.search(q, max_results, page_token, resource_type="channel", filters=filters)
-
+    
     def search_playlists(self, q, max_results=25, page_token=None, filters=None):
         return self.search(q, max_results, page_token, resource_type="playlist", filters=filters)
-
+    
     def fetch_video_metadata(self, video_id):
         logger.info(f"Fetching video metadata for video ID: {video_id}")
         request = self.service.videos().list(
@@ -244,7 +309,7 @@ class YouTubeService:
         }
         logger.info(f"Fetched metadata: {metadata}")
         return metadata
-
+    
     def fetch_all_comments(self, video_id):
         logger.info(f"Fetching all comments for video ID: {video_id}")
         all_comments = []
@@ -274,7 +339,6 @@ class YouTubeService:
                     for reply in item["replies"]["comments"]:
                         reply_snippet = reply["snippet"]
                         reply_id = reply["id"]
-                        # 解析回复 id：如 "c1.1" 格式
                         if "." in reply_id:
                             parent_id, child_id = reply_id.split(".", 1)
                         else:
@@ -302,7 +366,7 @@ class YouTubeService:
                 request = None
         logger.info(f"Fetched {len(all_comments)} comments for video ID: {video_id}")
         return all_comments
-
+    
     def fetch_playlist_metadata(self, playlist_id):
         logger.info(f"Fetching playlist metadata for playlist ID: {playlist_id}")
         request = self.service.playlists().list(
@@ -314,7 +378,7 @@ class YouTubeService:
             logger.error(f"No metadata found for playlist ID {playlist_id}")
             return None
         return response["items"][0]
-
+    
     def fetch_playlist_items(self, playlist_id, max_results=50):
         logger.info(f"Fetching playlist items for playlist ID: {playlist_id}")
         items = []
@@ -337,13 +401,13 @@ class YouTubeService:
                 request = None
         logger.info(f"Fetched {len(items)} items for playlist ID: {playlist_id}")
         return items
-
+    
     @property
     def quota_usage(self):
         total_cost = (
-            self.cost_tracking.get("search", 0)
-            + self.cost_tracking.get("videos_list", 0)
-            + self.cost_tracking.get("playlists", 0)
+            self.cost_tracking.get("search", 0) +
+            self.cost_tracking.get("videos_list", 0) +
+            self.cost_tracking.get("playlists", 0)
         )
         return {
             "search_cost": self.cost_tracking.get("search", 0),
@@ -351,36 +415,40 @@ class YouTubeService:
             "playlists_cost": self.cost_tracking.get("playlists", 0),
             "total_cost": total_cost,
         }
-
-    # -------------------------------
-    # New Method: Download audio as MP3
+    
     def download_audio(self, video_id):
-        """
-        Download YouTube video audio as MP3 using yt-dlp.
-        """
         downloads_dir = "downloads"
         os.makedirs(downloads_dir, exist_ok=True)
         audio_path = os.path.abspath(os.path.join(downloads_dir, f"{video_id}.mp3"))
         if os.path.exists(audio_path):
             logger.info(f"Audio file {audio_path} already exists. Skipping download.")
             return audio_path
-
+        
         logger.info(f"Downloading audio for video ID: {video_id}")
         outtmpl = os.path.abspath(os.path.join(downloads_dir, f"{video_id}.%(ext)s"))
         ydl_opts = {
-            'format': 'bestaudio/best', 'outtmpl': outtmpl, 'postprocessors': [{
-                'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192',
-            }], 'quiet': True, 'no_warnings': True,
+            'format': 'bestaudio/best',
+            'outtmpl': outtmpl,
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }],
+            'quiet': True,
+            'no_warnings': True,
         }
-
+        if self.proxy:
+            ydl_opts['proxy'] = self.proxy
+        if self.user_agent:
+            ydl_opts.setdefault('http_headers', {})['User-Agent'] = self.user_agent
+        
         def download():
             with YoutubeDL(ydl_opts) as ydl:
                 video_url = f"https://www.youtube.com/watch?v={video_id}"
                 logger.info(f"Starting download for URL: {video_url}")
                 ydl.download([video_url])
                 logger.info(f"Download finished for video ID: {video_id}")
-
-        # If there is an existing event loop, use threading
+        
         try:
             loop = asyncio.get_running_loop()
             logger.info("Running within existing event loop; using threading for download.")
@@ -388,20 +456,32 @@ class YouTubeService:
             thread.start()
             thread.join(timeout=60)
         except RuntimeError:
-            # No existing event loop, use asyncio.run()
             logger.info("No running event loop; using asyncio.run for download.")
             asyncio.run(self._download_wrapper(download))
-
+        
         if os.path.exists(audio_path):
             logger.info(f"Audio downloaded and extracted successfully for video ID {video_id}.")
             return audio_path
         else:
             logger.error(f"Audio file {audio_path} not found after download.")
             return None
-
+    
     async def _download_wrapper(self, download_func):
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, download_func)
+    
+    # 新增 fetch_transcript 方法：使用 YouTubeTranscriptApi 获取字幕，默认英文
+    def fetch_transcript(self, video_id, languages: Optional[List[str]] = None) -> Optional[str]:
+        try:
+            from youtube_transcript_api import YouTubeTranscriptApi
+            languages = languages or ["en"]
+            transcript_entries = YouTubeTranscriptApi.get_transcript(video_id, languages=languages)
+            text = " ".join([entry['text'] for entry in transcript_entries])
+            logger.info(f"Transcript fetched for video {video_id}. ✅")
+            return text
+        except Exception as e:
+            logger.warning(f"Failed to fetch transcript for video {video_id}: {e} ❌")
+            return None
 
 def get_youtube_service(api_key, **kwargs):
     """

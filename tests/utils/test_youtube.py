@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import os
 import time
 import threading
@@ -5,6 +6,9 @@ import pytest
 import logging
 from googleapiclient.errors import HttpError
 from utils.youtube import YouTubeService, get_youtube_service
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 # ------------------ DummyResponse 与 DummyRequest ------------------
 
@@ -228,12 +232,12 @@ def youtube_service(monkeypatch, dummy_service_success):
     def dummy_build_service(self, api_key, unverified):
         return dummy_service_success
     monkeypatch.setattr(YouTubeService, "_build_service", dummy_build_service)
-    service = YouTubeService(api_keys=["key1", "key2"], unverified=True, max_retries=2, backoff_factor=0)
+    # 注意这里传入 skip_key_check=True 避免 API key 检查
+    service = YouTubeService(api_keys=["key1", "key2"], unverified=True, max_retries=2, backoff_factor=0, skip_key_check=True)
     return service
 
 # ------------------------------ 测试下载音频（下载及提取逻辑） ------------------------------
 
-# 定义一个 DummyYDL 类用于模拟 YoutubeDL 下载行为
 class DummyYDL:
     def __init__(self, opts):
         self.opts = opts
@@ -246,28 +250,21 @@ class DummyYDL:
             f.write(b"dummy audio content")
 
 def test_download_audio_integration(tmp_path, monkeypatch):
-    # 切换当前工作目录到 tmp_path
     monkeypatch.chdir(tmp_path)
-    # 正常创建 downloads 目录
     downloads_dir = tmp_path / "downloads"
     downloads_dir.mkdir()
     video_id = "video_integration"
-    # 计算绝对路径，用于后续比较
     audio_path = os.path.abspath(str(downloads_dir / f"{video_id}.mp3"))
-    # 替换 utils.youtube 模块中的 YoutubeDL 为 DummyYDL，
-    # 注意这里 target 为 "utils.youtube.YoutubeDL" 而非 "yt_dlp.YoutubeDL"
     monkeypatch.setattr("utils.youtube.YoutubeDL", lambda opts: DummyYDL({**opts, "download_path": audio_path}))
-    # 让 time.sleep 正常调用（也可以不覆盖）
-    service = YouTubeService(api_keys=["dummy_key"])
+    service = YouTubeService(api_keys=["dummy_key"], skip_key_check=True)
     result = service.download_audio(video_id)
-    # 检查返回的路径是否正确
     assert result == audio_path
-    # 检查文件内容
     with open(result, "rb") as f:
         content = f.read()
     assert content == b"dummy audio content"
 
-# ------------------------------ 以下为其他 API 接口测试（保持不变） ------------------------------
+# ------------------------------ 以下为其他 API 接口测试 ------------------------------
+
 def test_search_videos_success(youtube_service):
     response = youtube_service.search_videos("test")
     assert "items" in response
@@ -329,7 +326,7 @@ def test_fetch_video_metadata_empty(monkeypatch):
     }
     dummy_service = DummyService(behavior)
     monkeypatch.setattr(YouTubeService, "_build_service", lambda self, api_key, unverified: dummy_service)
-    service = YouTubeService(api_keys=["key1"], unverified=True, max_retries=1, backoff_factor=0)
+    service = YouTubeService(api_keys=["key1"], unverified=True, max_retries=1, backoff_factor=0, skip_key_check=True)
     metadata = service.fetch_video_metadata("test_video")
     assert metadata is None
 
@@ -349,7 +346,7 @@ def test_fetch_all_comments_multi_page(monkeypatch):
     dummy_service = DummyService(behavior)
     monkeypatch.setattr(YouTubeService, "_build_service", lambda self, api_key, unverified: dummy_service)
     monkeypatch.setattr(time, "sleep", lambda s: None)
-    service = YouTubeService(api_keys=["key1"], unverified=True, max_retries=2, backoff_factor=0)
+    service = YouTubeService(api_keys=["key1"], unverified=True, max_retries=2, backoff_factor=0, skip_key_check=True)
     comments = service.fetch_all_comments("test_video")
     assert len(comments) == 2
     assert comments[0]["comment_id"] == "c1"
@@ -365,7 +362,7 @@ def test_fetch_playlist_metadata_success(youtube_service, monkeypatch):
     }
     dummy_service = DummyService(behavior)
     monkeypatch.setattr(YouTubeService, "_build_service", lambda self, api_key, unverified: dummy_service)
-    service = YouTubeService(api_keys=["key1"], unverified=True, max_retries=1, backoff_factor=0)
+    service = YouTubeService(api_keys=["key1"], unverified=True, max_retries=1, backoff_factor=0, skip_key_check=True)
     response = service.fetch_playlist_metadata("playlist1")
     assert response["id"] == "playlist1"
     assert response["snippet"]["title"] == "Test Playlist"
@@ -381,7 +378,7 @@ def test_fetch_playlist_items_success(monkeypatch):
     }
     dummy_service = DummyService(behavior)
     monkeypatch.setattr(YouTubeService, "_build_service", lambda self, api_key, unverified: dummy_service)
-    service = YouTubeService(api_keys=["key1"], unverified=True, max_retries=1, backoff_factor=0)
+    service = YouTubeService(api_keys=["key1"], unverified=True, max_retries=1, backoff_factor=0, skip_key_check=True)
     items = service.fetch_playlist_items("playlist1", max_results=50)
     assert len(items) == 1
     assert items[0]["snippet"]["title"] == "Playlist Item 1"
@@ -397,7 +394,7 @@ def test_fetch_playlist_items_multi_page(monkeypatch):
     dummy_service = DummyService(behavior)
     monkeypatch.setattr(YouTubeService, "_build_service", lambda self, api_key, unverified: dummy_service)
     monkeypatch.setattr(time, "sleep", lambda s: None)
-    service = YouTubeService(api_keys=["key1"], unverified=True, max_retries=2, backoff_factor=0)
+    service = YouTubeService(api_keys=["key1"], unverified=True, max_retries=2, backoff_factor=0, skip_key_check=True)
     items = service.fetch_playlist_items("playlist1", max_results=50)
     assert len(items) == 2
     assert items[0]["snippet"]["title"] == "Playlist Item 1"
@@ -415,7 +412,7 @@ def test_quota_exceeded_key_rotation(monkeypatch):
     dummy_service = DummyService(behavior)
     monkeypatch.setattr(YouTubeService, "_build_service", lambda self, api_key, unverified: dummy_service)
     monkeypatch.setattr(time, "sleep", lambda s: None)
-    service = YouTubeService(api_keys=["key1", "key2"], unverified=True, max_retries=2, backoff_factor=0)
+    service = YouTubeService(api_keys=["key1", "key2"], unverified=True, max_retries=2, backoff_factor=0, skip_key_check=True)
     response = service.search_videos("test")
     assert "items" in response
     assert service.get_current_key() == "key2"
@@ -433,7 +430,7 @@ def test_max_retries_exceeded(monkeypatch):
     dummy_service = DummyService(behavior)
     monkeypatch.setattr(YouTubeService, "_build_service", lambda self, api_key, unverified: dummy_service)
     monkeypatch.setattr(time, "sleep", lambda s: None)
-    service = YouTubeService(api_keys=["key1", "key2"], unverified=True, max_retries=2, backoff_factor=0)
+    service = YouTubeService(api_keys=["key1", "key2"], unverified=True, max_retries=2, backoff_factor=0, skip_key_check=True)
     with pytest.raises(Exception, match="Max retries exceeded"):
         service.search_videos("test")
 
@@ -458,7 +455,7 @@ def test_fetch_all_comments_unexpected_error(monkeypatch):
     }
     dummy_service = DummyService(behavior)
     monkeypatch.setattr(YouTubeService, "_build_service", lambda self, api_key, unverified: dummy_service)
-    service = YouTubeService(api_keys=["key1"], unverified=True, max_retries=1, backoff_factor=0)
+    service = YouTubeService(api_keys=["key1"], unverified=True, max_retries=1, backoff_factor=0, skip_key_check=True)
     with pytest.raises(HttpError, match="some other error"):
         service.fetch_all_comments("test_video")
 
@@ -579,7 +576,7 @@ def test_fetch_all_comments_with_replies(monkeypatch):
     }
     dummy_service = DummyService(behavior)
     monkeypatch.setattr(YouTubeService, "_build_service", lambda self, api_key, unverified: dummy_service)
-    service = YouTubeService(api_keys=["key1"], unverified=True, max_retries=1, backoff_factor=0)
+    service = YouTubeService(api_keys=["key1"], unverified=True, max_retries=1, backoff_factor=0, skip_key_check=True)
     comments = service.fetch_all_comments("test_video")
     assert len(comments) == 3
     top_comment = comments[0]
@@ -593,12 +590,12 @@ def test_fetch_all_comments_with_replies(monkeypatch):
     assert reply2["parent_id"] == "c1"
 
 def test_rotate_key_single_key():
-    service = YouTubeService(api_keys=["only_key"], unverified=True, max_retries=1, backoff_factor=0)
+    service = YouTubeService(api_keys=["only_key"], unverified=True, max_retries=1, backoff_factor=0, skip_key_check=True)
     with pytest.raises(Exception, match="All API keys have been exhausted"):
         service.rotate_key()
 
 def test_concurrent_rotate_key(monkeypatch):
-    service = YouTubeService(api_keys=["key1", "key2"], unverified=True, max_retries=1, backoff_factor=0)
+    service = YouTubeService(api_keys=["key1", "key2"], unverified=True, max_retries=1, backoff_factor=0, skip_key_check=True)
     def rotate():
         try:
             service.rotate_key()
@@ -620,7 +617,7 @@ def test_build_service_unverified(monkeypatch, caplog):
     def dummy_build(*args, **kwargs):
         return "dummy_service"
     monkeypatch.setattr("googleapiclient.discovery.build", dummy_build)
-    service = YouTubeService(api_keys=["key1"], unverified=True, max_retries=1, backoff_factor=0)
+    service = YouTubeService(api_keys=["key1"], unverified=True, max_retries=1, backoff_factor=0, skip_key_check=True)
     assert service.service == "dummy_service"
     assert any("Building YouTube service with unverified SSL context" in record.message for record in caplog.records)
 
@@ -634,12 +631,11 @@ def test_execute_request_unexpected_exception(monkeypatch, youtube_service):
 
 def test_api_key_single_string(monkeypatch):
     monkeypatch.setattr(YouTubeService, "_build_service", lambda self, api_key, unverified: DummyService({"search": dummy_search_success}))
-    service = YouTubeService(api_keys="single_key", unverified=True, max_retries=1, backoff_factor=0)
+    service = YouTubeService(api_keys="single_key", unverified=True, max_retries=1, backoff_factor=0, skip_key_check=True)
     assert isinstance(service.api_keys, list)
     assert service.api_keys[0] == "single_key"
 
 def test_get_youtube_service():
-    service = get_youtube_service("dummy_key")
+    service = get_youtube_service("dummy_key", skip_key_check=True)
     assert isinstance(service, YouTubeService)
     assert service.get_current_key() == "dummy_key"
-
