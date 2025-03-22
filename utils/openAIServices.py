@@ -13,7 +13,6 @@ logger.setLevel(logging.INFO)
 DEFAULT_CONFIG_DIR = os.path.join(os.path.dirname(__file__), "config")
 DEFAULT_CONFIG_FILE = os.path.join(DEFAULT_CONFIG_DIR, "openai_config.yaml")
 
-
 class OpenAIService:
     def __init__(
         self,
@@ -28,11 +27,11 @@ class OpenAIService:
           - 如果传入 api_key，则采用简单默认配置（默认使用 GPT‑4 模型）；
           - 如果传入 client，则直接使用该客户端；
           - 若两者均未提供，则构造空配置（仅供内部方法单元测试使用）。
-
-        :param config_path: YAML 配置文件路径
-        :param api_key: API 密钥
-        :param client: 已实例化的 OpenAI 客户端
         """
+        if config_path is not None and config_path.startswith("sk-"):
+            api_key = config_path
+            config_path = None
+
         self.models: Dict[str, Dict[str, Any]] = {}
         self.prompts: Dict[str, Dict[str, str]] = {}
         self.default_model: Optional[str] = None
@@ -44,6 +43,10 @@ class OpenAIService:
 
         # 优先使用外部传入的 client
         self.client = client
+
+        # 如果传入了 API key，则忽略配置文件路径
+        if api_key:
+            config_path = None
 
         if config_path is None and api_key is None:
             # 如果都未传入，则自动加载默认配置文件（如果存在）
@@ -57,6 +60,7 @@ class OpenAIService:
             self.load_configuration(config_path)
         elif api_key:
             # 直接通过 api_key 构造默认配置，默认使用 GPT‑4
+            openai.api_key = api_key  # 确保设置 API key
             self.models = {
                 "default": {
                     "model_name": "gpt-4",
@@ -91,6 +95,7 @@ class OpenAIService:
         if self.client is None:
             self.client = openai
             logger.info("Using openai module as client.")
+
 
     def load_configuration(self, config_path: str) -> None:
         """
