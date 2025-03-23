@@ -6,7 +6,7 @@ from io import BytesIO
 from typing import Any, Dict, List, Optional
 
 from pydub import AudioSegment
-from utils.helper import retry  # 假设 retry 为同步重试装饰器
+from utils.helper import retry  
 from utils.youtube import YouTubeService, get_youtube_service
 from utils.openAIServices import OpenAIService
 
@@ -22,7 +22,7 @@ class AudioProcessingAgent:
       1. 使用 YouTubeService 下载视频音频文件（异步包装调用同步方法）。
       2. 使用 pydub 分割音频文件成固定时长的片段。
       3. 对每个音频片段调用 OpenAIService 的 Whisper 接口进行转录，并生成摘要。
-         - 每个片段生成摘要后，可记录到数据库中。
+         - 每个片段生成摘要后，将结果记录到数据库中（异步写入）。
       4. 对所有片段摘要进行递归合并，得到最终摘要。
       5. 返回最终摘要（通常为文本或 JSON 格式）。
       
@@ -69,8 +69,8 @@ class AudioProcessingAgent:
         loop = asyncio.get_running_loop()
         audio_path = await loop.run_in_executor(None, self.youtube_service.download_audio, video_id)
         if audio_path:
-            logger.info(f"Audio file downloaded: {audio_path}")
-            # 如果有数据库对象，记录下载日志
+            logger.info(f"Audio file downloaded: {audio_path} 😊")
+            # 异步记录下载日志到数据库
             if self.db:
                 try:
                     from datetime import datetime
@@ -80,12 +80,15 @@ class AudioProcessingAgent:
                         "audio_path": audio_path,
                         "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                     }
-                    self.db.store_data("audio_processing_logs", record)
+                    if hasattr(self.db, "store_data_async"):
+                        await self.db.store_data_async("audio_processing_logs", record)
+                    else:
+                        await asyncio.to_thread(self.db.store_data, "audio_processing_logs", record)
                     logger.info(f"Download record stored for video {video_id}.")
                 except Exception as e:
                     logger.error(f"Failed to store download record for video {video_id}: {e}")
         else:
-            logger.error(f"Failed to download audio for video {video_id}")
+            logger.error(f"Failed to download audio for video {video_id} 😢")
         return audio_path
 
     def split_audio(self, audio_path: str) -> List[AudioSegment]:
@@ -96,7 +99,7 @@ class AudioProcessingAgent:
             logger.info(f"Splitting audio {audio_path} into chunks of {self.max_duration_ms} ms.")
             audio = AudioSegment.from_file(audio_path)
             chunks = [audio[i:i + self.max_duration_ms] for i in range(0, len(audio), self.max_duration_ms)]
-            logger.info(f"Audio split into {len(chunks)} chunks.")
+            logger.info(f"Audio split into {len(chunks)} chunks. 😊")
             return chunks
         except Exception as e:
             logger.error(f"Failed to split audio {audio_path}: {e}")
@@ -112,10 +115,10 @@ class AudioProcessingAgent:
             audio_chunk.export(audio_file, format="mp3")
             audio_file.seek(0)  # 重置文件指针
 
-            logger.info("Transcribing audio chunk via OpenAIService's Whisper interface.")
+            logger.info("Transcribing audio chunk via OpenAIService's Whisper interface. 😊")
             transcript_text = await self.openai_service.transcribe_audio(audio_file)
             if transcript_text:
-                logger.info("Transcription completed for audio chunk.")
+                logger.info("Transcription completed for audio chunk. 😊")
                 return transcript_text
             else:
                 logger.error("Transcription returned empty result.")
@@ -136,7 +139,7 @@ class AudioProcessingAgent:
             })
             response_text = await self.openai_service.async_completion(prompt=prompt)
             summary = response_text.strip()
-            logger.info("Summary generated for transcript chunk.")
+            logger.info("Summary generated for transcript chunk. 😊")
             return summary
         except Exception as e:
             logger.error(f"Failed to summarize text: {e}")
@@ -172,11 +175,11 @@ class AudioProcessingAgent:
         """
         audio_path = await self.download_audio(video_id)
         if not audio_path:
-            logger.error(f"Audio download failed for video {video_id}.")
+            logger.error(f"Audio download failed for video {video_id}. 😢")
             return None
         audio_chunks = self.split_audio(audio_path)
         if not audio_chunks:
-            logger.error(f"Audio splitting failed for video {video_id}.")
+            logger.error(f"Audio splitting failed for video {video_id}. 😢")
             return None
 
         chunk_summaries = []
@@ -191,6 +194,7 @@ class AudioProcessingAgent:
             if summary:
                 chunk_summaries.append(summary)
                 previous_summary = summary
+                # 异步记录每个片段摘要到数据库
                 if self.db:
                     try:
                         from datetime import datetime
@@ -201,8 +205,11 @@ class AudioProcessingAgent:
                             "summary": summary,
                             "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                         }
-                        self.db.store_data("audio_processing_logs", record)
-                        logger.info(f"Audio chunk {idx + 1} summary recorded in database.")
+                        if hasattr(self.db, "store_data_async"):
+                            await self.db.store_data_async("audio_processing_logs", record)
+                        else:
+                            await asyncio.to_thread(self.db.store_data, "audio_processing_logs", record)
+                        logger.info(f"Audio chunk {idx + 1} summary recorded in database. 😊")
                     except Exception as db_e:
                         logger.error(f"Failed to record chunk {idx + 1} summary: {db_e}")
             else:
@@ -210,12 +217,12 @@ class AudioProcessingAgent:
             await asyncio.sleep(random.uniform(0.5, 2))
         
         if not chunk_summaries:
-            logger.error(f"No summaries generated for video {video_id}.")
+            logger.error(f"No summaries generated for video {video_id}. 😢")
             return None
         
         final_summary = await self.recursive_summarize(chunk_summaries, topic, metadata)
         if not final_summary:
-            logger.error(f"Recursive summary generation failed for video {video_id}.")
+            logger.error(f"Recursive summary generation failed for video {video_id}. 😢")
             return None
 
         if self.db:
@@ -227,8 +234,11 @@ class AudioProcessingAgent:
                     "summary": final_summary,
                     "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 }
-                self.db.store_data("audio_processing_logs", final_record)
-                logger.info(f"Final audio summary for video {video_id} recorded in database.")
+                if hasattr(self.db, "store_data_async"):
+                    await self.db.store_data_async("audio_processing_logs", final_record)
+                else:
+                    await asyncio.to_thread(self.db.store_data, "audio_processing_logs", final_record)
+                logger.info(f"Final audio summary for video {video_id} recorded in database. 😊")
             except Exception as db_e:
                 logger.error(f"Failed to record final audio summary for video {video_id}: {db_e}")
         return final_summary

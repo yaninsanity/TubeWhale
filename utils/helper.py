@@ -23,6 +23,25 @@ def retry(max_retries=3, delay=2, backoff_factor=2):
         return wrapper
     return decorator
 
+
+def async_retry(max_retries: int = 3, delay: int = 2):
+    """
+    异步重试装饰器，用于在 API 调用失败时自动重试。
+    """
+    def decorator(func):
+        async def wrapper(*args, **kwargs):
+            current_delay = delay
+            for attempt in range(max_retries):
+                try:
+                    return await func(*args, **kwargs)
+                except Exception as e:
+                    logger.error(f"Attempt {attempt + 1}/{max_retries} failed: {e}")
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(current_delay)
+                        current_delay *= 2
+            raise Exception(f"All {max_retries} attempts failed.")
+        return wrapper
+    return decorator
 def setup_logging(log_level=logging.INFO):
     """
     设置日志格式。

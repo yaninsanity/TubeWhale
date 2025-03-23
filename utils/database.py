@@ -39,12 +39,12 @@ class Video(Base):
     weighted_score = Column(Float, default=0.0)
     default_audio_language = Column(String)
     country_code = Column(String)
-    timestamp = Column(String)  # 更新时间，格式 '%Y-%m-%d %H:%M:%S'
+    timestamp = Column(String)  # 格式 '%Y-%m-%d %H:%M:%S'
     llm_summary = Column(Text)
     transcript = Column(Text)
     is_transcript = Column(Integer, default=0)  # 0: False, 1: True
     audio_summary = Column(Text)
-    ai_cost = Column(Float, default=0.0)  # 确保模型中定义了该列
+    ai_cost = Column(Float, default=0.0)
 
     # 关联评论与转录记录
     comments = relationship("Comment", back_populates="video", cascade="all, delete")
@@ -54,8 +54,8 @@ class Video(Base):
 class AIInteraction(Base):
     __tablename__ = "ai_interactions"
     id = Column(Integer, primary_key=True)
-    input_data = Column(Text, nullable=False)
-    output_data = Column(Text, nullable=False)
+    input_data = Column(Text, nullable=False)   # 存储请求输入（例如 prompt）
+    output_data = Column(Text, nullable=False)    # 存储生成的结果
     interaction_type = Column(String, nullable=False)
     tokens_used = Column(Integer, default=0)
     cost = Column(Float, default=0.0)
@@ -82,7 +82,7 @@ class KeywordAnalysis(Base):
     __tablename__ = "keyword_analysis"
     id = Column(Integer, primary_key=True)
     keyword = Column(String, nullable=False)
-    critique = Column(Text)
+    critique = Column(Text)  # 存储搜索摘要或评价
     total_views = Column(Integer, default=0)
     total_likes = Column(Integer, default=0)
     weighted_score = Column(Float, default=0.0)
@@ -111,7 +111,7 @@ class BrainstormedTopic(Base):
 
 
 # -------------------------------
-# Database 类封装
+# Database 类封装（同步接口）
 # -------------------------------
 class Database:
     """
@@ -119,18 +119,17 @@ class Database:
 
     表设计说明：
       - videos 表：存储视频相关元数据，包括 AI 生成的摘要、转录、音频摘要及累计的 OpenAI 调用费用。
-      - ai_interactions 表：记录所有 AI 接口调用交互的详细信息。
+      - ai_interactions 表：记录所有 AI 接口调用交互的详细信息，包括输入和输出数据。
       - comments 表：存储视频评论数据，与 videos 表通过 video_id 关联。
-      - keyword_analysis 表：存储关键词分析结果。
+      - keyword_analysis 表：存储关键词分析和搜索摘要结果。
       - transcripts 表：存储转录和摘要历史记录。
       - brainstormed_topics 表：存储头脑风暴产生的话题和评分。
 
     更新控制：
-      如果某视频在指定周期（默认为 7 天）内已更新，则更新操作将被跳过。
+      如果某视频在指定周期（默认为 7 天）内已更新，则跳过更新操作。
     
-    注意：如果你遇到 "no such column: videos.ai_cost" 的错误，
-          请确保删除旧的数据库文件或在开发阶段设置 recreate=True，
-          以便重新创建数据库模式。生产环境建议使用 Alembic 进行迁移管理。
+    注意：开发过程中如果遇到 "no such column: videos.ai_cost" 错误，请删除旧的数据库文件或设置 recreate=True，
+          生产环境建议使用 Alembic 进行迁移管理。
     """
     def __init__(self, db_path: str, recreate: bool = False):
         logger.info("Initializing database with path: %s", db_path)
@@ -146,7 +145,6 @@ class Database:
         return self.Session()
 
     def close(self):
-        # SQLAlchemy 的连接池将在程序退出时自动释放
         logger.info("Database closed (engine will be disposed on program exit).")
 
     def should_update_video_metadata(self, video_id: str, period_days: int = 7) -> bool:
@@ -310,6 +308,9 @@ class Database:
     def store_ai_interaction(self, input_data: Dict[str, Any], output_data: Dict[str, Any],
                              interaction_type: str, tokens_used: int = 0, cost: float = 0.0,
                              timestamp: Optional[str] = None):
+        """
+        存储 AI 交互记录，包括请求输入和生成输出，以便后续调试和成本核算。
+        """
         session = self.get_session()
         try:
             new_interaction = AIInteraction(

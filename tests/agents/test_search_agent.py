@@ -147,8 +147,9 @@ def test_summarize_results(search_agent):
     # 检查返回的摘要中包含 "Summary:" 字样（根据 DummyOpenAIService.completion 模拟返回）
     assert "Summary:" in summary
 
-def test_execute_search(search_agent):
-    result = search_agent.execute_search("sample")
+@pytest.mark.asyncio
+async def test_execute_search(search_agent):
+    result = await search_agent.execute_search("sample")
     expected_keywords = {"keyword1", "keyword2", "keyword3"}
     assert set(result["keywords_searched"]) == expected_keywords
     for kw, lst in result["aggregated_by_keyword"].items():

@@ -9,10 +9,11 @@ from datetime import datetime
 from tqdm import tqdm
 
 # 内部模块
-from utils.database import Database
+from utils.async_database import AsyncDatabase  # 异步数据库包装器
+from utils.database import Database              # 同步数据库，由 AsyncDatabase 包装
 from agents.search_agent import SearchAgent
 from agents.transcript_agent import fetch_transcript
-from agents.summarizer_agent import gpt_summarizer_agent  # 封装生成 LLM 摘要的异步接口
+from agents.summarizer_agent import gpt_summarizer_agent  # 异步 LLM 摘要接口
 from agents.audio_agent import AudioProcessingAgent
 from agents.standardizer_agent import StandardizerAgent
 from utils.youtube import YouTubeService
@@ -71,9 +72,8 @@ async def listen_for_exit(exit_event: asyncio.Event):
 
 # -------------------------------------------------------------------------------
 # 单个视频处理流程（异步调用各 Agent 接口）
-# 所有依赖均通过参数传入，确保统一管理（例如：standardizer_agent、youtube_service、openai_service、db）
 # -------------------------------------------------------------------------------
-async def process_single_video(video, keyword, db: Database, persist_summaries,
+async def process_single_video(video, keyword, async_db: AsyncDatabase, persist_summaries,
                                full_audio_analysis, dry_run, youtube_service, openai_service, standardizer_agent):
     video_id = video['video_id']
     step = ""
@@ -81,7 +81,7 @@ async def process_single_video(video, keyword, db: Database, persist_summaries,
         async with semaphore:
             # Step 1: 获取视频元数据
             step = "fetch_metadata"
-            logging.info(f"[{video_id}] Fetching metadata.")
+            logging.info(f"[{video_id}] Fetching metadata. 😊")
             if not dry_run:
                 video_metadata = youtube_service.fetch_video_metadata(video_id)
             else:
@@ -113,12 +113,12 @@ async def process_single_video(video, keyword, db: Database, persist_summaries,
                     }
                 }
             if video_metadata and not dry_run and persist_summaries:
-                db.store_video_metadata(video_metadata)
+                await async_db.store_video_metadata(video_metadata)
             video['metadata'] = video_metadata
 
             # Step 2: 获取 transcript 及 LLM 生成摘要
             step = "fetch_transcript"
-            logging.info(f"[{video_id}] Fetching transcript.")
+            logging.info(f"[{video_id}] Fetching transcript. 😊")
             if not dry_run:
                 try:
                     transcript = await fetch_transcript(youtube_service, video_id)
@@ -130,17 +130,26 @@ async def process_single_video(video, keyword, db: Database, persist_summaries,
             if transcript:
                 video['transcript'] = transcript
                 if not dry_run:
-                    video['llm_summary'] = await gpt_summarizer_agent(transcript, openai_service=openai_service)
+                    prompt_text = transcript  # 可按需要构造更复杂的 prompt
+                    llm_summary = await gpt_summarizer_agent(transcript, openai_service=openai_service)
+                    video['llm_summary'] = llm_summary
+                    await async_db.store_ai_interaction(
+                        input_data={"prompt": prompt_text},
+                        output_data={"response": llm_summary},
+                        interaction_type="transcript_summary",
+                        tokens_used=openai_service.total_prompt_tokens,
+                        cost=openai_service.total_cost
+                    )
                 else:
                     video['llm_summary'] = "Dummy LLM summary in dry_run."
                 video['summary_source'] = 'transcript'
-                logging.info(f"[{video_id}] Transcript and LLM summary obtained.")
+                logging.info(f"[{video_id}] Transcript and LLM summary obtained. 😊")
             else:
-                logging.info(f"[{video_id}] No transcript available.")
+                logging.info(f"[{video_id}] No transcript available. 🌼")
 
-            # Step 3: 异步获取评论
+            # Step 3: 异步获取评论（并行执行）
             step = "fetch_comments"
-            logging.info(f"[{video_id}] Fetching comments asynchronously.")
+            logging.info(f"[{video_id}] Fetching comments asynchronously. 😊")
             try:
                 if not dry_run:
                     loop = asyncio.get_running_loop()
@@ -154,8 +163,8 @@ async def process_single_video(video, keyword, db: Database, persist_summaries,
                     ]
                 video['comments'] = comments
                 if comments and not dry_run and persist_summaries:
-                    db.store_comments(video_id, comments)
-                logging.info(f"[{video_id}] {len(comments)} comments fetched.")
+                    await async_db.store_comments(video_id, comments)
+                logging.info(f"[{video_id}] {len(comments)} comments fetched. 😊")
             except Exception as e:
                 logging.error(f"[{video_id}] Error fetching comments: {e}")
                 video['comments'] = None
@@ -163,7 +172,7 @@ async def process_single_video(video, keyword, db: Database, persist_summaries,
             # Step 4: 音频分析（可选）
             if full_audio_analysis:
                 step = "audio_analysis"
-                logging.info(f"[{video_id}] Audio analysis enabled.")
+                logging.info(f"[{video_id}] Audio analysis enabled. 😊")
                 audio_agent = AudioProcessingAgent(openai_service=openai_service, youtube_service=youtube_service)
                 if not dry_run:
                     audio_summary = await audio_agent.download_audio(video_id)
@@ -172,15 +181,15 @@ async def process_single_video(video, keyword, db: Database, persist_summaries,
                 if audio_summary:
                     video['audio_summary'] = audio_summary
                     video['summary_source'] = video.get('summary_source', '') + ', audio'
-                    logging.info(f"[{video_id}] Audio summary obtained.")
+                    logging.info(f"[{video_id}] Audio summary obtained. 😊")
                 else:
                     logging.error(f"[{video_id}] Audio summarization failed.")
             else:
                 logging.info(f"[{video_id}] Audio analysis disabled.")
 
-            # Step 5: 标准化摘要（统一使用传入的 standardizer_agent）
+            # Step 5: 标准化摘要（统一使用 standardizer_agent）
             step = "standardize_summary"
-            logging.info(f"[{video_id}] Standardizing summary.")
+            logging.info(f"[{video_id}] Standardizing summary. 😊")
             if video.get('llm_summary'):
                 try:
                     standardized_summary = await standardizer_agent.standardize(video['llm_summary'])
@@ -197,22 +206,20 @@ async def process_single_video(video, keyword, db: Database, persist_summaries,
                 except Exception as e:
                     logging.error(f"[{video_id}] Audio summary standardization error: {e}")
                     video['standardized_audio_summary'] = video.get('audio_summary', '')
-            summary_text = (video.get('standardized_audio_summary') or
-                            video.get('standardized_summary') or
-                            video.get('llm_summary', ''))
+            summary_text = video.get('standardized_audio_summary') or video.get('standardized_summary') or video.get('llm_summary', '')
             video['final_summary'] = summary_text
 
-            # Step 6: 更新数据库
+            # Step 6: 更新数据库记录
             step = "update_metadata"
-            if not dry_run and persist_summaries and db:
+            if not dry_run and persist_summaries and async_db:
                 video['timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                db.update_video_metadata(
+                await async_db.update_video_metadata(
                     video_id,
                     video.get('llm_summary', ''),
                     video.get('transcript', ''),
                     json.dumps(video.get('audio_summary', {})) if video.get('audio_summary') else None
                 )
-                logging.info(f"[{video_id}] Metadata updated in DB.")
+                logging.info(f"[{video_id}] Metadata updated in DB. 😊")
 
     except Exception as e:
         logging.error(f"[{video_id}] Error at step {step}: {e}")
@@ -226,19 +233,19 @@ async def process_videos(keyword, top_k, youtube_service, openai_api_key, db_pat
     logging.info("Starting video processing pipeline.")
     if dry_run:
         logging.info("Dry run mode: skipping external API calls and DB writes.")
-    db = Database(db_path) if not dry_run else None
+    # 构造异步数据库包装对象（非 dry_run 模式下）
+    async_db = AsyncDatabase(Database(db_path)) if not dry_run else None
 
-    # 创建退出事件
+    # 创建退出事件并启动监听任务
     exit_event = asyncio.Event()
     exit_listener = asyncio.create_task(listen_for_exit(exit_event))
 
-    processed_videos = []  # 存储处理过的视频信息
+    processed_videos = []  # 保存处理过的视频信息
     tasks = []
 
     try:
         from utils.openAIServices import OpenAIService
         openai_service = OpenAIService(openai_api_key)
-        # 统一创建 standardizer_agent，并传入 openai_service
         standardizer_agent = StandardizerAgent(openai_service=openai_service)
         search_agent = SearchAgent(youtube_service, openai_service=openai_service)
         aggregated = search_agent.aggregate_search(keyword)
@@ -252,8 +259,9 @@ async def process_videos(keyword, top_k, youtube_service, openai_api_key, db_pat
                 logging.info("Exit command detected. Stopping scheduling of new videos.")
                 break
             task = asyncio.create_task(process_single_video(
-                video, keyword, db, persist_summaries,
-                full_audio_analysis, dry_run, youtube_service, openai_service, standardizer_agent))
+                video, keyword, async_db, persist_summaries,
+                full_audio_analysis, dry_run, youtube_service, openai_service, standardizer_agent
+            ))
             tasks.append(task)
             processed_videos.append(video)
 
@@ -264,8 +272,8 @@ async def process_videos(keyword, top_k, youtube_service, openai_api_key, db_pat
         logging.error(f"Pipeline failed: {e}")
         logging.debug(traceback.format_exc())
     finally:
-        if db:
-            db.close()
+        if async_db:
+            async_db.close()
         await exit_listener
 
         # 生成处理报告

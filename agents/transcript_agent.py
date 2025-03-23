@@ -1,43 +1,19 @@
 #!/usr/bin/env python3
-import os
 import logging
 import asyncio
-from typing import Optional
+from typing import Dict, Any, Optional, List
 
 from utils.openAIServices import OpenAIService
 from utils.youtube import YouTubeService
-from dotenv import load_dotenv
-load_dotenv()
+from utils.helper import retry
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def retry(max_retries=3, delay=2):
-    """
-    Retry decorator with exponential backoff.
-    If the decorated async function fails repeatedly, retry with increasing delays.
-    """
-    def decorator(func):
-        async def wrapper(*args, **kwargs):
-            _delay = delay
-            for attempt in range(max_retries):
-                try:
-                    return await func(*args, **kwargs)
-                except Exception as e:
-                    logger.error(
-                        f"Error in {func.__name__}: {e}, retrying {attempt + 1}/{max_retries} in {_delay} seconds..."
-                    )
-                    await asyncio.sleep(_delay)
-                    _delay *= 2  # Exponential backoff
-            raise Exception(f"Failed to complete {func.__name__} after {max_retries} retries.")
-        return wrapper
-    return decorator
-
-
 async def maybe_async(func, *args, **kwargs):
     """
-    如果 func 是 async 函数，则直接 await 调用；否则用 asyncio.to_thread 调用。
+    如果 func 是 async 函数，则直接 await 调用；否则用 asyncio.to_thread 包装调用。
     """
     if asyncio.iscoroutinefunction(func):
         return await func(*args, **kwargs)
@@ -75,22 +51,22 @@ class VideoProcessor:
           1. 尝试获取 YouTube 字幕（调用 maybe_async()）。
           2. 若无字幕，则下载音频并调用 Whisper 进行转录。
           3. 利用 OpenAIService 异步生成结构化摘要。
-          4. 将转录和摘要存入数据库。
+          4. 将转录和摘要存入数据库（异步包装）。
           5. 返回生成的摘要。
         """
         try:
             # Step 1: 尝试获取字幕
             transcript = await maybe_async(self.youtube_service.fetch_transcript, video_id)
             if not transcript:
-                logger.warning(f"Video {video_id} has no transcript, falling back to audio transcription.")
+                logger.warning(f"Video {video_id} has no transcript, falling back to audio transcription. 😊")
                 # Step 2: 下载音频并转录
                 audio_path = await maybe_async(self.youtube_service.download_audio, video_id)
                 if not audio_path:
-                    logger.error(f"Audio download failed for video {video_id}.")
+                    logger.error(f"Audio download failed for video {video_id}. 😢")
                     return None
                 transcript = await maybe_async(self.youtube_service.transcribe_audio, audio_path)
                 if not transcript:
-                    logger.error(f"Audio transcription failed for video {video_id}.")
+                    logger.error(f"Audio transcription failed for video {video_id}. 😢")
                     return None
 
             # Step 3: 利用 OpenAIService 异步生成摘要
@@ -102,12 +78,12 @@ class VideoProcessor:
             )
             interpreted_summary = interpreted_summary.strip() if interpreted_summary else None
             if not interpreted_summary:
-                logger.error(f"Transcript interpretation failed for video {video_id}.")
+                logger.error(f"Transcript interpretation failed for video {video_id}. 😢")
                 return None
 
-            # Step 4: 存储转录和摘要到数据库
-            self.db.store_transcript_summary(video_id, transcript, interpreted_summary)
-            logger.info(f"Video {video_id}'s transcript and summary successfully stored.")
+            # Step 4: 异步存储转录和摘要到数据库
+            await asyncio.to_thread(self.db.store_transcript_summary, video_id, transcript, interpreted_summary)
+            logger.info(f"Video {video_id}'s transcript and summary successfully stored. 😊")
             return interpreted_summary
 
         except Exception as e:
@@ -127,9 +103,9 @@ class VideoProcessor:
             )
             summary = summary.strip() if summary else None
             if summary:
-                logger.info(f"Transcript interpreted (first 100 chars): {summary[:100]}...")
+                logger.info(f"Transcript interpreted (first 100 chars): {summary[:100]}... 😊")
             else:
-                logger.error("Empty summary returned.")
+                logger.error("Empty summary returned. 😢")
             return summary
         except Exception as e:
             logger.error(f"Error during transcript interpretation: {e}")
@@ -138,9 +114,10 @@ class VideoProcessor:
 
 __all__ = ["fetch_transcript", "VideoProcessor"]
 
-# 如果直接运行本文件，则进行简单测试
+# ---------------------- 如果直接运行本模块，则进行简单测试 ----------------------
 if __name__ == "__main__":
     from utils.database import Database
+    import os
 
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "dummy_key")
     YOUTUBE_API_KEYS = ["your_youtube_api_key"]

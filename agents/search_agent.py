@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import datetime
 from typing import Dict, Any, Optional, List
@@ -20,7 +21,7 @@ class SearchAgent:
          并累计各关键词返回的数量作为权重。
       4. 结果精炼：对去重后的结果进行排序（可先按权重、再按发布时间）。
       5. 摘要生成：调用 OpenAIService 生成聚合结果摘要。
-      6. 结果记录：若传入数据库对象，则将搜索摘要记录到数据库中。
+      6. 结果记录：若传入数据库对象，则将搜索摘要记录到数据库中（异步写入）。
     """
 
     def __init__(
@@ -34,6 +35,7 @@ class SearchAgent:
         :param youtube_service: 用于视频搜索的 YouTubeService 实例。
         :param openai_service: 用于文本生成的 OpenAIService 实例。
         :param db: 数据库对象，用于记录搜索摘要（可选）。
+                   建议传入支持异步操作的 AsyncDatabase 对象，或者提供异步接口。
         :param settings: 全局设置，默认包含：
             - default_filter: 默认搜索过滤条件。
             - max_results: 每个关键词搜索返回的视频数上限。
@@ -67,9 +69,6 @@ class SearchAgent:
         template_vars: Optional[Dict[str, Any]] = None,
         extra_text: Optional[str] = None
     ) -> str:
-        """
-        获取格式化后的 prompt 文本。支持 prompt 定义为字典（取 "user" 字段）或直接为字符串。
-        """
         raw_prompt = self.openai_service.get_prompt(prompt_template, variables=template_vars)
         prompt_text = raw_prompt.get("user", "") if isinstance(raw_prompt, dict) else raw_prompt
         if extra_text:
@@ -77,9 +76,6 @@ class SearchAgent:
         return prompt_text
 
     def generate_keywords(self, base_keyword: str) -> List[str]:
-        """
-        根据 base_keyword 生成关键词变体；若禁用 brainstorm，则直接返回 [base_keyword]。
-        """
         if not self.settings.get("enable_brainstorm", True):
             logger.info("[SearchAgent] Brainstorm disabled; returning original keyword.")
             return [base_keyword]
@@ -100,9 +96,6 @@ class SearchAgent:
             return [base_keyword]
 
     def search_by_keyword(self, keyword: str, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        """
-        针对单个关键词调用 YouTubeService 搜索视频，并返回结果列表。
-        """
         try:
             max_results = self.settings.get("max_results", 10)
             effective_filters = filters or self.settings.get("default_filter", {})
@@ -124,9 +117,6 @@ class SearchAgent:
             return []
 
     def aggregate_search(self, base_keyword: str, filters: Optional[Dict[str, Any]] = None) -> Dict[str, List[Dict[str, Any]]]:
-        """
-        根据原始关键词进行聚合搜索，生成多个关键词并分别搜索，返回字典格式结果。
-        """
         keywords = self.generate_keywords(base_keyword)
         aggregated: Dict[str, List[Dict[str, Any]]] = {}
         for kw in keywords:
@@ -135,9 +125,6 @@ class SearchAgent:
         return aggregated
 
     def deduplicate_results(self, aggregated: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
-        """
-        合并聚合结果并基于 video_id 去重，同时累计权重。
-        """
         dedup: Dict[str, Dict[str, Any]] = {}
         for kw, results in aggregated.items():
             for item in results:
@@ -152,9 +139,6 @@ class SearchAgent:
         return list(dedup.values())
 
     def optimize_variations(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        对去重后的结果进行排序优化，默认依据 settings 中的 order_by 和 order_direction 排序。
-        """
         order_by = self.settings.get("order_by", "weight")
         order_direction = self.settings.get("order_direction", "desc")
         reverse = True if order_direction == "desc" else False
@@ -167,9 +151,6 @@ class SearchAgent:
             return results
 
     def refine_results(self, results: List[Dict[str, Any]], top_n: int = 5) -> List[Dict[str, Any]]:
-        """
-        对去重后的结果进行优化排序，再按发布时间排序（降序），返回前 N 个结果。
-        """
         if not self.settings.get("enable_refine", True):
             logger.info("[SearchAgent] Refinement disabled; returning original results.")
             return results
@@ -180,15 +161,11 @@ class SearchAgent:
         return refined[:top_n]
 
     def summarize_results(self, results: List[Dict[str, Any]]) -> str:
-        """
-        使用 OpenAIService 对结果生成结构化摘要，反馈各关键词及视频汇总情况。
-        """
         if not self.settings.get("enable_summary", True):
             logger.info("[SearchAgent] Summary generation disabled.")
             return ""
         if not results:
             return "No videos found to summarize."
-        # 按关键词分组
         keyword_groups: Dict[str, List[str]] = {}
         for item in results:
             kw = item.get("search_keyword", "unknown")
@@ -204,10 +181,10 @@ class SearchAgent:
         logger.info("[SearchAgent] Generated summary for aggregated results.")
         return summary_text
 
-    def execute_search(self, base_keyword: str, filters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def execute_search(self, base_keyword: str, filters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         综合执行搜索流程：聚合搜索、去重、精炼，并返回最终结果数据。
-        如果传入了数据库对象，则将搜索摘要记录到数据库中。
+        如果传入了数据库对象，则将搜索摘要记录到数据库中（异步写入）。
         """
         logger.info(f"[SearchAgent] Executing full search workflow for keyword '{base_keyword}'.")
         aggregated = self.aggregate_search(base_keyword, filters=filters)
@@ -223,19 +200,22 @@ class SearchAgent:
             "summary": summary_text,
         }
         self._last_search_result = result
-        # 如果数据库对象存在，则记录搜索摘要到数据库（使用 KeywordAnalysis 表）
+        # 异步记录搜索摘要到数据库（如果传入了支持异步操作的 DB 对象）
         if self.db:
             try:
                 record = {
                     "keyword": base_keyword,
                     "critique": summary_text,
-                    "total_views": len(refined),  # 示例：使用 refined 数量作为视频数
+                    "total_views": len(refined),
                     "total_likes": 0,
                     "weighted_score": 0.0,
                     "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 }
-                self.db.store_keyword_analysis([record])
-                logger.info("[SearchAgent] Search summary recorded in database.")
+                if hasattr(self.db, "store_keyword_analysis_async"):
+                    await self.db.store_keyword_analysis_async([record])
+                else:
+                    await asyncio.to_thread(self.db.store_keyword_analysis, [record])
+                logger.info("[SearchAgent] Search summary recorded in database. 😊")
             except Exception as e:
                 logger.error(f"[SearchAgent] Failed to record search summary: {e}")
         return result
