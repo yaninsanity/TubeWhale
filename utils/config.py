@@ -9,7 +9,7 @@ class Config:
         env_config = dotenv_values(".env")
         # 默认配置（全部转为大写键）
         self.KEYWORD = env_config.get("KEYWORD", "")
-        self.YOUTUBE_API_KEYS = env_config.get("YOUTUBE_API_KEYS", "").split(',')
+        self.YOUTUBE_API_KEYS = env_config.get("YOUTUBE_API_KEYS", "").split(',') if ',' in env_config.get("YOUTUBE_API_KEYS", "") else [env_config.get("YOUTUBE_API_KEYS", "")]
         self.OPENAI_API_KEY = env_config.get("OPENAI_API_KEY", "")
         self.DB_PATH = env_config.get("DB_PATH", "youtube_summaries.db")
         self.PERSIST_AGENT_SUMMARIES = env_config.get("PERSIST_AGENT_SUMMARIES", "true").lower() == "true"
