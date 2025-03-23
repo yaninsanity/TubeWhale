@@ -18,3 +18,5 @@ pytest
 pytest-asyncio
 sqlalchemy
 pytube
+browser_cookie3
+ffmpeg

@@ -29,7 +29,7 @@ async def fetch_transcript(youtube_service: YouTubeService, video_id: str) -> Op
     """
     transcript = await maybe_async(youtube_service.fetch_transcript, video_id)
     if not transcript:
-        raise Exception(f"Transcript not found for video {video_id}")
+        raise Warning(f"Transcript not found for video {video_id}")
     return transcript
 
 

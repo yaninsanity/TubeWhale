@@ -7,12 +7,12 @@ import logging
 import random
 import asyncio
 from typing import List, Optional
-from yt_dlp import YoutubeDL
+
 import googleapiclient.discovery  # 避免在模块级别导入 build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import build_http
 
-from utils.helper import retry
+from utils.helper import retry  # 假设 helper.retry 为同步重试装饰器
 
 # YouTube API 的 Discovery URL
 DISCOVERY_URL = "https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest"
@@ -20,14 +20,20 @@ DISCOVERY_URL = "https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest"
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+
 # ================= Dummy Service（仅供内部测试使用） =================
 class _DummyResource:
     def __init__(self, call_type):
         self.call_type = call_type
+
     def list(self, **kwargs):
-        return DummyRequest(response={"items": [{"snippet": {"title": "Test Video"},
-                                                   "statistics": {"viewCount": "1000", "likeCount": "100", "commentCount": "10"},
-                                                   "contentDetails": {}}]})
+        # 返回固定测试数据
+        return DummyRequest(response={"items": [{
+            "snippet": {"title": "Test Video"},
+            "statistics": {"viewCount": "1000", "likeCount": "100", "commentCount": "10"},
+            "contentDetails": {}
+        }]})
+
 
 class _DummyService:
     def videos(self):
@@ -41,20 +47,12 @@ class _DummyService:
     def playlistItems(self):
         return _DummyResource("playlistItems")
 
+
 # ================= YouTubeService 模块 =================
 class YouTubeService:
     """
-    YouTubeService 封装了 YouTube Data API 的调用，包括搜索、视频详情、评论、播放列表等接口，
-    同时集成了 yt-dlp 用于下载视频音频并提取为 MP3 格式。
-
-    改进点：
-      - 使用传入配置，而非直接依赖 os 环境变量，确保配置灵动灵活。
-      - 支持代理、Cookie、User-Agent 参数（由外部统一配置传入），为未来 proxy pool、自动 Cookie 读取等预留扩展接口。
-      - 重试机制与指数退避（含随机短延迟，模拟人类行为）。
-      - 当 quota 超出时自动轮换 API key。
-      - 请求重建，处理不可复用的 request 对象。
-      - 日志记录中加入 emoji 表示状态（✅、😬、😢）。
-      - 新增 fetch_transcript 方法：调用 YouTubeTranscriptApi 获取视频字幕（默认英文），对条目文本使用 str() 转换，防止类型错误。
+    YouTubeService 封装了 YouTube Data API 的调用，
+    同时集成了下载音频与获取字幕的功能。
     """
     def __init__(self, api_keys: List[str],
                  unverified: bool = False,
@@ -66,18 +64,6 @@ class YouTubeService:
                  user_agent: Optional[str] = None,
                  cookies: Optional[str] = None,
                  auto_detect_cookies: bool = True):
-        """
-        :param api_keys: YouTube API keys 列表。
-        :param unverified: 是否使用未验证的 SSL 上下文（不推荐）。
-        :param max_retries: 每个 API 请求的最大重试次数。
-        :param backoff_factor: 指数退避因子（秒）。
-        :param skip_key_check: 是否跳过 API key 检查（适用于测试环境）。
-        :param proxy: 单个代理地址（如不使用 proxy_pool）。
-        :param proxy_pool: 代理地址列表，未来可集成动态代理池。
-        :param user_agent: 自定义 User-Agent 字符串，由外部配置传入。
-        :param cookies: Cookie 字符串或文件路径，由外部配置传入。
-        :param auto_detect_cookies: 如果未传入 cookies，则自动尝试检测（默认 True）。
-        """
         if isinstance(api_keys, str):
             api_keys = [api_keys]
         if not api_keys:
@@ -95,7 +81,7 @@ class YouTubeService:
         self.cookies = cookies
         if auto_detect_cookies and not self.cookies:
             self.cookies = self._auto_detect_cookies()
-        
+
         if not skip_key_check:
             self.check_api_keys()
         else:
@@ -113,16 +99,16 @@ class YouTubeService:
         return random.choice(agents)
 
     def _auto_detect_cookies(self) -> Optional[str]:
-        """
-        自动检测 Cookie 配置的 stub 实现：
-        此处仅作为示例，实际可整合 browser_cookie3 等库读取浏览器 Cookie 并返回文件路径或字符串。
-        """
-        # 示例：如果有特定的配置文件（如 cookies.txt）存在，则自动加载
-        default_cookie_file = "cookies.txt"
-        if os.path.exists(default_cookie_file):
-            logger.info("Auto-detected cookies file from default path.")
-            return default_cookie_file
-        logger.info("No cookies file auto-detected.")
+        try:
+            import browser_cookie3
+            cj = browser_cookie3.chrome(domain_name=".youtube.com")
+            cookie_str = "; ".join([f"{c.name}={c.value}" for c in cj])
+            if cookie_str:
+                logger.info("Successfully auto-detected YouTube cookies. ✅")
+                return cookie_str
+        except Exception as e:
+            logger.warning(f"Auto-detect cookies failed: {e} 😢")
+        logger.info("No cookies auto-detected. 🌼")
         return None
 
     def check_api_keys(self):
@@ -183,7 +169,6 @@ class YouTubeService:
             logger.info("YouTube service initialized successfully. 😊")
             return service
         except Exception as e:
-            # 针对测试环境，部分 key 返回 DummyService
             if api_key in {"key1", "key2"}:
                 logger.info("Returning dummy service in _build_service for testing.")
                 return _DummyService()
@@ -199,7 +184,7 @@ class YouTubeService:
                 time.sleep(random.uniform(0.1, 0.5))
                 logger.info(f"Executing {call_type} request, attempt {attempts + 1}.")
                 response = request.execute()
-                logger.info(f"{call_type} request executed successfully.")
+                logger.info(f"{call_type} request executed successfully. ✅")
                 return response
             except HttpError as e:
                 error_text = e.content.decode("utf-8") if e.content else str(e)
@@ -208,7 +193,7 @@ class YouTubeService:
                     try:
                         self.rotate_key()
                     except Exception as rotate_exception:
-                        logger.error("All API keys exhausted. Aborting request.")
+                        logger.error("All API keys exhausted. Aborting request. ❌")
                         raise rotate_exception
                     attempts += 1
                     sleep_time = self.backoff_factor * (2 ** attempts)
@@ -321,6 +306,7 @@ class YouTubeService:
         logger.info(f"Fetched metadata: {metadata}")
         return metadata
 
+    # —— 改动 1：获取评论时，增加异常捕获，确保网络异常时返回空列表而非中断整个流程
     def fetch_all_comments(self, video_id):
         logger.info(f"Fetching all comments for video ID: {video_id}")
         all_comments = []
@@ -331,7 +317,12 @@ class YouTubeService:
             textFormat="plainText",
         )
         while request:
-            response = self._execute_request(request, call_type="commentThreads")
+            try:
+                response = self._execute_request(request, call_type="commentThreads")
+            except Exception as e:
+                logger.error(f"Error fetching comments for video {video_id}: {e}")
+                # 返回已有的评论（可能为空）以防止整个流程中断
+                return all_comments
             for item in response.get("items", []):
                 top_comment = item["snippet"]["topLevelComment"]
                 top_snippet = top_comment["snippet"]
@@ -427,80 +418,65 @@ class YouTubeService:
             "total_cost": total_cost,
         }
 
+    # --------------- 音频下载方法（采用 pytube + ffmpeg-python） ---------------
     def download_audio(self, video_id):
         downloads_dir = "downloads"
         os.makedirs(downloads_dir, exist_ok=True)
-        audio_path = os.path.abspath(os.path.join(downloads_dir, f"{video_id}.mp3"))
-        if os.path.exists(audio_path):
-            logger.info(f"Audio file {audio_path} already exists. Skipping download.")
-            return audio_path
-        
-        logger.info(f"Downloading audio for video ID: {video_id}")
-        outtmpl = os.path.abspath(os.path.join(downloads_dir, f"{video_id}.%(ext)s"))
-        ydl_opts = {
-            'format': 'bestaudio/best',
-            'outtmpl': outtmpl,
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }],
-            'quiet': True,
-            'no_warnings': True,
-            'retries': 3,
-            'socket_timeout': 10,
-            'http_headers': {
-                'User-Agent': self.user_agent,
-                'Referer': "https://www.youtube.com/"
-            }
-        }
-        if self.proxy_pool:
-            chosen_proxy = random.choice(self.proxy_pool)
-            ydl_opts['proxy'] = chosen_proxy
-            logger.info(f"Using proxy from pool: {chosen_proxy}")
-        elif self.proxy:
-            ydl_opts['proxy'] = self.proxy
-        if self.cookies:
-            ydl_opts['cookies'] = self.cookies
+        output_file = os.path.abspath(os.path.join(downloads_dir, f"{video_id}.mp3"))
+        if os.path.exists(output_file):
+            logger.info(f"Audio file {output_file} already exists. Skipping download. ✅")
+            return output_file
 
-        def download():
-            with YoutubeDL(ydl_opts) as ydl:
-                video_url = f"https://www.youtube.com/watch?v={video_id}"
-                logger.info(f"Starting download for URL: {video_url}")
-                ydl.download([video_url])
-                logger.info(f"Download finished for video ID: {video_id}")
-        
+        logger.info(f"Downloading and extracting audio for video ID: {video_id}")
+
         try:
-            loop = asyncio.get_running_loop()
-            logger.info("Running within existing event loop; using threading for download.")
-            thread = threading.Thread(target=download)
-            thread.start()
-            thread.join(timeout=60)
-        except RuntimeError:
-            logger.info("No running event loop; using asyncio.run for download.")
-            asyncio.run(self._download_wrapper(download))
-        
-        if os.path.exists(audio_path):
-            delay = random.uniform(0.5, 2)
-            logger.info(f"Sleeping for {delay:.2f} seconds post download.")
-            time.sleep(delay)
-            logger.info(f"Audio downloaded and extracted successfully for video ID {video_id}. 😊")
-            return audio_path
-        else:
-            logger.error(f"Audio file {audio_path} not found after download. 😢")
+            from pytube import YouTube
+            import ffmpeg
+
+            yt = YouTube(f"https://www.youtube.com/watch?v={video_id}",
+                         on_progress_callback=lambda stream, chunk, bytes_remaining: None,
+                         use_oauth=False,
+                         allow_oauth_cache=False)
+            stream = yt.streams.filter(only_audio=True).order_by("abr").desc().first()
+            if not stream:
+                raise Exception("No audio stream found.")
+
+            stream_url = stream.url
+            logger.info(f"Obtained stream URL for video {video_id}.")
+
+            (
+                ffmpeg
+                .input(stream_url)
+                .output(output_file, format='mp3', acodec='libmp3lame', audio_bitrate='192k', loglevel='error')
+                .overwrite_output()
+                .run()
+            )
+            if os.path.exists(output_file):
+                delay = random.uniform(0.5, 2)
+                logger.info(f"Sleeping for {delay:.2f} seconds post extraction. 😊")
+                time.sleep(delay)
+                logger.info(f"Audio downloaded and extracted successfully for video ID {video_id}. ✅")
+                return output_file
+            else:
+                logger.error(f"Audio file {output_file} not found after extraction. 😢")
+                return None
+        except HttpError as he:
+            if "HTTP Error 400" in str(he):
+                logger.error(f"Failed to download/extract audio for video ID {video_id}: {he}")
+                return None
+            else:
+                logger.error(f"Failed to download/extract audio for video ID {video_id}: {he}")
+                return None
+        except Exception as e:
+            logger.error(f"Failed to download/extract audio for video ID {video_id}: {e}")
             return None
-    
+
     async def _download_wrapper(self, download_func):
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, download_func)
-    
+
     @retry(max_retries=2, delay=3)
     async def fetch_transcript(self, video_id: str) -> Optional[str]:
-        """
-        获取视频字幕的函数。
-        若字幕被禁用或获取失败，则直接返回 None。
-        对每个条目的 'text' 转换为字符串再拼接，防止类型错误。
-        """
         try:
             from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound
             transcript_entries = YouTubeTranscriptApi.get_transcript(video_id, languages=["en"])
@@ -519,7 +495,25 @@ class YouTubeService:
 
 
 def get_youtube_service(api_key, **kwargs):
-    """
-    Factory function: returns an instance of YouTubeService.
-    """
     return YouTubeService(api_key, **kwargs)
+
+
+# ---------------- 以下为 DummyRequest 用于内部测试 ----------------
+class DummyResponse:
+    def __init__(self, reason="quotaExceeded", status=403):
+        self.reason = reason
+        self.status = status
+
+class DummyRequest:
+    def __init__(self, response=None, error=False, error_text="", 
+                 uri="dummy_uri?q=test&maxResults=25&type=video&videoEmbeddable=true&videoSyndicated=true"):
+        self.response = response
+        self.error = error
+        self.error_text = error_text
+        self.uri = uri
+
+    def execute(self):
+        if self.error:
+            raise HttpError(resp=DummyResponse(reason=self.error_text),
+                            content=self.error_text.encode("utf-8"))
+        return self.response
