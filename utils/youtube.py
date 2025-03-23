@@ -20,12 +20,11 @@ DISCOVERY_URL = "https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest"
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-# ================= Dummy Service（仅供内部测试时使用，不建议在生产中使用） =================
+# ================= Dummy Service（仅供内部测试使用） =================
 class _DummyResource:
     def __init__(self, call_type):
         self.call_type = call_type
     def list(self, **kwargs):
-        # 返回固定测试数据
         return DummyRequest(response={"items": [{"snippet": {"title": "Test Video"},
                                                    "statistics": {"viewCount": "1000", "likeCount": "100", "commentCount": "10"},
                                                    "contentDetails": {}}]})
@@ -49,15 +48,36 @@ class YouTubeService:
     同时集成了 yt-dlp 用于下载视频音频并提取为 MP3 格式。
 
     改进点：
+      - 使用传入配置，而非直接依赖 os 环境变量，确保配置灵动灵活。
+      - 支持代理、Cookie、User-Agent 参数（由外部统一配置传入），为未来 proxy pool、自动 Cookie 读取等预留扩展接口。
       - 重试机制与指数退避（含随机短延迟，模拟人类行为）。
       - 当 quota 超出时自动轮换 API key。
       - 请求重建，处理不可复用的 request 对象。
       - 日志记录中加入 emoji 表示状态（✅、😬、😢）。
-      - 支持代理与自定义 User-Agent，用于 yt-dlp 下载。
-      - 新增 fetch_transcript 方法：调用 YouTubeTranscriptApi 获取视频字幕（默认英文），并对每个条目的 'text' 使用 str() 转换防止类型错误。
+      - 新增 fetch_transcript 方法：调用 YouTubeTranscriptApi 获取视频字幕（默认英文），对条目文本使用 str() 转换，防止类型错误。
     """
-    def __init__(self, api_keys, unverified=False, max_retries=3, backoff_factor=1,
-                 skip_key_check: bool = False, proxy: Optional[str] = None, user_agent: Optional[str] = None):
+    def __init__(self, api_keys: List[str],
+                 unverified: bool = False,
+                 max_retries: int = 3,
+                 backoff_factor: int = 1,
+                 skip_key_check: bool = False,
+                 proxy: Optional[str] = None,
+                 proxy_pool: Optional[List[str]] = None,
+                 user_agent: Optional[str] = None,
+                 cookies: Optional[str] = None,
+                 auto_detect_cookies: bool = True):
+        """
+        :param api_keys: YouTube API keys 列表。
+        :param unverified: 是否使用未验证的 SSL 上下文（不推荐）。
+        :param max_retries: 每个 API 请求的最大重试次数。
+        :param backoff_factor: 指数退避因子（秒）。
+        :param skip_key_check: 是否跳过 API key 检查（适用于测试环境）。
+        :param proxy: 单个代理地址（如不使用 proxy_pool）。
+        :param proxy_pool: 代理地址列表，未来可集成动态代理池。
+        :param user_agent: 自定义 User-Agent 字符串，由外部配置传入。
+        :param cookies: Cookie 字符串或文件路径，由外部配置传入。
+        :param auto_detect_cookies: 如果未传入 cookies，则自动尝试检测（默认 True）。
+        """
         if isinstance(api_keys, str):
             api_keys = [api_keys]
         if not api_keys:
@@ -70,7 +90,11 @@ class YouTubeService:
         self.backoff_factor = backoff_factor
         self.cost_tracking = {"search": 0, "videos_list": 0, "playlists": 0}
         self.proxy = proxy
-        self.user_agent = user_agent
+        self.proxy_pool = proxy_pool
+        self.user_agent = user_agent or self._get_random_user_agent()
+        self.cookies = cookies
+        if auto_detect_cookies and not self.cookies:
+            self.cookies = self._auto_detect_cookies()
         
         if not skip_key_check:
             self.check_api_keys()
@@ -79,7 +103,28 @@ class YouTubeService:
         current_key = self.get_current_key()
         logger.info(f"Using API key: {current_key} ✅")
         self.service = self._build_service(current_key, unverified)
-    
+
+    def _get_random_user_agent(self) -> str:
+        agents = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.1 Safari/605.1.15",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+        ]
+        return random.choice(agents)
+
+    def _auto_detect_cookies(self) -> Optional[str]:
+        """
+        自动检测 Cookie 配置的 stub 实现：
+        此处仅作为示例，实际可整合 browser_cookie3 等库读取浏览器 Cookie 并返回文件路径或字符串。
+        """
+        # 示例：如果有特定的配置文件（如 cookies.txt）存在，则自动加载
+        default_cookie_file = "cookies.txt"
+        if os.path.exists(default_cookie_file):
+            logger.info("Auto-detected cookies file from default path.")
+            return default_cookie_file
+        logger.info("No cookies file auto-detected.")
+        return None
+
     def check_api_keys(self):
         available_keys = []
         test_video_id = "dQw4w9WgXcQ"
@@ -101,11 +146,11 @@ class YouTubeService:
         self.api_keys = available_keys
         self.current_key_index = 0
         logger.info(f"Available API keys: {self.api_keys}")
-    
+
     def get_current_key(self):
         with self.key_lock:
             return self.api_keys[self.current_key_index]
-    
+
     def rotate_key(self):
         with self.key_lock:
             if len(self.api_keys) == 1:
@@ -116,7 +161,7 @@ class YouTubeService:
             logger.info(f"Rotated API key. Now using key: {new_key} ✅")
             self.service = self._build_service(new_key, self.unverified)
             return new_key
-    
+
     def _build_service(self, api_key, unverified=False):
         if str(api_key).strip().lower() == "dummy_key":
             logger.info("Using dummy service for API key 'dummy_key'.")
@@ -138,12 +183,13 @@ class YouTubeService:
             logger.info("YouTube service initialized successfully. 😊")
             return service
         except Exception as e:
+            # 针对测试环境，部分 key 返回 DummyService
             if api_key in {"key1", "key2"}:
                 logger.info("Returning dummy service in _build_service for testing.")
                 return _DummyService()
             logger.error(f"Error building YouTube service: {e}")
             raise
-    
+
     def _execute_request(self, request, call_type):
         attempts = 0
         while attempts < self.max_retries:
@@ -177,7 +223,7 @@ class YouTubeService:
                 logger.error(f"Unexpected error in {call_type}: {e}")
                 raise
         raise Exception(f"Max retries exceeded for {call_type} request.")
-    
+
     def _rebuild_request(self, old_request, call_type):
         if not hasattr(old_request, "uri"):
             raise Exception("缺少 uri")
@@ -227,7 +273,7 @@ class YouTubeService:
             return new_request
         else:
             raise Exception(f"Unsupported call_type for rebuilding request: {call_type}")
-    
+
     def search(self, q, max_results=25, page_token=None, resource_type="video", filters=None):
         params = {
             "part": "snippet",
@@ -241,16 +287,16 @@ class YouTubeService:
         logger.info(f"Performing search with parameters: {params}")
         request = self.service.search().list(**params)
         return self._execute_request(request, call_type="search")
-    
+
     def search_videos(self, q, max_results=25, page_token=None, filters=None):
         return self.search(q, max_results, page_token, resource_type="video", filters=filters)
-    
+
     def search_channels(self, q, max_results=25, page_token=None, filters=None):
         return self.search(q, max_results, page_token, resource_type="channel", filters=filters)
-    
+
     def search_playlists(self, q, max_results=25, page_token=None, filters=None):
         return self.search(q, max_results, page_token, resource_type="playlist", filters=filters)
-    
+
     def fetch_video_metadata(self, video_id):
         logger.info(f"Fetching video metadata for video ID: {video_id}")
         request = self.service.videos().list(
@@ -274,7 +320,7 @@ class YouTubeService:
         }
         logger.info(f"Fetched metadata: {metadata}")
         return metadata
-    
+
     def fetch_all_comments(self, video_id):
         logger.info(f"Fetching all comments for video ID: {video_id}")
         all_comments = []
@@ -331,7 +377,7 @@ class YouTubeService:
                 request = None
         logger.info(f"Fetched {len(all_comments)} comments for video ID: {video_id}")
         return all_comments
-    
+
     def fetch_playlist_metadata(self, playlist_id):
         logger.info(f"Fetching playlist metadata for playlist ID: {playlist_id}")
         request = self.service.playlists().list(
@@ -343,7 +389,7 @@ class YouTubeService:
             logger.error(f"No metadata found for playlist ID {playlist_id}")
             return None
         return response["items"][0]
-    
+
     def fetch_playlist_items(self, playlist_id, max_results=50):
         logger.info(f"Fetching playlist items for playlist ID: {playlist_id}")
         items = []
@@ -366,7 +412,7 @@ class YouTubeService:
                 request = None
         logger.info(f"Fetched {len(items)} items for playlist ID: {playlist_id}")
         return items
-    
+
     @property
     def quota_usage(self):
         total_cost = (
@@ -380,7 +426,7 @@ class YouTubeService:
             "playlists_cost": self.cost_tracking.get("playlists", 0),
             "total_cost": total_cost,
         }
-    
+
     def download_audio(self, video_id):
         downloads_dir = "downloads"
         os.makedirs(downloads_dir, exist_ok=True)
@@ -401,13 +447,22 @@ class YouTubeService:
             }],
             'quiet': True,
             'no_warnings': True,
+            'retries': 3,
+            'socket_timeout': 10,
+            'http_headers': {
+                'User-Agent': self.user_agent,
+                'Referer': "https://www.youtube.com/"
+            }
         }
-        if self.proxy:
+        if self.proxy_pool:
+            chosen_proxy = random.choice(self.proxy_pool)
+            ydl_opts['proxy'] = chosen_proxy
+            logger.info(f"Using proxy from pool: {chosen_proxy}")
+        elif self.proxy:
             ydl_opts['proxy'] = self.proxy
-        # 始终设置 HTTP headers，防止被识别为机器人
-        ydl_opts.setdefault('http_headers', {})['User-Agent'] = self.user_agent or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
-        ydl_opts.setdefault('http_headers', {})['Referer'] = "https://www.youtube.com/"
-        
+        if self.cookies:
+            ydl_opts['cookies'] = self.cookies
+
         def download():
             with YoutubeDL(ydl_opts) as ydl:
                 video_url = f"https://www.youtube.com/watch?v={video_id}"
@@ -426,10 +481,13 @@ class YouTubeService:
             asyncio.run(self._download_wrapper(download))
         
         if os.path.exists(audio_path):
-            logger.info(f"Audio downloaded and extracted successfully for video ID {video_id}.")
+            delay = random.uniform(0.5, 2)
+            logger.info(f"Sleeping for {delay:.2f} seconds post download.")
+            time.sleep(delay)
+            logger.info(f"Audio downloaded and extracted successfully for video ID {video_id}. 😊")
             return audio_path
         else:
-            logger.error(f"Audio file {audio_path} not found after download.")
+            logger.error(f"Audio file {audio_path} not found after download. 😢")
             return None
     
     async def _download_wrapper(self, download_func):
