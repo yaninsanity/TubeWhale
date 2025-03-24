@@ -1,5 +1,3 @@
-# tests/test_agent.py
-
 import asyncio
 import pytest
 
@@ -30,67 +28,19 @@ class DummyYouTubeService:
     def transcribe_audio(self, audio_path):
         return "Dummy transcript from audio"
 
-# 如果你的 Agent 类已经在项目中定义（比如在 agent.py 中），你可以直接导入：
-# from agent import Agent
-# 这里为了示例，我们将 process_video_transcript 与 interpret_transcript 封装在一个简单的 Agent 类中：
-class Agent:
-    def __init__(self, db, openai_service, youtube_service):
-        self.db = db
-        self.openai_service = openai_service
-        self.youtube_service = youtube_service
-
-    async def interpret_transcript(self, transcript: str, topic: str) -> str:
-        try:
-            summary = await self.openai_service.async_completion(
-                prompt=transcript,
-                prompt_template=None,
-                temperature=0.5,
-                max_tokens=1024
-            )
-            summary = summary.strip() if summary else None
-            return summary
-        except Exception as e:
-            return None
-
-    async def process_video_transcript(self, video_id: str, topic: str) -> str:
-        try:
-            # Step 1: 尝试获取字幕（同步方法用 asyncio.to_thread 包装）
-            transcript = await asyncio.to_thread(self.youtube_service.fetch_transcript, video_id)
-            if not transcript:
-                # 未获取到字幕，使用音频下载和转录流程
-                audio_path = await asyncio.to_thread(self.youtube_service.download_audio, video_id)
-                if not audio_path:
-                    return None
-                transcript = await asyncio.to_thread(self.youtube_service.transcribe_audio, audio_path)
-                if not transcript:
-                    return None
-
-            # Step 2: 生成摘要
-            interpreted_summary = await self.interpret_transcript(transcript, topic)
-            if not interpreted_summary:
-                return None
-
-            # Step 3: 存储转录与摘要（同步调用）
-            self.db.store_transcript_summary(video_id, transcript, interpreted_summary)
-            return interpreted_summary
-
-        except Exception as e:
-            return None
-
-# ---------------------------
-# 以下为测试用例
-# ---------------------------
+# 导入改进后的 VideoProcessor
+from agents.transcript_agent import VideoProcessor
 
 @pytest.mark.asyncio
 async def test_process_video_transcript_with_existing_transcript():
     db = DummyDatabase()
     openai_service = DummyOpenAIService()
     youtube_service = DummyYouTubeService()
-    agent = Agent(db, openai_service, youtube_service)
+    processor = VideoProcessor(db, openai_service, youtube_service)
 
     video_id = "video_with_transcript"
     topic = "Test Topic"
-    summary = await agent.process_video_transcript(video_id, topic)
+    summary = await processor.process_video_transcript(video_id, topic)
     
     # 验证返回摘要不为空，并且存储数据正确（使用 fetch_transcript 得到的字幕）
     assert summary is not None
@@ -102,11 +52,11 @@ async def test_process_video_transcript_with_audio_fallback():
     db = DummyDatabase()
     openai_service = DummyOpenAIService()
     youtube_service = DummyYouTubeService()
-    agent = Agent(db, openai_service, youtube_service)
+    processor = VideoProcessor(db, openai_service, youtube_service)
 
     video_id = "video_without_transcript"
     topic = "Fallback Topic"
-    summary = await agent.process_video_transcript(video_id, topic)
+    summary = await processor.process_video_transcript(video_id, topic)
     
     # 此情况下 fetch_transcript 返回 None，应该走下载和音频转录流程
     assert summary is not None
@@ -119,13 +69,13 @@ async def test_interpret_transcript_error_handling(monkeypatch):
     db = DummyDatabase()
     openai_service = DummyOpenAIService()
     youtube_service = DummyYouTubeService()
-    agent = Agent(db, openai_service, youtube_service)
+    processor = VideoProcessor(db, openai_service, youtube_service)
 
     # 模拟 OpenAIService 异步接口抛出异常
     async def failing_completion(*args, **kwargs):
         raise Exception("Test error")
     monkeypatch.setattr(openai_service, "async_completion", failing_completion)
 
-    summary = await agent.interpret_transcript("Some transcript", "Test Topic")
+    summary = await processor.interpret_transcript("Some transcript", "Test Topic")
     # 当发生异常时，应返回 None
     assert summary is None
