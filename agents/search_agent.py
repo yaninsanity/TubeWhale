@@ -69,17 +69,22 @@ class SearchAgent:
         template_vars: Optional[Dict[str, Any]] = None,
         extra_text: Optional[str] = None
     ) -> str:
-        raw_prompt = self.openai_service.get_prompt(prompt_template, variables=template_vars)
-        prompt_text = raw_prompt.get("user", "") if isinstance(raw_prompt, dict) else raw_prompt
-        if extra_text:
-            prompt_text += "\n" + extra_text
-        return prompt_text
+        try:
+            raw_prompt = self.openai_service.get_prompt(prompt_template, variables=template_vars)
+            prompt_text = raw_prompt.get("user", "") if isinstance(raw_prompt, dict) else raw_prompt
+            if extra_text:
+                prompt_text += "\n" + extra_text
+            return prompt_text
+        except Exception as e:
+            logger.error(f"[SearchAgent] Error getting prompt content: {e}")
+            return ""
 
     def generate_keywords(self, base_keyword: str) -> List[str]:
         if not self.settings.get("enable_brainstorm", True):
             logger.info("[SearchAgent] Brainstorm disabled; returning original keyword.")
             return [base_keyword]
         try:
+            logger.info(f"[SearchAgent] Generating keywords for base keyword: {base_keyword}")
             prompt_vars = {"base_keyword": base_keyword, "max_n": 5}
             keywords_text = self._get_prompt_content(
                 prompt_template=self.settings["brainstorm_prompt_template"],
@@ -97,6 +102,7 @@ class SearchAgent:
 
     def search_by_keyword(self, keyword: str, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         try:
+            logger.info(f"[SearchAgent] Searching videos for keyword: {keyword}")
             max_results = self.settings.get("max_results", 10)
             effective_filters = filters or self.settings.get("default_filter", {})
             response = self.youtube_service.search_videos(q=keyword, max_results=max_results, filters=effective_filters)
@@ -117,14 +123,17 @@ class SearchAgent:
             return []
 
     def aggregate_search(self, base_keyword: str, filters: Optional[Dict[str, Any]] = None) -> Dict[str, List[Dict[str, Any]]]:
+        logger.info(f"[SearchAgent] Aggregating search results for base keyword: {base_keyword}")
         keywords = self.generate_keywords(base_keyword)
         aggregated: Dict[str, List[Dict[str, Any]]] = {}
         for kw in keywords:
             results = self.search_by_keyword(kw, filters=filters)
             aggregated[kw] = results
+            logger.info(f"[SearchAgent] Aggregated {len(results)} results for keyword: {kw}")
         return aggregated
 
     def deduplicate_results(self, aggregated: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+        logger.info("[SearchAgent] Starting deduplication of results.")
         dedup: Dict[str, Dict[str, Any]] = {}
         for kw, results in aggregated.items():
             for item in results:
@@ -139,6 +148,7 @@ class SearchAgent:
         return list(dedup.values())
 
     def optimize_variations(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        logger.info("[SearchAgent] Optimizing result variations.")
         order_by = self.settings.get("order_by", "weight")
         order_direction = self.settings.get("order_direction", "desc")
         reverse = True if order_direction == "desc" else False
@@ -151,6 +161,7 @@ class SearchAgent:
             return results
 
     def refine_results(self, results: List[Dict[str, Any]], top_n: int = 5) -> List[Dict[str, Any]]:
+        logger.info("[SearchAgent] Refining results.")
         if not self.settings.get("enable_refine", True):
             logger.info("[SearchAgent] Refinement disabled; returning original results.")
             return results
@@ -161,10 +172,12 @@ class SearchAgent:
         return refined[:top_n]
 
     def summarize_results(self, results: List[Dict[str, Any]]) -> str:
+        logger.info("[SearchAgent] Generating summary of results.")
         if not self.settings.get("enable_summary", True):
             logger.info("[SearchAgent] Summary generation disabled.")
             return ""
         if not results:
+            logger.info("[SearchAgent] No results found for summarization.")
             return "No videos found to summarize."
         keyword_groups: Dict[str, List[str]] = {}
         for item in results:
@@ -177,8 +190,12 @@ class SearchAgent:
                 summary_lines.append(f"  - {title}")
         summary_input = "\n".join(summary_lines)
         prompt = self._get_prompt_content("structured_output", template_vars={"text": summary_input})
-        summary_text = self.openai_service.completion(prompt=prompt)
-        logger.info("[SearchAgent] Generated summary for aggregated results.")
+        try:
+            summary_text = self.openai_service.completion(prompt=prompt)
+            logger.info("[SearchAgent] Generated summary for aggregated results.")
+        except Exception as e:
+            logger.error(f"[SearchAgent] Error during summary generation: {e}")
+            summary_text = "Summary generation failed."
         return summary_text
 
     async def execute_search(self, base_keyword: str, filters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -187,10 +204,13 @@ class SearchAgent:
         如果传入了数据库对象，则将搜索摘要记录到数据库中（异步写入）。
         """
         logger.info(f"[SearchAgent] Executing full search workflow for keyword '{base_keyword}'.")
+        start_time = datetime.now()
         aggregated = self.aggregate_search(base_keyword, filters=filters)
         deduped = self.deduplicate_results(aggregated)
         refined = self.refine_results(deduped)
         summary_text = self.summarize_results(refined)
+        total_time = (datetime.now() - start_time).total_seconds()
+        logger.info(f"[SearchAgent] Search workflow completed in {total_time} seconds.")
         result = {
             "keywords_searched": list(aggregated.keys()),
             "aggregated_by_keyword": aggregated,
@@ -198,6 +218,7 @@ class SearchAgent:
             "refined_results": refined,
             "total_unique_videos": len(deduped),
             "summary": summary_text,
+            "execution_time_seconds": total_time
         }
         self._last_search_result = result
         # 异步记录搜索摘要到数据库（如果传入了支持异步操作的 DB 对象）
