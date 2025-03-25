@@ -6,16 +6,16 @@ models:
     max_tokens: 4000
     temperature: 0.7
     price:
-      prompt: 15.00        # $15/M input tokens
-      completion: 60.00     # $60/M output tokens
-  
+      prompt: 15.00        # $15 per million input tokens
+      completion: 60.00     # $60 per million output tokens
+
   whisper-large:
     model_name: "whisper-1"
     type: "audio"
     price:
-      prompt: 0.006        # 每分钟收费 0.006
+      prompt: 0.006        # $0.006 per minute
       completion: 0.0
-  
+
   openai_o3_mini:
     model_name: "gpt-4-turbo"
     type: "text"
@@ -25,7 +25,7 @@ models:
     price:
       prompt: 1.10
       completion: 4.40
-  
+
   gpt_4_5:
     model_name: "gpt-4-1106-preview"
     type: "text"
@@ -35,7 +35,7 @@ models:
     price:
       prompt: 75.00
       completion: 150.00
-  
+
   gpt_4o:
     model_name: "gpt-4o"
     type: "text"
@@ -45,7 +45,7 @@ models:
     price:
       prompt: 2.50
       completion: 10.00
-  
+
   gpt_4o_mini:
     model_name: "gpt-3.5-turbo"
     type: "text"
@@ -66,31 +66,38 @@ models:
       prompt: 0.0
       completion: 0.0
     api_key: "dummy_api_key_image"
-
+    
 prompts:
   keyword_generation:
-    system: "You are a domain expert specializing in generating keyword variations."
+    system: "You are a seasoned digital marketing and SEO expert with deep insights into video trends and YouTube search optimization. Your task is to generate creative, innovative, and highly relevant keyword variations that capture diverse search intents for a given base keyword."
     user: >
-      Generate up to {{ max_n }} relevant keyword variations for the base keyword '{{ base_keyword }}'
-      to search for high topic-related YouTube videos.
-      Return each keyword on a separate line without numbering.
-  
-  structured_output:
-    system: "You are an expert in summarizing and extracting structured information."
-    user: >
-      Provide a JSON-formatted response that contains a standardized summary with the following keys:
-      "main_topic", "key_insights", "recommended_tools", "best_practices", "challenges_and_advice".
-      Use the input text to generate an actionable guide.
-      Text: "{{ text }}"
-  
+      Given the base keyword '{{ base_keyword }}' and the maximum number of variations {{ max_n }}, generate a list of unique and SEO-optimized keyword variations.
+      Each variation should be concise, descriptive, and written on a separate line without any numbering.
+      Ensure that the output is actionable for discovering trending YouTube videos.
+
   summarization:
-    system: "You are an expert content creator and summarizer."
+    system: "You are a professional content creator and summarizer with expertise in distilling lengthy and complex text into clear, concise, and actionable summaries. Your output should capture key takeaways, essential insights, and practical recommendations."
     user: >
-      Your goal is to produce a concise, actionable summary for guide production.
-      Focus on key takeaways, important insights, and actionable steps.
+      Based on the text provided below and considering the previous summary (if any), produce a refined and concise summary.
+      Focus on highlighting the most important insights and actionable steps.
       Previous Summary: "{{ previous_summary }}"
+      Text: "{{ text }}"
+      Your summary should be engaging, clear, and directly useful for guide production.
+
+  structured_output:
+    system: "You are an expert data analyst and content strategist whose job is to transform unstructured text into a standardized JSON format. Your output must strictly adhere to the schema provided."
+    user: >
+      Convert the following text into a structured JSON output following exactly this schema:
+      {
+        "main_topic": "N/A",
+        "key_insights": "N/A",
+        "recommended_tools": "N/A",
+        "best_practices": "N/A",
+        "challenges_and_advice": "N/A"
+      }
+      Each field should be populated with concise and informative content derived from the text.
       Text: "{{ text }}"
 
   default:
-    system: "You are a helpful assistant."
+    system: "You are a versatile assistant capable of handling a wide range of tasks with clarity and efficiency."
     user: "{{ input }}"
