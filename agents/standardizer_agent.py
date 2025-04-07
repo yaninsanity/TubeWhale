@@ -130,6 +130,7 @@ class StandardizerAgent:
 
         # 如果指定模型不存在，则回退到默认模型
         if model not in self.openai_service.models:
+            logger.info(f'current models: {self.openai_service.models}')
             logger.warning(f"Model '{model}' not configured. Falling back to default '{self.openai_service.default_model}'.")
             model = self.openai_service.default_model
 
