@@ -20,3 +20,4 @@ sqlalchemy
 pytube
 browser_cookie3
 ffmpeg
+yt_dlp

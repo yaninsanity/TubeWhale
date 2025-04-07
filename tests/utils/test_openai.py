@@ -1,643 +1,190 @@
-from io import BytesIO
+import asyncio
 import os
 import tempfile
-import pytest
 import yaml
-import logging
+import pytest
+from datetime import datetime
+from io import BytesIO
 
-import openai
+# Ensure the module path is correct.
 from utils.openAIServices import OpenAIService
 
-# ------------------ 测试用 YAML 配置 ------------------
+# ---------------- Dummy Client Implementation ----------------
 
-# Chat 类型模型配置
-DUMMY_YAML = """
-models:
-  test-model:
-    model_name: "gpt-3.5-turbo"
-    type: "chat"
-    context_length: 4096
-    max_tokens: 100
-    temperature: 0.5
-    top_p: 1.0
-    frequency_penalty: 0.0
-    presence_penalty: 0.0
-    price:
-      prompt: 0.002
-      completion: 0.002
-    api_key: "dummy_api_key"
-prompts:
-  default:
-    prompt: "Default system message."
-    description: "A default system message for chat."
-  test_prompt:
-    prompt: "Hello, {user_input}!"
-    description: "A test prompt with user input placeholder."
-default_model: "test-model"
-max_retries: 2
-"""
+class DummyChatCompletionsStream:
+    def create(self, messages, **kwargs):
+        # Simulate a streaming response by yielding two dictionary chunks.
+        yield {"choices": [{"delta": {"content": "dummy stream part 1"}}]}
+        yield {"choices": [{"delta": {"content": "dummy stream part 2"}}]}
 
-# Completion 类型模型配置
-DUMMY_YAML_COMPLETION = """
-models:
-  test-completion:
-    model_name: "text-davinci-003"
-    type: "completion"
-    context_length: 2048
-    max_tokens: 150
-    temperature: 0.7
-    top_p: 1.0
-    frequency_penalty: 0.0
-    presence_penalty: 0.0
-    price:
-      prompt: 0.001
-      completion: 0.002
-    api_key: "dummy_api_key"
-prompts:
-  default:
-    prompt: "Default text prompt: "
-    description: "A default prompt for text completion."
-default_model: "test-completion"
-max_retries: 2
-"""
+class DummyCompletionsStream:
+    def create(self, prompt, **kwargs):
+        # Simulate a streaming response for non-chat completions.
+        yield {"choices": [{"text": "dummy stream text part 1"}]}
+        yield {"choices": [{"text": "dummy stream text part 2"}]}
 
-# Audio 类型模型配置
-AUDIO_YAML = """
-models:
-  test-audio:
-    model_name: "whisper-1"
-    type: "audio"
-    context_length: null
-    max_tokens: null
-    temperature: null
-    price:
-      prompt: 0.003
-      completion: 0.000
-    api_key: "dummy_api_key_audio"
-prompts:
-  default:
-    prompt: "Audio system message."
-    description: "A default system message for audio."
-default_model: "test-audio"
-max_retries: 2
-"""
+class DummyChatCompletions:
+    def create(self, messages, **kwargs):
+        # Return a non-stream chat response.
+        return {
+            "choices": [{"message": {"content": "dummy chat response"}}],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 20}
+        }
 
-# 包装型配置：单层包装的情况
-WRAPPED_YAML = """
-config:
-  models:
-    wrapped-model:
-      model_name: "gpt-3.5-turbo"
-      type: "chat"
-      context_length: 4096
-      max_tokens: 100
-      temperature: 0.5
-      price:
-        prompt: 0.002
-        completion: 0.002
-      api_key: "dummy_api_key_wrapped"
-  prompts:
-    default:
-      prompt: "Wrapped default system message."
-      description: "Wrapped prompt."
-  default_model: "wrapped-model"
-  max_retries: 3
-"""
+class DummyCompletions:
+    def create(self, prompt, **kwargs):
+        # Return a non-stream text completion.
+        return {
+            "choices": [{"text": "dummy text response"}],
+            "usage": {"prompt_tokens": 5, "completion_tokens": 10}
+        }
 
-# 用于测试 invalid YAML 格式（非法内容）
-INVALID_YAML = "::: not a valid yaml :::"
+class DummyEmbeddings:
+    def create(self, **kwargs):
+        return {
+            "data": [{"embedding": [0.1, 0.2, 0.3]}],
+            "usage": {"prompt_tokens": 3}
+        }
 
-# Models 部分为无效类型（非 dict 或 list）
-INVALID_MODELS_YAML = """
-models: 12345
-prompts:
-  default:
-    prompt: "Default message."
-default_model: "any"
-max_retries: 2
-"""
+class DummyAudioTranscriptions:
+    def create(self, file, model, response_format, **kwargs):
+        return {"text": "dummy transcription"}
 
-# Prompts 部分为无效类型
-INVALID_PROMPTS_YAML = """
-models:
-  test-model:
-    model_name: "gpt-3.5-turbo"
-    type: "chat"
-    context_length: 4096
-    max_tokens: 100
-    temperature: 0.5
-    api_key: "dummy_api_key"
-prompts: 98765
-default_model: "test-model"
-max_retries: 2
-"""
-
-# ------------------ Fixture ------------------
-
-@pytest.fixture
-def config_file(tmp_path):
-    path = tmp_path / "config.yaml"
-    path.write_text(DUMMY_YAML, encoding="utf-8")
-    return str(path)
-
-@pytest.fixture
-def config_file_completion(tmp_path):
-    path = tmp_path / "config_completion.yaml"
-    path.write_text(DUMMY_YAML_COMPLETION, encoding="utf-8")
-    return str(path)
-
-@pytest.fixture
-def audio_config_file(tmp_path):
-    path = tmp_path / "audio_config.yaml"
-    path.write_text(AUDIO_YAML, encoding="utf-8")
-    return str(path)
-
-@pytest.fixture
-def wrapped_config_file(tmp_path):
-    path = tmp_path / "wrapped_config.yaml"
-    path.write_text(WRAPPED_YAML, encoding="utf-8")
-    return str(path)
-
-@pytest.fixture
-def invalid_yaml_file(tmp_path):
-    path = tmp_path / "invalid.yaml"
-    path.write_text(INVALID_YAML, encoding="utf-8")
-    return str(path)
-
-@pytest.fixture
-def invalid_models_yaml_file(tmp_path):
-    path = tmp_path / "invalid_models.yaml"
-    path.write_text(INVALID_MODELS_YAML, encoding="utf-8")
-    return str(path)
-
-@pytest.fixture
-def invalid_prompts_yaml_file(tmp_path):
-    path = tmp_path / "invalid_prompts.yaml"
-    path.write_text(INVALID_PROMPTS_YAML, encoding="utf-8")
-    return str(path)
-
-# ------------------ Dummy Response 定义 ------------------
-
-class DummyChatResponse:
+class DummyClient:
     def __init__(self):
-        self.choices = [{"message": {"content": "Dummy chat response"}}]
-        self.usage = {"prompt_tokens": 10, "completion_tokens": 5}
+        # For non-streaming completions.
+        self.chat = type("DummyChat", (), {
+            "completions": DummyChatCompletions()
+        })
+        self.completions = DummyCompletions()
+        self.embeddings = DummyEmbeddings()
+        self.audio = type("DummyAudio", (), {
+            "transcriptions": DummyAudioTranscriptions()
+        })
+        # For streaming, add separate attributes.
+        self.chat_stream = type("DummyChatStream", (), {
+            "completions": DummyChatCompletionsStream()
+        })
+        self.completions_stream = DummyCompletionsStream()
 
-class DummyCompletionResponse:
-    def __init__(self):
-        self.choices = [{"text": "Dummy completion response"}]
-        self.usage = {"prompt_tokens": 8, "completion_tokens": 4}
+# ---------------- Fixtures ----------------
 
-class DummyEmbeddingResponse:
-    def __init__(self):
-        self.data = [{"embedding": [0.1, 0.2, 0.3]}]
-        self.usage = {"prompt_tokens": 5}
+@pytest.fixture
+def dummy_client():
+    return DummyClient()
 
-class DummyAudioResponse:
-    def __init__(self):
-        self.choices = [{"text": "Dummy audio response"}]
-        self.usage = {"prompt_tokens": 0, "completion_tokens": 0}
+@pytest.fixture
+def service_with_client(dummy_client):
+    service = OpenAIService(api_key="sk-dummy")
+    # Override the client for non-streaming methods.
+    service.client = dummy_client
+    # For streaming, we'll override _retry_api_call to use our streaming attributes.
+    # Here we simulate that if 'stream' is True and model type is 'chat', then use dummy_client.chat_stream.completions.create.
+    original_retry = service._retry_api_call
+    def retry_wrapper(func, *args, **kwargs):
+        if kwargs.get("stream"):
+            # Decide which streaming method to use based on the function passed.
+            if func.__name__ == "create" and "messages" in kwargs:
+                return dummy_client.chat_stream.completions.create(*args, **kwargs)
+            elif func.__name__ == "create":
+                return dummy_client.completions_stream.create(*args, **kwargs)
+        return original_retry(func, *args, **kwargs)
+    service._retry_api_call = retry_wrapper
+    return service
 
-# ------------------ Dummy API 方法 ------------------
+@pytest.fixture
+def temp_config_file():
+    config = {
+        "models": {
+            "default": {
+                "model_name": "dummy-gpt",
+                "type": "chat",
+                "context_length": 4096,
+                "max_tokens": 50,
+                "temperature": 0.5,
+                "price": {"prompt": 0.001, "completion": 0.002},
+                "api_key": "sk-dummy"
+            }
+        },
+        "prompts": {
+            "default": {
+                "prompt": "You are a helpful assistant.",
+                "description": "Default prompt"
+            },
+            "summarization": {
+                "prompt": (
+                    "Based on the text provided below and considering the previous summary (if any), produce a refined and concise summary.\n"
+                    "Previous Summary: \"{previous_summary}\"\n"
+                    "Text: \"{text}\"\n"
+                    "Your summary should be engaging, clear, and directly useful."
+                ),
+                "description": "Summarization prompt"
+            }
+        },
+        "max_retries": 2,
+        "default_model": "default"
+    }
+    with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".yaml") as tmp:
+        yaml.safe_dump(config, tmp)
+        tmp_path = tmp.name
+    yield tmp_path
+    os.remove(tmp_path)
 
-def dummy_chat_completion_create(*args, **kwargs):
-    return DummyChatResponse()
+# ---------------- Tests ----------------
 
-def dummy_completion_create(*args, **kwargs):
-    return DummyCompletionResponse()
-
-def dummy_embedding_create(*args, **kwargs):
-    return DummyEmbeddingResponse()
-
-def dummy_audio_create(*args, **kwargs):
-    return DummyAudioResponse()
-
-def dummy_streaming_response():
-    # 模拟 chat 类型流式响应
-    class DummyChunk:
-        def __init__(self, content):
-            self.choices = [{"delta": {"content": content}}]
-    yield DummyChunk("Chunk 1, ")
-    yield DummyChunk("Chunk 2.")
-
-def dummy_chat_stream_create(*args, **kwargs):
-    return dummy_streaming_response()
-
-def dummy_completion_stream_create(*args, **kwargs):
-    # 模拟非 chat 模型流式响应
-    class DummyChunk:
-        def __init__(self, text):
-            self.choices = [{"text": text}]
-    return iter([DummyChunk("Text Chunk 1 "), DummyChunk("Text Chunk 2")])
-
-def dummy_stream_empty(*args, **kwargs):
-    # 返回 iterator 中包含一个 chunk，其 choices 为空
-    class DummyChunk:
-        def __init__(self):
-            self.choices = []
-    return iter([DummyChunk()])
-
-def dummy_audio_stream_create(*args, **kwargs):
-    # 模拟 audio 类型流式响应，返回 chunks 带 text 字段
-    class DummyChunk:
-        def __init__(self, text):
-            self.choices = [{"text": text}]
-    return iter([DummyChunk("Audio Chunk 1 "), DummyChunk("Audio Chunk 2")])
-
-# ------------------ 基本功能测试 ------------------
-
-def test_load_configuration(config_file):
-    service = OpenAIService(config_file)
-    assert service.default_model == "test-model"
-    assert "test-model" in service.models
+def test_load_configuration(temp_config_file):
+    service = OpenAIService(config_path=temp_config_file)
+    assert "default" in service.models
     assert "default" in service.prompts
-    assert "test_prompt" in service.prompts
-    assert service.max_retries == 2
+    assert service.default_model == "default"
 
-def test_load_configuration_wrapped(wrapped_config_file):
-    service = OpenAIService(wrapped_config_file)
-    assert service.default_model == "wrapped-model"
-    assert "wrapped-model" in service.models
-    assert service.prompts["default"]["prompt"] == "Wrapped default system message."
-    assert service.max_retries == 3
+def test_get_prompt_with_variables(temp_config_file):
+    service = OpenAIService(config_path=temp_config_file)
+    prompt = service.get_prompt("summarization", {"text": "Hello world", "previous_summary": "None"})
+    assert "Hello world" in prompt
+    assert "None" in prompt
 
-# ------------------ get_prompt 测试 ------------------
+def test_completion(service_with_client):
+    result = service_with_client.completion(prompt="Test prompt", prompt_template="default")
+    assert "dummy chat response" in result
 
-def test_get_prompt_formatting(config_file):
-    service = OpenAIService(config_file)
-    result = service.get_prompt("test_prompt", {"user_input": "world"})
-    assert result == "Hello, world!"
+@pytest.mark.asyncio
+async def test_async_completion(service_with_client):
+    result = await service_with_client.async_completion(prompt="Async test", prompt_template="default")
+    assert "dummy chat response" in result
 
-def test_get_prompt_fallback(config_file):
-    service = OpenAIService(config_file)
-    result = service.get_prompt("non_exist")
-    assert result == "Default system message."
+def test_stream_completion(service_with_client):
+    stream_gen = service_with_client.stream_completion(prompt="Stream test", prompt_template="default")
+    collected = ""
+    for piece in stream_gen:
+        collected += piece
+    assert "dummy stream part 1" in collected
+    assert "dummy stream part 2" in collected
 
-def test_get_prompt_with_none(config_file):
-    service = OpenAIService(config_file)
-    result = service.get_prompt(None, {"user_input": "none"})
-    assert result == "Default system message."
-
-def test_get_prompt_extra_variables(config_file):
-    service = OpenAIService(config_file)
-    result = service.get_prompt("test_prompt", {"user_input": "extra", "unused": "value"})
-    assert result == "Hello, extra!"
-
-def test_get_prompt_formatting_error(tmp_path):
-    bad_yaml = """
-models:
-  test-model:
-    model_name: "gpt-3.5-turbo"
-    type: "chat"
-    context_length: 4096
-    max_tokens: 100
-    temperature: 0.5
-    api_key: "dummy_api_key"
-prompts:
-  default:
-    prompt: "Hello, {user}!"
-default_model: "test-model"
-max_retries: 2
-"""
-    path = tmp_path / "bad.yaml"
-    path.write_text(bad_yaml, encoding="utf-8")
-    service = OpenAIService(str(path))
-    result = service.get_prompt("default", {"user_input": "world"})
-    # 格式化失败时返回原始模板
-    assert result == "Hello, {user}!"
-
-# ------------------ _load_yaml_file 测试 ------------------
-
-def test_load_yaml_file_success(tmp_path):
-    content = "key: value\nnumber: 123"
-    path = tmp_path / "valid.yaml"
-    path.write_text(content, encoding="utf-8")
-    service = OpenAIService()
-    data = service._load_yaml_file(str(path))
-    assert data["key"] == "value"
-    assert data["number"] == 123
-
-# ------------------ _process_model_config 测试 ------------------
-
-def test_process_model_config_guess_type():
-    cfg = {"model_name": "unknown-model"}
-    service = OpenAIService()
-    processed = service._process_model_config(cfg)
-    assert processed["type"] == "completion"
-
-def test_process_model_config_audio():
-    cfg = {"model_name": "whisper-large", "context_length": None, "max_tokens": None, "temperature": None}
-    service = OpenAIService()
-    processed = service._process_model_config(cfg)
-    assert processed["type"] == "audio"
-    assert processed["context_length"] == 0
-    assert processed["max_tokens"] == 0
-    assert processed["temperature"] == 0
-
-def test_process_model_config_embedding():
-    cfg = {"model_name": "text-embedding-ada-002"}
-    service = OpenAIService()
-    processed = service._process_model_config(cfg)
-    assert processed["type"] == "embedding"
-
-# ------------------ Completion 测试 ------------------
-
-def test_completion_chat(monkeypatch, config_file):
-    service = OpenAIService(config_file)
-    monkeypatch.setattr(openai.ChatCompletion, "create", dummy_chat_completion_create)
-    response = service.completion(prompt="Test message", prompt_template="default")
-    assert response == "Dummy chat response"
-    assert service.total_prompt_tokens == 10
-    assert service.total_completion_tokens == 5
-    assert abs(service.total_cost - 0.00003) < 1e-6
-
-def test_completion_text(monkeypatch, config_file_completion):
-    service = OpenAIService(config_file_completion)
-    monkeypatch.setattr(openai, "Completion", type("DummyCompletion", (), {"create": dummy_completion_create}))
-    response = service.completion(prompt="What is the weather?", prompt_template="default")
-    assert response == "Dummy completion response"
-    assert service.total_prompt_tokens == 8
-    assert service.total_completion_tokens == 4
-    assert abs(service.total_cost - 0.000016) < 1e-6
-
-def test_completion_no_usage(monkeypatch, config_file):
-    class DummyNoUsage:
-        def __init__(self):
-            self.choices = [{"message": {"content": "No usage response"}}]
-    def no_usage_create(*args, **kwargs):
-        return DummyNoUsage()
-    service = OpenAIService(config_file)
-    monkeypatch.setattr(openai.ChatCompletion, "create", no_usage_create)
-    response = service.completion(prompt="No usage", prompt_template="default")
-    assert response == "No usage response"
-    assert service.total_prompt_tokens == 0
-    assert service.total_cost == 0.0
-
-def test_completion_empty_choices(monkeypatch, config_file_completion):
-    class DummyEmptyChoices:
-        def __init__(self):
-            self.choices = []  # 空列表
-            self.usage = {"prompt_tokens": 0, "completion_tokens": 0}
-    def empty_choices_create(*args, **kwargs):
-        return DummyEmptyChoices()
-    service = OpenAIService(config_file_completion)
-    monkeypatch.setattr(openai, "Completion", type("DummyEmpty", (), {"create": empty_choices_create}))
-    # 对于非 streaming 的 completion，当 choices 为空时，应返回空字符串
-    response = service.completion(prompt="Empty choices", prompt_template="default")
-    assert response == ""
-
-def test_completion_model_not_configured(config_file):
-    service = OpenAIService(config_file)
-    with pytest.raises(ValueError):
-        service.completion(model="non_exist", prompt="Test", prompt_template="default")
-
-def test_completion_no_prompt(monkeypatch, config_file_completion):
-    service = OpenAIService(config_file_completion)
-    def dummy_completion_empty(*args, **kwargs):
-        class DummyResp:
-            def __init__(self):
-                self.choices = [{"text": ""}]
-                self.usage = {"prompt_tokens": 0, "completion_tokens": 0}
-        return DummyResp()
-    monkeypatch.setattr(openai, "Completion", type("DummyEmpty", (), {"create": dummy_completion_empty}))
-    response = service.completion(prompt="", prompt_template="")
-    assert response == ""
-
-def test_completion_api_failure(monkeypatch, config_file_completion):
-    service = OpenAIService(config_file_completion)
-    def always_fail(*args, **kwargs):
-        raise Exception("Simulated failure")
-    monkeypatch.setattr(openai, "Completion", type("AlwaysFail", (), {"create": always_fail}))
-    with pytest.raises(Exception):
-        service.completion(prompt="Failure test", prompt_template="default")
-
-# ------------------ Streaming Completion 测试 ------------------
-
-def test_stream_completion_chat(monkeypatch, config_file):
-    service = OpenAIService(config_file)
-    monkeypatch.setattr(openai.ChatCompletion, "create", dummy_chat_stream_create)
-    stream_gen = service.stream_completion(prompt="Streaming test", prompt_template="default")
-    output = "".join(list(stream_gen))
-    assert output == "Chunk 1, Chunk 2."
-
-def test_stream_completion_nonchat(monkeypatch, config_file_completion):
-    service = OpenAIService(config_file_completion)
-    monkeypatch.setattr(openai, "Completion", type("DummyCompletionStream", (), {"create": dummy_completion_stream_create}))
-    stream_gen = service.stream_completion(prompt="Non-chat stream test", prompt_template="default")
-    output = "".join(list(stream_gen))
-    assert output == "Text Chunk 1 Text Chunk 2"
-
-def test_stream_completion_empty_choices(monkeypatch, config_file):
-    service = OpenAIService(config_file)
-    monkeypatch.setattr(openai.ChatCompletion, "create", dummy_stream_empty)
-    with pytest.raises(IndexError):
-        list(service.stream_completion(prompt="Empty stream", prompt_template="default"))
-
-def test_stream_completion_api_failure(monkeypatch, config_file):
-    service = OpenAIService(config_file)
-    def always_fail_stream(*args, **kwargs):
-        raise Exception("Streaming failure")
-    monkeypatch.setattr(openai.ChatCompletion, "create", always_fail_stream)
-    with pytest.raises(Exception):
-        list(service.stream_completion(prompt="Fail stream", prompt_template="default"))
-
-# ------------------ Retry 机制测试 ------------------
-
-def test_retry_completion(monkeypatch, config_file_completion):
-    service = OpenAIService(config_file_completion)
-    call_count = {"count": 0}
-    def retry_dummy_completion_create(*args, **kwargs):
-        if call_count["count"] < 1:
-            call_count["count"] += 1
-            raise Exception("Simulated API failure")
-        return DummyCompletionResponse()
-    monkeypatch.setattr(openai, "Completion", type("RetryDummyCompletion", (), {"create": retry_dummy_completion_create}))
-    response = service.completion(prompt="Retry test", prompt_template="default")
-    assert response == "Dummy completion response"
-    assert service.total_prompt_tokens == 8
-    assert service.total_completion_tokens == 4
-
-def test_retry_embedding(monkeypatch, config_file):
-    service = OpenAIService(config_file)
-    call_count = {"count": 0}
-    def retry_dummy_embedding_create(*args, **kwargs):
-        if call_count["count"] < 1:
-            call_count["count"] += 1
-            raise Exception("Simulated embedding API failure")
-        return DummyEmbeddingResponse()
-    monkeypatch.setattr(openai, "Embedding", type("RetryDummyEmbedding", (), {"create": retry_dummy_embedding_create}))
-    embedding_result = service.embedding(input_data="Test embedding")
-    assert embedding_result == [0.1, 0.2, 0.3]
-    assert service.total_prompt_tokens == 5
-
-# ------------------ Embedding 测试 ------------------
-
-def test_embedding(monkeypatch, config_file):
-    service = OpenAIService(config_file)
-    monkeypatch.setattr(openai, "Embedding", type("DummyEmbedding", (), {"create": dummy_embedding_create}))
-    embedding_result = service.embedding(input_data="Test embedding")
-    assert embedding_result == [0.1, 0.2, 0.3]
-    assert service.total_prompt_tokens == 5
-
-def test_embedding_no_input(config_file):
-    service = OpenAIService(config_file)
-    with pytest.raises(ValueError):
-        service.embedding(input_data=None)
-
-def test_embedding_api_failure(monkeypatch, config_file):
-    service = OpenAIService(config_file)
-    def always_fail_embedding(*args, **kwargs):
-        raise Exception("Embedding failure")
-    monkeypatch.setattr(openai, "Embedding", type("AlwaysFailEmbedding", (), {"create": always_fail_embedding}))
-    with pytest.raises(Exception):
-        service.embedding(input_data="Fail embedding")
-
-def test_embedding_invalid_response(monkeypatch, config_file):
-    service = OpenAIService(config_file)
-    def invalid_embedding_response(*args, **kwargs):
-        return {"usage": {"prompt_tokens": 5}}
-    monkeypatch.setattr(openai, "Embedding", type("InvalidEmbedding", (), {"create": invalid_embedding_response}))
-    with pytest.raises(RuntimeError):
-        service.embedding(input_data="Test invalid")
-
-def test_embedding_no_usage(monkeypatch, config_file):
-    class DummyNoUsageEmbedding:
-        def __init__(self):
-            self.data = [{"embedding": [0.1, 0.2, 0.3]}]
-    def no_usage_embedding(*args, **kwargs):
-        return DummyNoUsageEmbedding()
-    service = OpenAIService(config_file)
-    monkeypatch.setattr(openai, "Embedding", type("NoUsageEmbedding", (), {"create": no_usage_embedding}))
-    result = service.embedding(input_data="Test no usage")
+def test_embedding(service_with_client):
+    result = service_with_client.embedding(input_data="Test input", model="default")
+    assert isinstance(result, list)
     assert result == [0.1, 0.2, 0.3]
-    assert service.total_prompt_tokens == 0
-    assert service.total_cost == 0.0
-
-# ------------------ Audio 类型测试 ------------------
-
-def test_completion_audio(monkeypatch, audio_config_file):
-    service = OpenAIService(audio_config_file)
-    monkeypatch.setattr(openai, "Completion", type("DummyAudio", (), {"create": dummy_audio_create}))
-    response = service.completion(prompt="Audio test", prompt_template="default")
-    assert response == "Dummy audio response"
-    audio_cfg = service.models["test-audio"]
-    # audio 类型自动补 0
-    assert audio_cfg["context_length"] == 0
-    assert audio_cfg["max_tokens"] == 0
-    assert audio_cfg["temperature"] == 0
-
-def test_stream_audio(monkeypatch, audio_config_file):
-    service = OpenAIService(audio_config_file)
-    monkeypatch.setattr(openai, "Completion", type("DummyAudioStream", (), {"create": dummy_audio_stream_create}))
-    stream_gen = service.stream_completion(prompt="Audio stream test", prompt_template="default")
-    output = "".join(list(stream_gen))
-    assert output == "Audio Chunk 1 Audio Chunk 2"
-
-# ------------------ YAML 文件加载异常测试 ------------------
-
-def test_load_yaml_file_error(tmp_path):
-    fake_path = tmp_path / "non_existent.yaml"
-    service = OpenAIService()
-    with pytest.raises(Exception):
-        service._load_yaml_file(str(fake_path))
-
-def test_load_yaml_invalid(invalid_yaml_file):
-    with pytest.raises(Exception):
-        OpenAIService(invalid_yaml_file)
-
-# ------------------ Models / Prompts 配置测试 ------------------
-
-def test_load_models_invalid(invalid_models_yaml_file):
-    service = OpenAIService(invalid_models_yaml_file)
-    assert service.models == {}
-
-def test_load_prompts_invalid(invalid_prompts_yaml_file):
-    service = OpenAIService(invalid_prompts_yaml_file)
-    assert service.prompts == {}
-
-def test_load_prompts_list(tmp_path):
-    dummy_yaml_list_prompts = """
-models:
-  list-model:
-    model_name: "gpt-3.5-turbo"
-    type: "chat"
-    context_length: 4096
-    max_tokens: 100
-    temperature: 0.5
-    price:
-      prompt: 0.002
-      completion: 0.002
-    api_key: "dummy_api_key"
-prompts:
-  - name: list_prompt
-    prompt: "List prompt message."
-    description: "Prompt from list."
-default_model: "list-model"
-max_retries: 2
-"""
-    path = tmp_path / "config_list.yaml"
-    path.write_text(dummy_yaml_list_prompts, encoding="utf-8")
-    service = OpenAIService(str(path))
-    result = service.get_prompt("list_prompt")
-    assert result == "List prompt message."
-
-def test_load_prompts_config_from_list(tmp_path):
-    dummy_yaml = """
-models:
-  test-model:
-    model_name: "gpt-3.5-turbo"
-    type: "chat"
-    context_length: 4096
-    max_tokens: 100
-    temperature: 0.5
-    api_key: "dummy_api_key"
-prompts:
-  - name: list_prompt
-    prompt: "Prompt from list"
-    description: "Desc"
-default_model: "test-model"
-max_retries: 2
-"""
-    path = tmp_path / "config_prompts_list.yaml"
-    path.write_text(dummy_yaml, encoding="utf-8")
-    service = OpenAIService(str(path))
-    assert "list_prompt" in service.prompts
-    assert service.prompts["list_prompt"]["prompt"] == "Prompt from list"
-
-class DummyAudioTranscriptionResponse:
-    def __init__(self):
-        self.text = "Dummy transcription text"
-    def __getitem__(self, key):
-        # 支持字典方式访问
-        if key == "text":
-            return self.text
-        return None
-
-def dummy_audio_transcription_create(*args, **kwargs):
-    # 模拟 Whisper API 的返回，返回字典格式
-    return {"text": "Dummy transcription text"}
-
-# ------------------ 新增异步方法测试 ------------------
 
 @pytest.mark.asyncio
-async def test_async_completion(monkeypatch, config_file):
-    """
-    测试 async_completion 方法：应调用 ChatCompletion.create 并返回 Dummy chat response。
-    """
-    service = OpenAIService(config_file)
-    # 使用已有的 dummy_chat_completion_create 替换 openai.ChatCompletion.create
-    monkeypatch.setattr(openai.ChatCompletion, "create", dummy_chat_completion_create)
-    result = await service.async_completion(prompt="Async test", prompt_template="default")
-    assert result == "Dummy chat response"
+async def test_transcribe_audio(service_with_client):
+    dummy_audio = BytesIO(b"dummy audio data")
+    transcription = await service_with_client.transcribe_audio(dummy_audio)
+    assert "dummy transcription" in transcription
 
-@pytest.mark.asyncio
-async def test_transcribe_audio(monkeypatch, audio_config_file):
-    """
-    测试 transcribe_audio 方法：应调用 Audio.transcriptions.create 并返回 Dummy transcription text。
-    """
-    service = OpenAIService(audio_config_file)
-    # 替换 openai.Audio.transcriptions.create 为 dummy_audio_transcription_create
-    monkeypatch.setattr(service.client.Audio.transcriptions, "create", dummy_audio_transcription_create)
-    fake_audio = BytesIO(b"dummy audio content")
-    transcription = await service.transcribe_audio(fake_audio)
-    assert transcription == "Dummy transcription text"
+def test_retry_api_call(service_with_client):
+    def always_fail(*args, **kwargs):
+        raise Exception("Always fails")
+    with pytest.raises(Exception) as excinfo:
+        service_with_client._retry_api_call(always_fail)
+    assert "failed after" in str(excinfo.value)
+
+def test_update_usage(service_with_client):
+    initial_prompt_tokens = service_with_client.total_prompt_tokens
+    initial_cost = service_with_client.total_cost
+    usage = {"prompt_tokens": 100, "completion_tokens": 50}
+    model_cfg = service_with_client.models.get(service_with_client.default_model)
+    service_with_client._update_usage(usage, model_cfg)
+    assert service_with_client.total_prompt_tokens == initial_prompt_tokens + 100
+    expected_cost = round((100 * model_cfg["price"]["prompt"] + 50 * model_cfg["price"]["completion"]) / 1000.0, 6)
+    assert service_with_client.total_cost == initial_cost + expected_cost

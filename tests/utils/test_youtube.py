@@ -237,6 +237,12 @@ def dummy_rebuild_playlistItems(kwargs):
 class DummyStream:
     def __init__(self):
         self.url = "dummy_stream_url"
+    def download(self, output_path, filename):
+        # 模拟将音频流下载到临时文件，生成一个 dummy 文件以供后续转换
+        file_path = os.path.join(output_path, filename)
+        with open(file_path, "wb") as f:
+            f.write(b"dummy downloaded content")
+        return file_path
 
 class DummyStreamQuery:
     def __init__(self):
@@ -322,7 +328,7 @@ def test_download_audio_integration(tmp_path, monkeypatch):
     with open(output_file, "rb") as f:
         content = f.read()
     assert content == b"dummy audio content"
-
+    
 # ------------------------------ 以下为其他 API 接口测试 ------------------------------
 def test_search_videos_success(youtube_service):
     response = youtube_service.search_videos("test")
@@ -522,8 +528,11 @@ def test_fetch_all_comments_unexpected_error(monkeypatch):
 def test_rebuild_request_without_uri(youtube_service):
     class NoUri:
         pass
-    with pytest.raises(Exception, match="缺少 uri"):
+    
+    # Assert the exception message in English
+    with pytest.raises(Exception, match="Missing uri"):
         youtube_service._rebuild_request(NoUri(), "search")
+
 
 def test_rebuild_request_for_search(monkeypatch, youtube_service):
     dummy_uri = "dummy_uri?q=test_query&maxResults=10&type=video&videoEmbeddable=true&videoSyndicated=true&pageToken=ptoken"

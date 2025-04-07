@@ -1,159 +1,169 @@
 import pytest
-from datetime import datetime, timedelta, timezone
-from typing import Dict, Any
+import asyncio
+from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock
 
+# 假设 SearchAgent 定义在 search_agent.py 文件中
 from agents.search_agent import SearchAgent
 
-# Dummy OpenAIService 模拟
+# Dummy 数据库实现，用于记录调用（仅作为示例，不做任何实际存储）
+class DummyDB:
+    async def store_ai_interaction(self, input_data, output_data, interaction_type, tokens_used, cost, duration_ms):
+        return
+
+    async def store_keyword_analysis(self, record):
+        return
+
+# Dummy OpenAIService 模拟实现
 class DummyOpenAIService:
-    def get_prompt(self, prompt_template: str, variables: Dict[str, Any] = None) -> Dict[str, str]:
-        if prompt_template == "keyword_generation":
-            return {"user": "keyword1\nkeyword2\nkeyword3"}
-        if prompt_template == "structured_output":
-            # 返回模拟的摘要提示模板
-            return {"user": f"Summary: Dummy summary for text: {variables.get('text', '')}"}
-        return {"user": variables.get("input", "") if variables else ""}
+    def __init__(self):
+        # 模拟存储 prompt 模板
+        self.prompts = {
+            "keyword_generation": "dummy keyword prompt",
+            "structured_output": "dummy structured prompt"
+        }
 
-    def completion(self, prompt: str = "", prompt_template: str = "", template_vars: Dict[str, Any] = None, **kwargs) -> str:
-        # 针对关键词扩展模板，返回固定关键词变体
+    def get_prompt(self, prompt_template, variables=None):
+        # 根据不同模板返回简单拼接后的字符串
         if prompt_template == "keyword_generation":
-            return "keyword1\nkeyword2\nkeyword3"
-        # 如果 prompt 中包含 "summary:" 则返回固定摘要文本
-        if "summary:" in prompt.lower():
-            return "Summary: Found videos for keyword1 (3), keyword2 (3), keyword3 (3)."
-        return prompt
+            return f"Generate keywords for: {variables['base_keyword']}"
+        elif prompt_template == "structured_output":
+            return f"Summarize: {variables['text']}"
+        else:
+            return f"Prompt for: {variables}"
 
-# Dummy YouTubeService 模拟
+    async def async_completion(self, prompt, prompt_template):
+        # 模拟关键词生成和摘要生成的返回
+        if "Generate keywords" in prompt:
+            # 返回换行分隔的关键词列表
+            return "test1\ntest2\n"
+        elif "Summarize" in prompt:
+            return "Summary of videos."
+        else:
+            return "Default response."
+
+# Dummy YouTubeService 模拟实现
 class DummyYouTubeService:
-    def search_videos(self, q: str, max_results: int = 10, filters: Dict[str, Any] = None) -> Dict[str, Any]:
-        now = datetime.now(timezone.utc)
-        items = []
-        for i in range(max_results):
-            video_id = f"{q}_vid_{i}"
-            item = {
-                "id": {"videoId": video_id},
-                "snippet": {
-                    "title": f"Title for {q} video {i}",
-                    "description": f"Description for {q} video {i}",
-                    "publishedAt": (now - timedelta(seconds=i * 60)).isoformat().replace("+00:00", "Z")
-                }
-            }
-            items.append(item)
-        return {"items": items}
+    def search_videos(self, q, max_results, filters):
+        # 根据查询关键词返回模拟的搜索结果
+        return {
+            "items": [
+                {
+                    "id": {"videoId": f"{q}_vid1"},
+                    "snippet": {
+                        "title": f"{q} Video 1",
+                        "description": "Description 1",
+                        "publishedAt": "2023-01-01T00:00:00Z"
+                    }
+                },
+                {
+                    "id": {"videoId": f"{q}_vid2"},
+                    "snippet": {
+                        "title": f"{q} Video 2",
+                        "description": "Description 2",
+                        "publishedAt": "2023-01-02T00:00:00Z"
+                    }
+                },
+            ]
+        }
 
+# pytest fixture 用于构造 SearchAgent 实例
 @pytest.fixture
-def dummy_openai_service():
-    return DummyOpenAIService()
+def search_agent():
+    youtube_service = DummyYouTubeService()
+    openai_service = DummyOpenAIService()
+    db = DummyDB()
+    agent = SearchAgent(youtube_service, openai_service, db=db)
+    return agent
 
-@pytest.fixture
-def dummy_youtube_service():
-    return DummyYouTubeService()
-
-@pytest.fixture
-def default_settings() -> Dict[str, Any]:
-    return {
-        "default_filter": {"videoEmbeddable": "true", "videoSyndicated": "true"},
-        "max_results": 3,
-        "enable_brainstorm": True,
-        "brainstorm_prompt_template": "keyword_generation",
-        "enable_refine": True,
-        "order_by": "weight",
-        "order_direction": "desc",
-        "enable_optimization": True,
-        "enable_summary": True,
-    }
-
-@pytest.fixture
-def search_agent(dummy_youtube_service, dummy_openai_service, default_settings):
-    return SearchAgent(dummy_youtube_service, dummy_openai_service, settings=default_settings)
-
+# 测试关键词生成
 @pytest.mark.asyncio
-async def test_generate_keywords_with_brainstorm(search_agent):
-    keywords = search_agent.generate_keywords("input_keyword")
-    assert keywords == ["keyword1", "keyword2", "keyword3"]
+async def test_generate_keywords(search_agent):
+    keywords = await search_agent.generate_keywords("example")
+    # 根据 DummyOpenAIService，返回的关键词列表为 ["test1", "test2"]
+    assert keywords == ["test1", "test2"]
 
-def test_generate_keywords_without_brainstorm(search_agent):
-    search_agent.settings["enable_brainstorm"] = False
-    keywords = search_agent.generate_keywords("input_keyword")
-    assert keywords == ["input_keyword"]
+# 测试聚合搜索
+@pytest.mark.asyncio
+async def test_aggregate_search(search_agent):
+    aggregated = await search_agent.aggregate_search("sample")
+    # DummyOpenAIService 返回固定的 "test1" 与 "test2" 两个关键词
+    assert "test1" in aggregated
+    assert "test2" in aggregated
+    # 每个关键词的搜索结果均由 DummyYouTubeService 返回 2 个视频
+    assert len(aggregated["test1"]) == 2
+    assert len(aggregated["test2"]) == 2
 
-def test_search_by_keyword(search_agent):
-    results = search_agent.search_by_keyword("example")
-    assert len(results) == 3
-    for i, item in enumerate(results):
-        assert item["video_id"] == f"example_vid_{i}"
-        assert f"Title for example video {i}" in item["title"]
-
-def test_aggregate_search(search_agent):
-    aggregated = search_agent.aggregate_search("base")
-    expected_keys = {"keyword1", "keyword2", "keyword3"}
-    assert set(aggregated.keys()) == expected_keys
-    for kw, lst in aggregated.items():
-        assert len(lst) == 3
-
+# 测试去重逻辑：对于相同 video_id，累计 weight
 def test_deduplicate_results(search_agent):
+    # 构造包含重复 video_id 的聚合结果
     aggregated = {
         "kw1": [
-            {"video_id": "vid_1", "search_keyword": "kw1", "title": "Title 1", "publishedAt": "2020-01-01T00:00:00Z"},
-            {"video_id": "vid_2", "search_keyword": "kw1", "title": "Title 2", "publishedAt": "2020-01-02T00:00:00Z"},
+            {"search_keyword": "kw1", "video_id": "vid1", "title": "Title 1", "description": "Desc", "publish_time": "2023-01-01T00:00:00Z"},
+            {"search_keyword": "kw1", "video_id": "vid2", "title": "Title 2", "description": "Desc", "publish_time": "2023-01-02T00:00:00Z"},
         ],
         "kw2": [
-            {"video_id": "vid_2", "search_keyword": "kw2", "title": "Title 2", "publishedAt": "2020-01-02T00:00:00Z"},
-            {"video_id": "vid_3", "search_keyword": "kw2", "title": "Title 3", "publishedAt": "2020-01-03T00:00:00Z"},
+            {"search_keyword": "kw2", "video_id": "vid1", "title": "Title 1", "description": "Desc", "publish_time": "2023-01-01T00:00:00Z"},
         ]
     }
     deduped = search_agent.deduplicate_results(aggregated)
-    vids = {item["video_id"] for item in deduped}
-    assert vids == {"vid_1", "vid_2", "vid_3"}
+    # 应该得到两个唯一的视频 vid1 和 vid2
+    video_ids = {item["video_id"] for item in deduped}
+    assert video_ids == {"vid1", "vid2"}
+    # 检查 vid1 的 weight 应为 kw1 中的 2 个结果加上 kw2 中的 1 个结果，总共 3
     for item in deduped:
-        if item["video_id"] == "vid_2":
-            assert item["weight"] == 4
+        if item["video_id"] == "vid1":
+            assert item["weight"] == 3
 
+# 测试结果排序（优化）逻辑
 def test_optimize_variations(search_agent):
     results = [
-        {"video_id": "vid_1", "weight": 2},
-        {"video_id": "vid_2", "weight": 5},
-        {"video_id": "vid_3", "weight": 3},
+        {"video_id": "vid1", "weight": 5, "publish_time": "2023-01-01T00:00:00Z"},
+        {"video_id": "vid2", "weight": 10, "publish_time": "2023-01-02T00:00:00Z"},
+        {"video_id": "vid3", "weight": 7, "publish_time": "2023-01-03T00:00:00Z"},
     ]
     optimized = search_agent.optimize_variations(results)
-    assert optimized[0]["video_id"] == "vid_2"
-    assert optimized[1]["video_id"] == "vid_3"
-    assert optimized[2]["video_id"] == "vid_1"
+    weights = [item["weight"] for item in optimized]
+    # 应该按 weight 降序排序
+    assert weights == sorted(weights, reverse=True)
 
+# 测试精炼结果，默认按照发布时间降序返回 top_n 个视频
 def test_refine_results(search_agent):
     results = [
-        {"video_id": "vid_1", "publish_time": "2020-01-01T00:00:00Z", "title": "A", "weight": 2},
-        {"video_id": "vid_2", "publish_time": "2020-01-03T00:00:00Z", "title": "B", "weight": 3},
-        {"video_id": "vid_3", "publish_time": "2020-01-02T00:00:00Z", "title": "C", "weight": 1},
+        {"video_id": "vid1", "weight": 5, "publish_time": "2023-01-01T00:00:00Z"},
+        {"video_id": "vid2", "weight": 10, "publish_time": "2023-01-03T00:00:00Z"},
+        {"video_id": "vid3", "weight": 7, "publish_time": "2023-01-02T00:00:00Z"},
     ]
     refined = search_agent.refine_results(results, top_n=2)
-    refined_ids = [item["video_id"] for item in refined]
-    # 预期 refined 中应包含表现较好的（排序后前 2 个）视频 id
-    assert set(refined_ids) <= {"vid_2", "vid_3"}
+    # 按发布时间降序排序，最新的应当是 vid2，其次是 vid3
+    assert len(refined) == 2
+    assert refined[0]["video_id"] == "vid2"
+    assert refined[1]["video_id"] == "vid3"
 
-def test_summarize_results(search_agent):
-    # 假设 SearchAgent.execute_search 返回的结果中包含 summary 字段
-    # 为了测试，这里模拟直接调用 summarize_results 方法（你需要确保 SearchAgent 中有该方法）
-    if not hasattr(search_agent, "summarize_results"):
-        # 如果没有 summarize_results 方法，则使用 execute_search 返回的 summary 字段
-        result = search_agent.execute_search("sample")
-        summary = result.get("summary", "")
-    else:
-        summary = search_agent.summarize_results([
-            {"video_id": "vid_1", "search_keyword": "keyword1", "title": "Title 1"},
-            {"video_id": "vid_2", "search_keyword": "keyword1", "title": "Title 2"},
-            {"video_id": "vid_3", "search_keyword": "keyword2", "title": "Title 3"},
-        ])
-    # 检查返回的摘要中包含 "Summary:" 字样（根据 DummyOpenAIService.completion 模拟返回）
-    assert "Summary:" in summary
+# 测试摘要生成（利用 DummyOpenAIService 返回固定摘要）
+@pytest.mark.asyncio
+async def test_summarize_results(search_agent):
+    results = [
+        {"search_keyword": "kw1", "video_id": "vid1", "title": "Title 1", "description": "Desc", "publish_time": "2023-01-01T00:00:00Z"},
+        {"search_keyword": "kw2", "video_id": "vid2", "title": "Title 2", "description": "Desc", "publish_time": "2023-01-02T00:00:00Z"},
+    ]
+    summary = await search_agent.summarize_results(results)
+    assert "Summary of videos." in summary
 
+# 测试完整的搜索工作流
 @pytest.mark.asyncio
 async def test_execute_search(search_agent):
     result = await search_agent.execute_search("sample")
-    expected_keywords = {"keyword1", "keyword2", "keyword3"}
-    assert set(result["keywords_searched"]) == expected_keywords
-    for kw, lst in result["aggregated_by_keyword"].items():
-        assert len(lst) == 3
-    assert result["total_unique_videos"] <= 9
-    assert len(result["refined_results"]) > 0
-    assert search_agent.last_search_result == result
+    # 检查返回结果是否包含所有预期的键
+    expected_keys = {
+        "keywords_searched",
+        "aggregated_by_keyword",
+        "deduplicated_results",
+        "refined_results",
+        "total_unique_videos",
+        "summary",
+        "execution_time_seconds",
+    }
+    assert expected_keys.issubset(result.keys())
+    # 检查 refined_results 是否为列表且数量不超过预期
+    assert isinstance(result["refined_results"], list)

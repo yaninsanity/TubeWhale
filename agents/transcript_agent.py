@@ -1,149 +1,123 @@
 #!/usr/bin/env python3
-import logging
+"""
+Transcript Agent
+
+该模块负责获取 YouTube 视频的完整转录文本。
+流程：
+  1. 调用 YouTubeService.download_audio 下载视频音频文件（采用 pytube + ffmpeg 提取 mp3）。
+  2. 将下载的音频读取为 BytesIO 对象，并调用 OpenAIService.transcribe_audio 对音频进行转录。
+  3. 返回转录文本。
+
+该方案完全依赖于音频下载与转录，不再使用字幕 API。
+"""
+
+import os
 import asyncio
-import traceback
-from typing import Dict, Any, Optional, List
+import logging
+from io import BytesIO
+from typing import Optional
 
 from utils.openAIServices import OpenAIService
 from utils.youtube import YouTubeService
-from utils.helper import retry
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-
-
-async def maybe_async(func, *args, **kwargs):
+def get_default_logger(name: str = __name__) -> logging.Logger:
     """
-    如果 func 是 async 函数，则直接 await 调用；否则用 asyncio.to_thread 包装调用。
+    返回一个默认的 logger，如外部未传入 logger 时使用。
     """
-    if asyncio.iscoroutinefunction(func):
-        return await func(*args, **kwargs)
-    else:
-        return await asyncio.to_thread(func, *args, **kwargs)
+    logger = logging.getLogger(name)
+    if not logger.handlers:
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    return logger
 
-
-@retry(max_retries=3, delay=5)
-async def fetch_transcript(youtube_service: YouTubeService, video_id: str) -> Optional[str]:
-    """
-    获取视频字幕的函数。调用时使用重试机制。
-    如果字幕不存在，则抛出异常，触发重试。
-    """
-    transcript = await maybe_async(youtube_service.fetch_transcript, video_id)
-    if transcript is None or not transcript.strip():
-        raise Warning(f"Transcript not found for video {video_id}")
-    logger.info(f"Fetched transcript for video {video_id}: {transcript[:50]}...")
-    return transcript
-
-
-class VideoProcessor:
-    """
-    VideoProcessor 统一封装视频转录与摘要生成流程。
-    依赖的数据库、OpenAIService、YouTubeService均通过构造函数传入，
-    确保调用方统一管理各依赖的生命周期。
-    """
-    def __init__(self, db, openai_service: OpenAIService, youtube_service: YouTubeService):
-        self.db = db
+class TranscriptAgent:
+    def __init__(self, openai_service: OpenAIService, youtube_service: YouTubeService,
+                 logger: Optional[logging.Logger] = None):
+        """
+        :param openai_service: 已初始化的 OpenAIService 实例
+        :param youtube_service: 已初始化的 YouTubeService 实例
+        :param logger: 外部传入的 logger 对象；若未传入则使用默认 logger
+        """
         self.openai_service = openai_service
         self.youtube_service = youtube_service
+        self.logger = logger or get_default_logger(self.__class__.__name__)
 
-    @retry(max_retries=3, delay=5)
-    async def process_video_transcript(self, video_id: str, topic: str) -> Optional[str]:
+    async def fetch_transcript(self, video_id: str) -> Optional[str]:
         """
-        视频处理流程：
-          1. 尝试获取 YouTube 字幕（通过 maybe_async() 和重试）。
-          2. 若无字幕，则下载音频并调用 Whisper 进行转录。
-          3. 利用 OpenAIService 异步生成结构化摘要（结合主题信息）。
-          4. 将转录和摘要异步存入数据库。
-          5. 返回生成的摘要文本。
+        获取单个视频的转录文本。
+        流程：
+          1. 调用 youtube_service.download_audio 下载视频音频文件。
+          2. 将音频读取为 BytesIO 对象，并调用 openai_service.transcribe_audio 对音频进行转录。
+          3. 返回转录文本；若失败则返回 None。
+          
+        :param video_id: YouTube 视频 ID
+        :return: 转录文本或 None
         """
+        self.logger.info(f"[{video_id}] Downloading audio.")
         try:
-            logger.info(f"[VideoProcessor] Processing video {video_id} - Step 1: Fetch transcript")
-            # 尝试获取字幕
-            try:
-                transcript = await fetch_transcript(self.youtube_service, video_id)
-            except Exception as e:
-                logger.warning(f"[VideoProcessor] Transcript not available for video {video_id}: {e}")
-                transcript = None
-
-            # 若无字幕，则采用音频转录方案
-            if not transcript or not transcript.strip():
-                logger.info(f"[VideoProcessor] Video {video_id} has no valid transcript, falling back to audio transcription.")
-                audio_path = await maybe_async(self.youtube_service.download_audio, video_id)
-                if not audio_path or not audio_path.strip():
-                    logger.error(f"[VideoProcessor] Audio download failed for video {video_id}.")
-                    return None
-                logger.info(f"[VideoProcessor] Audio downloaded for video {video_id}: {audio_path}")
-                transcript = await maybe_async(self.youtube_service.transcribe_audio, audio_path)
-                if not transcript or not transcript.strip():
-                    logger.error(f"[VideoProcessor] Audio transcription failed for video {video_id}.")
-                    return None
-                logger.info(f"[VideoProcessor] Audio transcription succeeded for video {video_id}: {transcript[:50]}...")
-
-            # Step 3: 利用 OpenAIService 异步生成摘要（结合主题信息）
-            logger.info(f"[VideoProcessor] Video {video_id} - Step 2: Interpret transcript with topic '{topic}'")
-            interpreted_summary = await self.interpret_transcript(transcript, topic)
-            if not interpreted_summary or not interpreted_summary.strip():
-                logger.error(f"[VideoProcessor] Transcript interpretation failed for video {video_id}.")
+            loop = asyncio.get_running_loop()
+            # 将同步的音频下载操作包装为异步调用
+            audio_path = await loop.run_in_executor(None, self.youtube_service.download_audio, video_id)
+            if not audio_path:
+                self.logger.error(f"[{video_id}] Failed to download audio.")
                 return None
 
-            # Step 4: 异步存储转录与摘要到数据库
-            logger.info(f"[VideoProcessor] Video {video_id} - Step 3: Store transcript and summary into DB")
-            await asyncio.to_thread(self.db.store_transcript_summary, video_id, transcript, interpreted_summary)
-            logger.info(f"[VideoProcessor] Video {video_id} transcript and summary successfully stored.")
-            return interpreted_summary
+            self.logger.info(f"[{video_id}] Audio downloaded: {audio_path}. Starting transcription.")
+            try:
+                with open(audio_path, "rb") as f:
+                    audio_bytes = f.read()
+                audio_file = BytesIO(audio_bytes)
+            except Exception as e:
+                self.logger.error(f"[{video_id}] Failed to read audio file {audio_path}: {e}", exc_info=True)
+                return None
 
-        except Exception as e:
-            logger.error(f"[VideoProcessor] Error processing video {video_id}: {traceback.format_exc()}")
-            return None
-
-    async def interpret_transcript(self, transcript: str, topic: str) -> Optional[str]:
-        """
-        利用 OpenAIService 根据转录文本和主题生成结构化摘要。
-        将主题信息嵌入提示中，以便生成更聚焦的摘要。
-        """
-        try:
-            # 构造包含主题信息的提示文本
-            prompt_text = f"Generate a structured summary focusing on the topic '{topic}'.\nTranscript:\n{transcript}"
-            logger.info(f"[VideoProcessor] Interpreting transcript for topic '{topic}'")
-            summary = await self.openai_service.async_completion(
-                prompt=prompt_text,
-                prompt_template=None,
-                temperature=0.5,
-                max_tokens=1024
-            )
-            summary = summary.strip() if summary else None
-            if summary:
-                logger.info(f"[VideoProcessor] Transcript interpreted (first 100 chars): {summary[:100]}...")
+            transcript = await self.openai_service.transcribe_audio(audio_file)
+            if transcript and transcript.strip():
+                self.logger.info(f"[{video_id}] Transcription succeeded (first 50 chars): {transcript[:50]}...")
+                return transcript
             else:
-                logger.error("[VideoProcessor] Empty summary returned during transcript interpretation.")
-            return summary
+                self.logger.error(f"[{video_id}] Transcription failed or empty.")
+                return None
         except Exception as e:
-            logger.error(f"[VideoProcessor] Error during transcript interpretation: {traceback.format_exc()}")
+            self.logger.error(f"[{video_id}] Error in fetch_video_transcript: {e}", exc_info=True)
             return None
 
+async def run_transcript(video_id: str, openai_service: OpenAIService,
+                         youtube_service: YouTubeService,
+                         logger: Optional[logging.Logger] = None) -> Optional[str]:
+    """
+    顶层异步函数，获取视频转录文本。
+    :param video_id: YouTube 视频 ID
+    :param openai_service: 已初始化的 OpenAIService 实例
+    :param youtube_service: 已初始化的 YouTubeService 实例
+    :param logger: 外部传入的 logger；若未传入则使用默认 logger
+    :return: 转录文本或 None
+    """
+    logger = logger or get_default_logger()
+    agent = TranscriptAgent(openai_service, youtube_service, logger=logger)
+    logger.info(f"[run_transcript] Fetching transcript for video {video_id}.")
+    return await agent.fetch_transcript(video_id)
 
-__all__ = ["fetch_transcript", "VideoProcessor"]
-
-# ---------------------- 如果直接运行本模块，则进行简单测试 ----------------------
+# ---------------------- 示例入口 ----------------------
 if __name__ == "__main__":
-    from utils.database import Database
-    import os
+    async def main():
+        # 请确保环境变量 OPENAI_API_KEY 已设置，或直接在此处赋值
+        OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "sk-your_key")
+        YOUTUBE_API_KEYS = ["your_youtube_api_key1", "your_youtube_api_key2"]
 
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "dummy_key")
-    YOUTUBE_API_KEYS = ["your_youtube_api_key"]
-    DB_PATH = "videos.db"
+        # 初始化服务实例时，由外部传入 logger（或使用默认 logger）
+        default_logger = get_default_logger()
+        openai_service = OpenAIService(api_key=OPENAI_API_KEY)
+        youtube_service = YouTubeService(api_keys=YOUTUBE_API_KEYS)
 
-    db = Database(DB_PATH)
-    openai_service = OpenAIService(api_key=OPENAI_API_KEY)
-    youtube_service = YouTubeService(api_keys=YOUTUBE_API_KEYS)
+        test_video_id = "dQw4w9WgXcQ"  # 请替换为实际视频ID
+        transcript_text = await run_transcript(test_video_id, openai_service, youtube_service, logger=default_logger)
+        if transcript_text:
+            default_logger.info(f"Transcript for video {test_video_id}:\n{transcript_text}")
+        else:
+            default_logger.error("Transcript retrieval failed.")
 
-    processor = VideoProcessor(db, openai_service, youtube_service)
-
-    video_id = "dQw4w9WgXcQ"
-    topic = "Pop Music Trends"
-    result = asyncio.run(processor.process_video_transcript(video_id, topic))
-    if result:
-        logger.info(f"Final interpreted summary for video {video_id}:\n{result}")
-    else:
-        logger.error("Transcript processing failed.")
-    db.close()
+    asyncio.run(main())

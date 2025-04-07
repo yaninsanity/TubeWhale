@@ -1,33 +1,40 @@
-import os
-import yaml
-import logging
-from typing import Dict, Any, List, Generator, Optional
-import openai
+#!/usr/bin/env python3
 import asyncio
-from io import BytesIO  # 新增，用于处理音频文件
+import logging
+import os
+import threading
+import time
+import yaml
+from datetime import datetime
+from io import BytesIO
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union
 
+# 配置日志
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+_handler = logging.StreamHandler()
+_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
+logger.addHandler(_handler)
 
-# 默认配置文件所在目录（可根据需要修改）
-DEFAULT_CONFIG_DIR = os.path.join(os.path.dirname(__file__), "config")
-DEFAULT_CONFIG_FILE = os.path.join(DEFAULT_CONFIG_DIR, "openai_config.yaml")
 
 class OpenAIService:
+    """
+    OpenAIService 模块封装了所有 OpenAI API 相关调用，提供以下功能：
+      - 支持通过 YAML 文件或直接传入 API key 加载模型与提示配置；
+      - 同步接口：文本生成（completion）、嵌入计算（embedding）、流式输出（stream_completion）；
+      - 异步接口：async_completion、transcribe_audio 等；
+      - 内置错误重试机制（默认 3 次重试），并记录 token 使用和成本统计；
+      - 支持 chat、completion、embedding、audio.transcriptions 等多种调用方式。
+    """
+
     def __init__(
         self,
         config_path: Optional[str] = None,
         api_key: Optional[str] = None,
-        client: Optional[Any] = None
+        client: Optional[Any] = None,
+        logger: Optional[logging.Logger] = None
     ):
-        """
-        初始化 OpenAIService：
-          - 如果提供 config_path，则从 YAML 配置文件加载模型和提示；
-          - 如果未传入 config_path，则自动使用 DEFAULT_CONFIG_FILE；
-          - 如果传入 api_key，则采用简单默认配置（默认使用 GPT‑4 模型）；
-          - 如果传入 client，则直接使用该客户端；
-          - 若两者均未提供，则构造空配置（仅供内部方法单元测试使用）。
-        """
+        # 若 config_path 为直接传入的 API key，则调整参数
         if config_path is not None and config_path.startswith("sk-"):
             api_key = config_path
             config_path = None
@@ -36,31 +43,32 @@ class OpenAIService:
         self.prompts: Dict[str, Dict[str, str]] = {}
         self.default_model: Optional[str] = None
         self.default_prompt: Optional[str] = None
-        self.max_retries: int = 3  # 默认重试次数
+        self.max_retries: int = 3
         self.total_prompt_tokens: int = 0
         self.total_completion_tokens: int = 0
         self.total_cost: float = 0.0
+        self._lock = threading.Lock()
 
-        # 优先使用外部传入的 client
         self.client = client
+        self.logger = logger if logger else logging.getLogger(__name__)
 
-        # 如果传入了 API key，则忽略配置文件路径
+        # 若直接传入 API key，则不加载配置文件
         if api_key:
             config_path = None
 
+        # 尝试加载默认配置文件 openai_config.yaml（如果未传入 api_key）
         if config_path is None and api_key is None:
-            # 如果都未传入，则自动加载默认配置文件（如果存在）
-            if os.path.exists(DEFAULT_CONFIG_FILE):
-                config_path = DEFAULT_CONFIG_FILE
-                logger.info(f"Using default config file: {DEFAULT_CONFIG_FILE}")
+            default_config = self._get_default_config_path()
+            if default_config and os.path.exists(default_config):
+                config_path = default_config
+                self.logger.info(f"Using default config file: {default_config}")
             else:
-                logger.warning("No configuration provided and default config file not found; using empty configuration.")
+                self.logger.warning("No configuration provided and default config file not found; using empty configuration.")
 
         if config_path:
             self.load_configuration(config_path)
         elif api_key:
-            # 直接通过 api_key 构造默认配置，默认使用 GPT‑4
-            openai.api_key = api_key  # 确保设置 API key
+            # 使用内置默认配置
             self.models = {
                 "default": {
                     "model_name": "gpt-4",
@@ -75,35 +83,79 @@ class OpenAIService:
             self.prompts = {
                 "default": {
                     "prompt": "You are a helpful assistant.",
-                    "description": "默认提示",
+                    "description": "Default prompt",
                 },
                 "keyword_generation": {
                     "prompt": (
                         "Generate up to {max_n} relevant keyword variations for the base keyword '{base_keyword}' "
                         "to search for high topic-related YouTube videos.\nReturn each keyword on a separate line without numbering."
                     ),
-                    "description": "生成关键词变体的提示",
+                    "description": "Keyword generation prompt",
                 },
+                "summarization": {
+                    "prompt": (
+                        "Based on the text provided below and considering the previous summary (if any), produce a refined and concise summary.\n"
+                        "Previous Summary: \"{previous_summary}\"\n"
+                        "Text: \"{text}\"\n"
+                        "Your summary should be engaging, clear, and directly useful."
+                    ),
+                    "description": "Summarization prompt",
+                }
             }
             self.default_model = "default"
             self.default_prompt = "default"
-            logger.info("Initialized OpenAIService with direct API key and default configuration.")
+            self.logger.info("Initialized OpenAIService with direct API key and default configuration.")
         else:
-            logger.info("Initialized OpenAIService with empty configuration.")
+            self.logger.info("Initialized OpenAIService with empty configuration.")
 
-        # 如果没有传入 client，则将 openai 模块作为默认客户端
+        if not self.models:
+            self.logger.warning("No models loaded from configuration, using built-in default model.")
+            self.models = {
+                "default": {
+                    "model_name": "gpt-4",
+                    "type": "chat",
+                    "context_length": 8192,
+                    "max_tokens": 100,
+                    "temperature": 0.7,
+                    "price": {"prompt": 0.003, "completion": 0.003},
+                }
+            }
+            self.default_model = "default"
+        if not self.prompts:
+            self.logger.warning("No prompts loaded from configuration, using built-in default prompts.")
+            self.prompts = {
+                "default": {
+                    "prompt": "You are a helpful assistant.",
+                    "description": "Default prompt",
+                },
+                "summarization": {
+                    "prompt": (
+                        "Based on the text provided below and considering the previous summary (if any), produce a refined and concise summary.\n"
+                        "Previous Summary: \"{previous_summary}\"\n"
+                        "Text: \"{text}\"\n"
+                        "Your summary should be engaging, clear, and directly useful."
+                    ),
+                    "description": "Summarization prompt",
+                }
+            }
+            self.default_prompt = "default"
+
         if self.client is None:
-            self.client = openai
-            logger.info("Using openai module as client.")
+            import openai
+            default_api_key = self.models.get(self.default_model, {}).get("api_key") or os.environ.get("OPENAI_API_KEY")
+            self.client = openai.OpenAI(api_key=default_api_key)
+            self.logger.info("Using new OpenAI client instance.")
 
+    def _get_default_config_path(self) -> Optional[str]:
+        try:
+            default_dir = os.path.dirname(__file__)
+        except Exception:
+            default_dir = os.getcwd()
+        return os.path.join(default_dir, "openai_config.yaml")
 
     def load_configuration(self, config_path: str) -> None:
-        """
-        从 YAML 文件加载配置，包括模型和提示模板。
-        
-        :param config_path: 配置文件路径
-        """
         config_data = self._load_yaml_file(config_path)
+        self.logger.info(f"Raw configuration loaded: {config_data}")
         if isinstance(config_data, dict) and len(config_data) == 1:
             first_key = next(iter(config_data))
             if isinstance(config_data[first_key], dict) and (
@@ -122,16 +174,9 @@ class OpenAIService:
             self.default_prompt = "default"
         elif self.prompts:
             self.default_prompt = next(iter(self.prompts))
-        logger.info(f"Configuration loaded. Models: {list(self.models.keys())}, Prompts: {list(self.prompts.keys())}")
+        self.logger.info(f"Configuration loaded. Models: {list(self.models.keys())}, Prompts: {list(self.prompts.keys())}")
 
     def _load_yaml_file(self, path: str) -> Any:
-        """
-        加载 YAML 文件内容。
-        
-        :param path: YAML 文件路径
-        :return: 解析后的数据
-        :raises Exception: 加载文件失败时抛出异常
-        """
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = yaml.safe_load(f)
@@ -141,35 +186,23 @@ class OpenAIService:
             raise Exception(f"Failed to load configuration file: {e}") from e
 
     def _load_models_config(self, models_section: Any, full_config: dict) -> None:
-        """
-        加载模型配置，支持 list 和 dict 两种格式，同时应用全局 API 参数。
-        
-        :param models_section: 模型配置部分数据
-        :param full_config: 整个配置文件数据
-        """
-        models = {}
+        models: Dict[str, Dict[str, Any]] = {}
         if isinstance(models_section, list):
             for model_cfg in models_section:
-                if not isinstance(model_cfg, dict):
-                    continue
-                model_key = model_cfg.get("name") or model_cfg.get("model_name")
-                if not model_key:
-                    logger.warning("Skipping model config without a name identifier.")
-                    continue
-                models[model_key] = self._process_model_config(model_cfg)
+                if isinstance(model_cfg, dict):
+                    model_key = model_cfg.get("name") or model_cfg.get("model_name")
+                    if model_key:
+                        models[model_key] = self._process_model_config(model_cfg)
         elif isinstance(models_section, dict):
             for model_key, model_cfg in models_section.items():
-                if not isinstance(model_cfg, dict):
-                    logger.warning(f"Model config for {model_key} is not a dict, skipping.")
-                    continue
-                if "model_name" not in model_cfg:
-                    model_cfg["model_name"] = model_key
-                models[model_key] = self._process_model_config(model_cfg)
+                if isinstance(model_cfg, dict):
+                    if "model_name" not in model_cfg:
+                        model_cfg["model_name"] = model_key
+                    models[model_key] = self._process_model_config(model_cfg)
         else:
             logger.warning("No valid models configuration found.")
         self.models = models
 
-        # 应用全局 API 设置
         global_api_key = full_config.get("api_key")
         global_api_base = full_config.get("api_base")
         global_api_type = full_config.get("api_type")
@@ -185,12 +218,6 @@ class OpenAIService:
                 cfg["api_version"] = global_api_version
 
     def _process_model_config(self, model_cfg: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        处理单个模型的配置，自动推断模型类型和设置默认值。
-
-        :param model_cfg: 单个模型的配置字典
-        :return: 处理后的模型配置字典
-        """
         cfg = dict(model_cfg)
         if "model_name" not in cfg and "name" in cfg:
             cfg["model_name"] = cfg["name"]
@@ -200,7 +227,6 @@ class OpenAIService:
             if "embedding" in model_name or model_name.startswith("text-embedding-"):
                 model_type = "embedding"
             elif model_name.startswith("gpt-") or "turbo" in model_name or model_name.startswith("text-davinci-") or model_name.startswith("code-davinci-"):
-                # 默认选择 chat 模式（GPT‑4 更适合聊天）
                 model_type = "chat"
             elif model_name.startswith("whisper-") or model_name.startswith("audio-"):
                 model_type = "audio"
@@ -210,35 +236,20 @@ class OpenAIService:
                 model_type = "completion"
         cfg["type"] = model_type
 
-        # 设置 context_length、max_tokens 和 temperature 的默认值
         if model_type not in ("chat", "completion"):
-            cfg["context_length"] = 0 if cfg.get("context_length") is None else cfg["context_length"]
-            cfg["max_tokens"] = 0 if cfg.get("max_tokens") is None else cfg["max_tokens"]
-            cfg["temperature"] = 0 if cfg.get("temperature") is None else cfg["temperature"]
+            cfg["context_length"] = cfg.get("context_length", 0)
+            cfg["max_tokens"] = cfg.get("max_tokens", 0)
+            cfg["temperature"] = cfg.get("temperature", 0)
         else:
             if "context_length" not in cfg:
                 logger.warning(f"Model {model_name}: context_length not specified in config.")
-            cfg["max_tokens"] = 0 if cfg.get("max_tokens") is None else cfg["max_tokens"]
-            cfg["temperature"] = 0 if cfg.get("temperature") is None else cfg["temperature"]
+            cfg["max_tokens"] = cfg.get("max_tokens", 0)
+            cfg["temperature"] = cfg.get("temperature", 0)
 
-        # 处理价格信息
         if "price" in cfg and isinstance(cfg["price"], dict):
             price_cfg = cfg["price"]
-            if cfg.get("type") == "audio":
-                if "input" in price_cfg:
-                    price_cfg["prompt"] = float(price_cfg["input"])
-                if "output" in price_cfg:
-                    price_cfg["completion"] = float(price_cfg["output"])
-            else:
-                if "input" in price_cfg or "output" in price_cfg:
-                    if "prompt" not in price_cfg and "input" in price_cfg:
-                        price_cfg["prompt"] = float(price_cfg["input"])
-                    if "completion" not in price_cfg and "output" in price_cfg:
-                        price_cfg["completion"] = float(price_cfg["output"])
-            if "prompt" not in price_cfg:
-                price_cfg["prompt"] = 0.0
-            if "completion" not in price_cfg:
-                price_cfg["completion"] = 0.0
+            price_cfg["prompt"] = float(price_cfg.get("prompt", 0.0))
+            price_cfg["completion"] = float(price_cfg.get("completion", 0.0))
             cfg["price"] = price_cfg
         elif "price" in cfg and isinstance(cfg["price"], (int, float)):
             cfg["price"] = {"prompt": float(cfg["price"]), "completion": 0.0}
@@ -247,54 +258,45 @@ class OpenAIService:
         return cfg
 
     def _load_prompts_config(self, prompts_section: Any) -> None:
-        """
-        加载提示模板配置，支持 dict 和 list 两种格式。
-        
-        :param prompts_section: 提示模板部分数据
-        """
-        prompts = {}
+        prompts: Dict[str, Dict[str, str]] = {}
         if isinstance(prompts_section, dict):
             for prompt_name, prompt_value in prompts_section.items():
-                if prompt_value is None:
-                    continue
-                if isinstance(prompt_value, str):
-                    prompts[prompt_name] = {"prompt": prompt_value, "description": ""}
-                elif isinstance(prompt_value, dict):
-                    prompt_text = prompt_value.get("prompt", "")
-                    desc = prompt_value.get("description", "")
-                    prompts[prompt_name] = {"prompt": prompt_text, "description": desc}
-                else:
-                    logger.warning(f"Ignoring prompt {prompt_name} with unsupported type.")
+                if prompt_value is not None:
+                    if isinstance(prompt_value, str):
+                        prompts[prompt_name] = {"prompt": prompt_value, "description": ""}
+                    elif isinstance(prompt_value, dict):
+                        if "prompt" not in prompt_value and "user" in prompt_value:
+                            prompt_value["prompt"] = prompt_value["user"]
+                        prompts[prompt_name] = {
+                            "prompt": prompt_value.get("prompt", ""),
+                            "description": prompt_value.get("description", "")
+                        }
+                    else:
+                        logger.warning(f"Ignoring prompt {prompt_name} with unsupported type.")
         elif isinstance(prompts_section, list):
             for entry in prompts_section:
-                if not isinstance(entry, dict):
-                    continue
-                name = entry.get("name") or entry.get("id") or entry.get("prompt")
-                if not name:
-                    logger.warning("Prompt entry without a name or id field.")
-                    continue
-                prompt_text = entry.get("prompt", "")
-                desc = entry.get("description", "")
-                prompts[name] = {"prompt": prompt_text, "description": desc}
+                if isinstance(entry, dict):
+                    name = entry.get("name") or entry.get("id") or entry.get("prompt")
+                    if name:
+                        prompts[name] = {
+                            "prompt": entry.get("prompt", ""),
+                            "description": entry.get("description", "")
+                        }
+                    else:
+                        logger.warning("Prompt entry without a name or id field.")
         else:
             logger.warning("No valid prompts configuration found.")
         self.prompts = prompts
+        logger.info(f"Loaded prompts: {list(self.prompts.keys())}")
 
     def get_prompt(self, prompt_name: Optional[str], variables: Optional[Dict[str, Any]] = None) -> str:
-        """
-        根据提示名称获取并格式化提示文本。
-        
-        :param prompt_name: 提示模板名称
-        :param variables: 格式化所需变量
-        :return: 格式化后的提示文本
-        """
         if prompt_name is None:
             prompt_name = self.default_prompt
         if prompt_name not in self.prompts:
             logger.warning(f"Prompt '{prompt_name}' not found. Using default prompt.")
             prompt_name = self.default_prompt
         prompt_entry = self.prompts.get(prompt_name, {})
-        prompt_text = prompt_entry.get("prompt", "")
+        prompt_text = prompt_entry.get("prompt") or ""
         if variables:
             try:
                 prompt_text = prompt_text.format(**variables)
@@ -302,23 +304,17 @@ class OpenAIService:
                 logger.error(f"Error formatting prompt template '{prompt_name}' with variables {variables}: {e}")
         return prompt_text
 
-    def _build_chat_messages(self, prompt: Optional[str], prompt_template: Optional[str], template_vars: Optional[Dict[str, Any]]) -> List[Dict[str, str]]:
-        """
-        构建 chat 模型的消息列表，包含系统和用户消息。
-        
-        :param prompt: 用户直接提供的提示
-        :param prompt_template: 模板名称（可选）
-        :param template_vars: 模板变量
-        :return: 消息字典列表
-        """
+    def _build_chat_messages(
+        self,
+        prompt: Optional[str],
+        prompt_template: Optional[str],
+        template_vars: Optional[Dict[str, Any]]
+    ) -> List[Dict[str, str]]:
         messages = []
-        # 添加系统消息
         if self.default_prompt:
             system_prompt_text = self.get_prompt(self.default_prompt)
             if system_prompt_text:
                 messages.append({"role": "system", "content": system_prompt_text})
-
-        # 添加用户消息
         if prompt_template:
             prompt_text = self.get_prompt(prompt_template, variables=template_vars or {})
             if prompt:
@@ -334,15 +330,12 @@ class OpenAIService:
             messages.append({"role": "user", "content": prompt})
         return messages
 
-    def _build_plain_prompt(self, prompt: Optional[str], prompt_template: Optional[str], template_vars: Optional[Dict[str, Any]]) -> str:
-        """
-        构建非 chat 模型的最终提示文本。
-        
-        :param prompt: 用户直接提供的提示
-        :param prompt_template: 模板名称（可选）
-        :param template_vars: 模板变量
-        :return: 最终的提示文本
-        """
+    def _build_plain_prompt(
+        self,
+        prompt: Optional[str],
+        prompt_template: Optional[str],
+        template_vars: Optional[Dict[str, Any]]
+    ) -> str:
         final_prompt = ""
         if prompt_template:
             prompt_text = self.get_prompt(prompt_template, variables=template_vars or {})
@@ -360,6 +353,47 @@ class OpenAIService:
             final_prompt = prompt or ""
         return final_prompt
 
+    def _update_usage(self, usage: Dict[str, Any], model_cfg: Dict[str, Any]) -> None:
+        prompt_tokens = usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("completion_tokens", 0)
+        with self._lock:
+            self.total_prompt_tokens += prompt_tokens
+            self.total_completion_tokens += completion_tokens
+            price_info = model_cfg.get("price", {})
+            prompt_cost = price_info.get("prompt", 0.0)
+            completion_cost = price_info.get("completion", 0.0)
+            cost = round((prompt_tokens * prompt_cost + completion_tokens * completion_cost) / 1000.0, 6)
+            self.total_cost += cost
+        logger.info(f"Model {model_cfg.get('model_name')} used {prompt_tokens} prompt tokens and {completion_tokens} completion tokens, cost approx ${cost:.6f}.")
+
+    def _retry_api_call(self, func: Callable, *args, **kwargs) -> Any:
+        last_exception = None
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                result = func(*args, **kwargs)
+                return result
+            except Exception as e:
+                last_exception = e
+                logger.error(f"Attempt {attempt} failed: {e}")
+                if attempt < self.max_retries:
+                    time.sleep(1)
+                else:
+                    raise Exception(f"API call failed after {self.max_retries} attempts.") from e
+        raise Exception("Unexpected error in _retry_api_call") from last_exception
+
+    def _normalize_model_key(self, model_key: Optional[str]) -> Optional[str]:
+        if model_key is None:
+            return model_key
+        if model_key in self.models:
+            return model_key
+        alt = model_key.replace('-', '_')
+        if alt in self.models:
+            return alt
+        alt2 = model_key.replace('_', '-')
+        if alt2 in self.models:
+            return alt2
+        return model_key
+
     def completion(
         self,
         model: Optional[str] = None,
@@ -368,22 +402,10 @@ class OpenAIService:
         template_vars: Optional[Dict[str, Any]] = None,
         **kwargs
     ) -> str:
-        """
-        使用指定模型和提示生成完整回复（非流式调用）。
-
-        :param model: 模型配置键
-        :param prompt: 用户直接输入的提示文本
-        :param prompt_template: 提示模板名称（可选）
-        :param template_vars: 提示模板变量
-        :param kwargs: 其他 OpenAI API 参数
-        :return: 生成的回复文本
-        :raises Exception: 当 API 调用失败时或模型未配置时抛出异常
-        """
         model_key = model or self.default_model
-        if model_key is None:
-            raise ValueError("No model specified and no default model set.")
-        if model_key not in self.models:
-            raise ValueError(f"Model '{model_key}' is not configured.")
+        model_key = self._normalize_model_key(model_key)
+        if model_key is None or model_key not in self.models:
+            raise ValueError(f"Model '{model}' is not configured.")
         model_cfg = self.models[model_key]
         model_name = model_cfg.get("model_name", model_key)
         model_type = model_cfg.get("type")
@@ -402,58 +424,34 @@ class OpenAIService:
         }
         params.update(kwargs)
         params["model"] = model_name
-        params["stream"] = False  # 非流式调用
+        params["stream"] = False
 
         if self.client is None:
             raise Exception("No OpenAI client available. Please provide a valid API key or client.")
 
-        response = None
-        for attempt in range(1, self.max_retries + 1):
-            try:
-                if model_type == "chat":
-                    response = self.client.ChatCompletion.create(messages=messages, **params)
-                else:
-                    response = self.client.Completion.create(prompt=final_prompt, **params)
-                break
-            except Exception as e:
-                logger.error(f"Attempt {attempt} - API call failed for model {model_name}: {e}")
-                if attempt == self.max_retries:
-                    raise Exception(f"API call failed after {self.max_retries} attempts.") from e
+        if model_type == "chat":
+            response = self._retry_api_call(self.client.chat.completions.create, messages=messages, **params)
+        else:
+            combined_prompt = final_prompt
+            response = self._retry_api_call(self.client.completions.create, prompt=combined_prompt, **params)
+
+        # 如果返回对象不是字典，则尝试使用 model_dump() 转换
+        if not isinstance(response, dict) and hasattr(response, "model_dump"):
+            response = response.model_dump()
 
         if response is None:
             raise Exception("OpenAI API call failed without response.")
 
-        # 解析返回结果
         result_text = ""
-        choices = response.choices if hasattr(response, "choices") else response.get("choices", [])
+        choices = response.get("choices", [])
         if choices:
             if model_type == "chat":
-                if isinstance(choices[0], dict):
-                    result_text = choices[0].get("message", {}).get("content", "")
-                else:
-                    result_text = choices[0].message.get("content", "")
+                result_text = choices[0].get("message", {}).get("content", "")
             else:
-                if isinstance(choices[0], dict):
-                    result_text = choices[0].get("text", "")
-                else:
-                    result_text = choices[0].text
-        # 处理 token 使用情况及费用计算
-        usage = (
-            response.usage if hasattr(response, "usage")
-            else response.get("usage") if isinstance(response, dict)
-            else None
-        )
+                result_text = choices[0].get("text", "")
+        usage = response.get("usage")
         if usage:
-            prompt_tokens = usage.get("prompt_tokens", 0)
-            completion_tokens = usage.get("completion_tokens", 0)
-            self.total_prompt_tokens += prompt_tokens
-            self.total_completion_tokens += completion_tokens
-            price_info = model_cfg.get("price", {})
-            prompt_cost = price_info.get("prompt", 0.0)
-            completion_cost = price_info.get("completion", 0.0)
-            cost = (prompt_tokens * prompt_cost + completion_tokens * completion_cost) / 1000.0
-            self.total_cost += cost
-            logger.info(f"Model {model_name} used {prompt_tokens} prompt tokens and {completion_tokens} completion tokens, cost approx ${cost:.6f}.")
+            self._update_usage(usage, model_cfg)
         else:
             logger.info("API call completed. (Usage details not provided)")
         return result_text
@@ -466,29 +464,17 @@ class OpenAIService:
         template_vars: Optional[Dict[str, Any]] = None,
         **kwargs
     ) -> Generator[str, None, None]:
-        """
-        使用指定模型和提示生成回复（流式调用）。
-
-        :param model: 模型配置键
-        :param prompt: 用户直接输入的提示文本
-        :param prompt_template: 提示模板名称（可选）
-        :param template_vars: 提示模板变量
-        :param kwargs: 其他 OpenAI API 参数
-        :yield: 每次返回生成的文本片段
-        :raises Exception: 当 API 调用失败时抛出异常
-        """
         model_key = model or self.default_model
+        model_key = self._normalize_model_key(model_key)
         if model_key is None or model_key not in self.models:
-            raise ValueError(f"Model '{model_key}' is not configured.")
+            raise ValueError(f"Model '{model}' is not configured.")
         model_cfg = self.models[model_key]
         model_name = model_cfg.get("model_name", model_key)
         model_type = model_cfg.get("type")
-
         if model_type == "chat":
             messages = self._build_chat_messages(prompt, prompt_template, template_vars)
         else:
             final_prompt = self._build_plain_prompt(prompt, prompt_template, template_vars)
-
         params: Dict[str, Any] = {
             "temperature": model_cfg.get("temperature"),
             "max_tokens": model_cfg.get("max_tokens"),
@@ -503,49 +489,37 @@ class OpenAIService:
         if self.client is None:
             raise Exception("No OpenAI client available. Please provide a valid API key or client.")
 
-        try:
-            if model_type == "chat":
-                stream = self.client.ChatCompletion.create(messages=messages, **params)
-            else:
-                stream = self.client.Completion.create(prompt=final_prompt, **params)
-        except Exception as e:
-            logger.error(f"Streaming API call failed for model {model_name}: {e}")
-            raise Exception(f"Streaming API call failed: {e}") from e
+        if model_type == "chat":
+            stream = self._retry_api_call(self.client.chat.completions.create, messages=messages, **params)
+        else:
+            combined_prompt = final_prompt
+            stream = self._retry_api_call(self.client.completions.create, prompt=combined_prompt, **params)
 
+        # 若返回的 stream 对象非字典列表，则在每个 chunk 上尝试转换
         partial_text = ""
         for chunk in stream:
+            if not isinstance(chunk, dict) and hasattr(chunk, "model_dump"):
+                chunk = chunk.model_dump()
+            choices = chunk.get("choices", [])
             if model_type == "chat":
-                first_choice = chunk.choices[0]
-                delta = first_choice.get("delta", {}) if isinstance(first_choice, dict) else getattr(first_choice, "delta", {})
+                delta = choices[0].get("delta", {}) if choices else {}
                 text_part = delta.get("content", "")
             else:
-                first_choice = chunk.choices[0]
-                text_part = first_choice.get("text", "") if isinstance(first_choice, dict) else getattr(first_choice, "text", "")
+                text_part = choices[0].get("text", "") if choices else ""
             partial_text += text_part
             yield text_part
-        logger.info(f"Streaming completed for model {model_name}. Total length of output: {len(partial_text)} characters.")
+        logger.info(f"Streaming completed for model {model_name}. Total output length: {len(partial_text)} characters.")
 
     def embedding(
         self,
         model: Optional[str] = None,
         input_data: Any = None,
         **kwargs
-    ) -> List[float]:
-        """
-        使用指定模型生成文本或数据的嵌入向量。
-
-        :param model: 模型配置键
-        :param input_data: 输入数据（文本或其他可处理的数据）
-        :param kwargs: 其他 OpenAI API 参数
-        :return: 嵌入向量列表（若仅生成一个向量，则直接返回该向量）
-        :raises ValueError: 当输入为空时
-        :raises RuntimeError: 当返回格式异常时
-        """
+    ) -> Union[List[float], List[List[float]]]:
         model_key = model or self.default_model
-        if model_key is None:
-            raise ValueError("No model specified for embedding and no default model set.")
-        if model_key not in self.models:
-            raise ValueError(f"Model '{model_key}' is not configured.")
+        model_key = self._normalize_model_key(model_key)
+        if model_key is None or model_key not in self.models:
+            raise ValueError(f"Model '{model}' is not configured.")
         model_cfg = self.models[model_key]
         model_name = model_cfg.get("model_name", model_key)
         model_type = model_cfg.get("type")
@@ -561,69 +535,84 @@ class OpenAIService:
         if self.client is None:
             raise Exception("No OpenAI client available. Please provide a valid API key or client.")
 
-        response = None
-        for attempt in range(1, self.max_retries + 1):
-            try:
-                response = self.client.Embedding.create(**params)
-                break
-            except Exception as e:
-                logger.error(f"Attempt {attempt} - Embedding API call failed for model {model_name}: {e}")
-                if attempt == self.max_retries:
-                    raise Exception(f"Embedding API call failed after {self.max_retries} attempts.") from e
+        response = self._retry_api_call(self.client.embeddings.create, **params)
+        if not isinstance(response, dict) and hasattr(response, "model_dump"):
+            response = response.model_dump()
         if response is None:
             raise Exception("OpenAI Embedding API call failed without response.")
-        # 修改处理：如果 response 是 dict，则使用 .get("data")
-        if isinstance(response, dict):
-            data_list = response.get("data")
-        else:
-            data_list = getattr(response, "data", None)
+        data_list = response.get("data")
         if data_list is None:
             logger.error("Unexpected response format from embedding API.")
             raise RuntimeError("Invalid response from embedding API.")
         embeddings = [item.get("embedding") for item in data_list if item.get("embedding") is not None]
         result = embeddings[0] if len(embeddings) == 1 else embeddings
 
-        usage = (
-            response.usage if hasattr(response, "usage")
-            else response.get("usage") if isinstance(response, dict)
-            else None
-        )
+        usage = response.get("usage")
         if usage:
             prompt_tokens = usage.get("prompt_tokens", 0) or usage.get("total_tokens", 0)
-            self.total_prompt_tokens += prompt_tokens
-            price_info = model_cfg.get("price", {})
-            prompt_cost = price_info.get("prompt", 0.0)
-            cost = (prompt_tokens * prompt_cost) / 1000.0
-            self.total_cost += cost
+            with self._lock:
+                self.total_prompt_tokens += prompt_tokens
+                price_info = model_cfg.get("price", {})
+                prompt_cost = price_info.get("prompt", 0.0)
+                cost = round((prompt_tokens * prompt_cost) / 1000.0, 6)
+                self.total_cost += cost
             logger.info(f"Model {model_name} embedding used {prompt_tokens} tokens, cost approx ${cost:.6f}.")
         else:
             logger.info("Embedding call completed. (Usage details not provided)")
         return result
 
-    # -------------------------------
-    # 新增异步包装方法：用于摘要调用
-    async def async_completion(self, model: Optional[str] = None, prompt: Optional[str] = None,
-                               prompt_template: Optional[str] = None, template_vars: Optional[Dict[str, Any]] = None,
-                               **kwargs) -> str:
-        return await asyncio.to_thread(lambda: self.completion(model=model, prompt=prompt,
-                                                                prompt_template=prompt_template,
-                                                                template_vars=template_vars, **kwargs))
-    
-    # -------------------------------
-    # 新增支持 Whisper 的异步转录方法
+    async def async_completion(
+        self,
+        model: Optional[str] = None,
+        prompt: Optional[str] = None,
+        prompt_template: Optional[str] = None,
+        template_vars: Optional[Dict[str, Any]] = None,
+        **kwargs
+    ) -> str:
+        return await asyncio.to_thread(
+            lambda: self.completion(
+                model=model,
+                prompt=prompt,
+                prompt_template=prompt_template,
+                template_vars=template_vars,
+                **kwargs
+            )
+        )
+
     async def transcribe_audio(self, audio_file: BytesIO) -> str:
         """
-        使用 OpenAI Whisper 接口对音频文件进行转录，返回转录文本。
-        该方法采用异步包装，将同步调用封装在 asyncio.to_thread 中。
+        异步调用 OpenAI 的 Whisper API 进行音频转录。要求传入的 audio_file 是一个包含有效音频数据的 BytesIO 对象，
+        且必须包含正确的文件扩展名信息。若没有 name 属性，则默认设置为 "audio.mp3"。
         """
+        # 确保文件指针处于开头位置
+        audio_file.seek(0)
+        
+        # 如果没有 name 属性，则设置一个默认文件名，确保 API 能识别格式（比如 mp3）
+        if not hasattr(audio_file, 'name'):
+            audio_file.name = "audio.mp3"
+        else:
+            # 如果存在但没有扩展名，则补充 mp3 扩展名
+            if not os.path.splitext(audio_file.name)[1]:
+                audio_file.name += ".mp3"
+
         def call_transcription():
-            response = self.client.Audio.transcriptions.create(
+            return self.client.audio.transcriptions.create(
                 file=audio_file,
                 model="whisper-1",
                 response_format="text",
             )
-            return response
-        response = await asyncio.to_thread(call_transcription)
+
+        try:
+            response = await asyncio.to_thread(call_transcription)
+        except Exception as e:
+            self.logger.error(f"Error calling transcription API: {e}")
+            return ""
+
+        # 如果返回对象不是字典但具有 model_dump 方法，则调用 model_dump()
+        if not isinstance(response, dict) and hasattr(response, "model_dump"):
+            response = response.model_dump()
+        
+        # 返回转录文本，如果存在则返回 "text" 字段，否则返回空字符串
         if isinstance(response, dict):
             return response.get("text", "")
         return ""

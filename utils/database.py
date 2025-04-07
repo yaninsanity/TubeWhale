@@ -4,20 +4,20 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import (
-    create_engine, Column, Integer, String, Text, Float, Boolean, DateTime, ForeignKey, Table, MetaData
-)
-from sqlalchemy.orm import declarative_base, relationship, sessionmaker, Session
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+from sqlalchemy import create_engine, Column, Integer, String, Text, Float, Boolean, ForeignKey, MetaData
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
 Base = declarative_base()
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+if not logger.handlers: 
+    logger.addHandler(logging.StreamHandler())
+    logger.info("Logger initialized for database module.")
+
 
 # -------------------------------
 # ORM 模型定义
 # -------------------------------
-
 class Video(Base):
     __tablename__ = "videos"
     id = Column(Integer, primary_key=True)
@@ -42,25 +42,25 @@ class Video(Base):
     timestamp = Column(String)  # 格式 '%Y-%m-%d %H:%M:%S'
     llm_summary = Column(Text)
     transcript = Column(Text)
-    is_transcript = Column(Integer, default=0)  # 0: False, 1: True
+    is_transcript = Column(Integer, default=0)
     audio_summary = Column(Text)
     ai_cost = Column(Float, default=0.0)
 
-    # 关联评论与转录记录
     comments = relationship("Comment", back_populates="video", cascade="all, delete")
     transcripts = relationship("Transcript", back_populates="video", cascade="all, delete")
-
+    process_logs = relationship("VideoProcessLog", back_populates="video", cascade="all, delete")
 
 class AIInteraction(Base):
     __tablename__ = "ai_interactions"
     id = Column(Integer, primary_key=True)
-    input_data = Column(Text, nullable=False)   # 存储请求输入（例如 prompt）
-    output_data = Column(Text, nullable=False)    # 存储生成的结果
+    input_data = Column(Text, nullable=False)
+    output_data = Column(Text, nullable=False)
     interaction_type = Column(String, nullable=False)
     tokens_used = Column(Integer, default=0)
     cost = Column(Float, default=0.0)
-    timestamp = Column(String, nullable=False)
-
+    request_time = Column(String, nullable=False)
+    response_time = Column(String, nullable=False)
+    duration_ms = Column(Integer, default=0)
 
 class Comment(Base):
     __tablename__ = "comments"
@@ -77,17 +77,15 @@ class Comment(Base):
 
     video = relationship("Video", back_populates="comments")
 
-
 class KeywordAnalysis(Base):
     __tablename__ = "keyword_analysis"
     id = Column(Integer, primary_key=True)
     keyword = Column(String, nullable=False)
-    critique = Column(Text)  # 存储搜索摘要或评价
+    critique = Column(Text)
     total_views = Column(Integer, default=0)
     total_likes = Column(Integer, default=0)
     weighted_score = Column(Float, default=0.0)
     timestamp = Column(String, nullable=False)
-
 
 class Transcript(Base):
     __tablename__ = "transcripts"
@@ -99,7 +97,6 @@ class Transcript(Base):
 
     video = relationship("Video", back_populates="transcripts")
 
-
 class BrainstormedTopic(Base):
     __tablename__ = "brainstormed_topics"
     id = Column(Integer, primary_key=True)
@@ -109,60 +106,67 @@ class BrainstormedTopic(Base):
     topic_score = Column(Float, default=0.0)
     timestamp = Column(String, nullable=False)
 
+class VideoProcessLog(Base):
+    __tablename__ = "video_process_logs"
+    id = Column(Integer, primary_key=True)
+    video_id = Column(String, ForeignKey("videos.video_id", ondelete="CASCADE"), nullable=False, index=True)
+    step = Column(String, nullable=False)
+    status = Column(String, nullable=False)
+    details = Column(Text)
+    timestamp = Column(String, nullable=False)
+
+    video = relationship("Video", back_populates="process_logs")
 
 # -------------------------------
-# Database 类封装（同步接口）
+# Database 封装类
 # -------------------------------
 class Database:
     """
-    数据库封装类，负责初始化数据库及所有数据的存储和更新操作。
-
-    表设计说明：
-      - videos 表：存储视频相关元数据，包括 AI 生成的摘要、转录、音频摘要及累计的 OpenAI 调用费用。
-      - ai_interactions 表：记录所有 AI 接口调用交互的详细信息，包括输入和输出数据。
-      - comments 表：存储视频评论数据，与 videos 表通过 video_id 关联。
-      - keyword_analysis 表：存储关键词分析和搜索摘要结果。
-      - transcripts 表：存储转录和摘要历史记录。
-      - brainstormed_topics 表：存储头脑风暴产生的话题和评分。
-
-    更新控制：
-      如果某视频在指定周期（默认为 7 天）内已更新，则跳过更新操作。
-    
-    注意：开发过程中如果遇到 "no such column: videos.ai_cost" 错误，请删除旧的数据库文件或设置 recreate=True，
-          生产环境建议使用 Alembic 进行迁移管理。
+    数据库封装类，负责初始化数据库及所有数据的存储与更新操作，
+    包括视频元数据、AI 交互、评论、关键词分析、转录摘要、头脑风暴话题及处理日志。
     """
-    def __init__(self, db_path: str, recreate: bool = False):
-        logger.info("Initializing database with path: %s", db_path)
+    def __init__(self, db_path: str, logger: logging.Logger, recreate: bool = False):
+        self.logger = logger or logging.getLogger(__name__)  # 默认使用当前模块的日志器
+        self.logger.info("Initializing database with path: %s", db_path)
         self.engine = create_engine(f"sqlite:///{db_path}", echo=False, future=True)
         if recreate:
-            logger.info("Recreating database: dropping all tables.")
+            self.logger.info("Recreating database: dropping all tables.")
             Base.metadata.drop_all(self.engine)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine, future=True)
-        logger.info("Database tables created.")
+        self.logger.info("Database tables created.")
 
-    def get_session(self) -> Session:
+    def get_session(self):
         return self.Session()
 
     def close(self):
-        logger.info("Database closed (engine will be disposed on program exit).")
+        self.logger.info("Database closed (engine will be disposed on program exit).")
+
+    def _commit_session(self, session, action_desc: str):
+        try:
+            session.commit()
+            self.logger.info("%s succeeded.", action_desc)
+        except Exception as e:
+            session.rollback()
+            self.logger.error("%s failed: %s", action_desc, e)
+            raise
+        finally:
+            session.close()
 
     def should_update_video_metadata(self, video_id: str, period_days: int = 7) -> bool:
-        session = self.get_session()
-        try:
+        with self.get_session() as session:
             video = session.query(Video).filter(Video.video_id == video_id).first()
             if video and video.timestamp:
                 last_update = datetime.strptime(video.timestamp, '%Y-%m-%d %H:%M:%S')
                 if datetime.now() - last_update < timedelta(days=period_days):
-                    logger.info("Video %s updated recently on %s; skipping update.", video_id, video.timestamp)
+                    self.logger.info("Video %s updated on %s recently; skipping update.", video_id, video.timestamp)
                     return False
             return True
-        finally:
-            session.close()
 
     def store_video_metadata(self, video_metadata: dict):
         session = self.get_session()
         try:
+            # Sanitizing data (ensuring default values for missing fields)
             video_metadata['view_count'] = int(video_metadata.get('view_count', 0)) or 0
             video_metadata['like_count'] = int(video_metadata.get('like_count', 0)) or 0
             video_metadata['comment_count'] = int(video_metadata.get('comment_count', 0)) or 0
@@ -172,6 +176,7 @@ class Database:
                 (video_metadata['comment_count'] * 0.4), 2
             )
             current_ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            session.expire_on_commit = False
             video = session.query(Video).filter(Video.video_id == video_metadata['id']).first()
             if not video:
                 video = Video(video_id=video_metadata['id'])
@@ -199,19 +204,16 @@ class Database:
             video.audio_summary = video_metadata.get('audio_summary')
             video.ai_cost = video_metadata.get('ai_cost', 0.0)
             session.merge(video)
-            session.commit()
-            logger.info("Metadata stored for video ID: %s", video_metadata['id'])
-        except Exception as e:
+            self._commit_session(session, f"Storing metadata for video ID: {video_metadata['id']}")
+        except Exception:
             session.rollback()
-            logger.error("Failed to store video metadata for %s: %s", video_metadata.get('id', 'UNKNOWN'), e)
             raise
-        finally:
-            session.close()
+
 
     def update_video_metadata(self, video_id: str, llm_summary: str, transcript: str,
                               audio_summary: str = None, ai_cost: float = 0.0):
         if not self.should_update_video_metadata(video_id):
-            logger.info("Skipping update for video %s (updated recently).", video_id)
+            logger.info("Skipping update for video %s (recent update).", video_id)
             return
         session = self.get_session()
         try:
@@ -223,16 +225,12 @@ class Database:
                 video.audio_summary = audio_summary
                 video.ai_cost = ai_cost
                 video.timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                session.commit()
-                logger.info("Video %s metadata updated.", video_id)
+                self._commit_session(session, f"Updating metadata for video {video_id}")
             else:
                 logger.error("Video %s not found for update.", video_id)
-        except Exception as e:
+        except Exception:
             session.rollback()
-            logger.error("Failed to update metadata for video %s: %s", video_id, e)
             raise
-        finally:
-            session.close()
 
     def store_comments(self, video_id: str, comments: List[Dict[str, Any]]):
         session = self.get_session()
@@ -247,17 +245,13 @@ class Database:
                     publish_time=comment['publish_time'],
                     viewer_rating=comment.get('viewer_rating', 'none'),
                     moderation_status=comment.get('moderation_status', 'published'),
-                    parent_id=comment['parent_id']
+                    parent_id=comment.get('parent_id')
                 )
                 session.add(new_comment)
-            session.commit()
-            logger.info("Stored %d comments for video %s.", len(comments), video_id)
-        except Exception as e:
+            self._commit_session(session, f"Storing comments for video {video_id}")
+        except Exception:
             session.rollback()
-            logger.error("Failed to store comments for video %s: %s", video_id, e)
             raise
-        finally:
-            session.close()
 
     def store_brainstormed_topics(self, topics: List[str], critique: str, topic_score: float):
         if not topics:
@@ -274,18 +268,14 @@ class Database:
                 timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             )
             session.add(new_topic)
-            session.commit()
-            logger.info("Brainstormed topics stored.")
-        except Exception as e:
+            self._commit_session(session, "Storing brainstormed topics")
+        except Exception:
             session.rollback()
-            logger.error("Failed to store brainstormed topics: %s", e)
             raise
-        finally:
-            session.close()
 
     def store_transcript_summary(self, video_id: str, transcript: str, summary: str):
         if not video_id or not transcript.strip() or not summary.strip():
-            logger.error("Invalid input for transcript and summary storage.")
+            logger.error("Invalid input for transcript summary storage.")
             return
         session = self.get_session()
         try:
@@ -296,40 +286,32 @@ class Database:
                 timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             )
             session.add(new_record)
-            session.commit()
-            logger.info("Transcript and summary stored for video %s.", video_id)
-        except Exception as e:
+            self._commit_session(session, f"Storing transcript and summary for video {video_id}")
+        except Exception:
             session.rollback()
-            logger.error("Failed to store transcript and summary for video %s: %s", video_id, e)
             raise
-        finally:
-            session.close()
 
     def store_ai_interaction(self, input_data: Dict[str, Any], output_data: Dict[str, Any],
                              interaction_type: str, tokens_used: int = 0, cost: float = 0.0,
-                             timestamp: Optional[str] = None):
-        """
-        存储 AI 交互记录，包括请求输入和生成输出，以便后续调试和成本核算。
-        """
+                             timestamp: Optional[str] = None, duration_ms: int = 0):
         session = self.get_session()
         try:
+            now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             new_interaction = AIInteraction(
                 input_data=json.dumps(input_data, default=str),
                 output_data=json.dumps(output_data, default=str),
                 interaction_type=interaction_type,
                 tokens_used=tokens_used,
                 cost=cost,
-                timestamp=timestamp if timestamp else datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                request_time=timestamp if timestamp else now_str,
+                response_time=now_str,
+                duration_ms=duration_ms
             )
             session.add(new_interaction)
-            session.commit()
-            logger.info("AI interaction stored successfully for type %s.", interaction_type)
-        except Exception as e:
+            self._commit_session(session, f"Storing AI interaction for type {interaction_type}")
+        except Exception:
             session.rollback()
-            logger.error("Failed to store AI interaction: %s", e)
             raise
-        finally:
-            session.close()
 
     def store_keyword_analysis(self, keyword_analysis: List[Dict[str, Any]]):
         session = self.get_session()
@@ -344,34 +326,55 @@ class Database:
                     timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 )
                 session.add(new_entry)
-            session.commit()
-            logger.info("Keyword analysis stored successfully.")
-        except Exception as e:
+            self._commit_session(session, "Storing keyword analysis")
+        except Exception:
             session.rollback()
-            logger.error("Failed to store keyword analysis: %s", e)
             raise
-        finally:
-            session.close()
+
+    def store_video_process_log(self, video_id: str, step: str, status: str, details: str = ""):
+        session = self.get_session()
+        try:
+            new_log = VideoProcessLog(
+                video_id=video_id,
+                step=step,
+                status=status,
+                details=details,
+                timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            )
+            session.add(new_log)
+            self._commit_session(session, f"Storing process log for video {video_id}, step '{step}'")
+        except Exception:
+            session.rollback()
+            raise
 
     def store_data(self, table_name: str, data_dict: Dict[str, Any]):
         session = self.get_session()
         try:
-            from sqlalchemy import MetaData  # 延迟导入
             metadata = MetaData()
             metadata.reflect(bind=self.engine)
+            
             if table_name not in metadata.tables:
+                self.logger.error(f"Table '{table_name}' not found in database.")
                 raise Exception(f"Table '{table_name}' not found in database.")
+            
             table = metadata.tables[table_name]
+            
+            # Sanitize the data_dict to match the expected column names
+            for key in list(data_dict.keys()):
+                if key not in table.columns:
+                    self.logger.warning(f"Column '{key}' does not exist in table '{table_name}', removing it.")
+                    del data_dict[key]
+            
+            # Insert the data into the table
             ins = table.insert().values(**data_dict)
             session.execute(ins)
-            session.commit()
-            logger.info("Data stored successfully in %s.", table_name)
+            
+            # Commit changes to the database
+            self._commit_session(session, f"Storing data in table {table_name}")
         except Exception as e:
             session.rollback()
-            logger.error("Failed to store data in %s: %s", table_name, e)
+            self.logger.error(f"Failed to store data in table {table_name}: {e}")
             raise
         finally:
             session.close()
-
-
-__all__ = ["Database"]
+            self.logger.info(f"Data stored successfully in table {table_name}.")
