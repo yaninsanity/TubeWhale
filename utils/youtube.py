@@ -155,7 +155,7 @@ class YouTubeService:
                 raise Exception("All API keys have been exhausted due to quota limits.")
             # 将当前 key 从列表中移除
             bad_key = self.api_keys.pop(self.current_key_index)
-            self.logger.error(f"API key {bad_key} removed due to quota exceeded.")
+            self.logger.warning(f"API key {bad_key} removed due to quota exceeded.")
             if not self.api_keys:
                 raise Exception("All API keys exhausted after removal.")
             # 计算新的索引（取余）
