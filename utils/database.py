@@ -154,13 +154,23 @@ class Database:
             session.close()
 
     def should_update_video_metadata(self, video_id: str, period_days: int = 7) -> bool:
+        """
+        如果视频在 period_days 内已经更新过且已有 transcript 或 llm_summary，则跳过更新。
+        否则返回 True 允许更新。
+        """
         with self.get_session() as session:
             video = session.query(Video).filter(Video.video_id == video_id).first()
             if video and video.timestamp:
                 last_update = datetime.strptime(video.timestamp, '%Y-%m-%d %H:%M:%S')
+                # 如果上次更新时间在 period_days 以内
                 if datetime.now() - last_update < timedelta(days=period_days):
-                    self.logger.info("Video %s updated on %s recently; skipping update.", video_id, video.timestamp)
-                    return False
+                    # 仅当已有 transcript 或 llm_summary 时才跳过
+                    if (video.transcript and video.transcript.strip()) or (video.llm_summary and video.llm_summary.strip()):
+                        self.logger.info(
+                            "Video %s updated on %s with existing summary; skipping update.",
+                            video_id, video.timestamp
+                        )
+                        return False
             return True
 
     def store_video_metadata(self, video_metadata: dict):

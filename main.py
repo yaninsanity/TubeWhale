@@ -58,8 +58,7 @@ def get_logger():
         logger.addHandler(console_handler)
 
         # 文件 handler
-        if not os.path.exists('logs'):
-            os.makedirs('logs')
+        os.makedirs('logs', exist_ok=True)
         timestamp = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
         log_filename = os.path.join('logs', f'{timestamp}.log')
         file_handler = logging.FileHandler(log_filename, mode='w', encoding='utf-8')
@@ -157,9 +156,18 @@ async def process_single_video(video, keyword, async_db: AsyncDatabase, persist_
             if transcript:
                 video['transcript'] = transcript
                 if not dry_run:
-                    prompt_text = transcript  # 可按需求构造更复杂的 prompt
-                    llm_summary = await gpt_summarizer_agent(transcript, openai_service=openai_service, logger=logger)
+                    prompt_text = transcript
+                    llm_summary = await gpt_summarizer_agent(transcript, service=openai_service, logger=logger)
                     video['llm_summary'] = llm_summary
+
+                    # —— 立即存一份到 transcripts 表 —— 
+                    if persist_summaries:
+                        await async_db.store_transcript_summary(
+                            video_id,
+                            transcript,
+                            llm_summary
+                        )
+
                     await async_db.store_ai_interaction(
                         input_data={"prompt": prompt_text},
                         output_data={"response": llm_summary},
@@ -173,7 +181,6 @@ async def process_single_video(video, keyword, async_db: AsyncDatabase, persist_
                 logger.info(f"[{video_id}] Transcript and LLM summary obtained.")
             else:
                 logger.info(f"[{video_id}] No transcript available.")
-
             # Step 3: 异步获取评论（并行执行）
             step = "fetch_comments"
             logger.info(f"[{video_id}] Fetching comments asynchronously.")
@@ -200,17 +207,47 @@ async def process_single_video(video, keyword, async_db: AsyncDatabase, persist_
             if full_audio_analysis:
                 step = "audio_analysis"
                 logger.info(f"[{video_id}] Audio analysis enabled.")
-                audio_agent = AudioProcessingAgent(openai_service=openai_service, youtube_service=youtube_service, logger=logger)
-                if not dry_run:
-                    audio_summary = await audio_agent.download_audio(video_id)
-                else:
-                    audio_summary = "Dummy audio summary in dry_run."
+                # 1) Whisper 整段转录
+                try:
+                    transcript_audio = await run_transcript(video_id, openai_service, youtube_service, logger=logger)
+                except Exception as e:
+                    logger.error(f"[{video_id}] Whisper transcription failed: {e}")
+                    transcript_audio = None
+
+                # 2) LLM 摘要
+                audio_summary = None
+                if transcript_audio:
+                    try:
+                        audio_summary = await gpt_summarizer_agent(
+                            transcript_audio,
+                            service=openai_service,
+                            logger=logger
+                        )
+                    except Exception as e:
+                        logger.error(f"[{video_id}] Audio summary generation failed: {e}")
+
+                # 3) 回退：逐块处理
+                if not audio_summary:
+                    agent = AudioProcessingAgent(
+                        openai_service=openai_service,
+                        youtube_service=youtube_service,
+                        logger=logger
+                    )
+                    try:
+                        audio_summary = await agent.process_video_audio(
+                            video_id=video_id,
+                            topic=keyword,
+                            metadata={"title": video_metadata.get("title", "")}
+                        )
+                    except Exception as e:
+                        logger.error(f"[{video_id}] Chunked audio analysis failed: {e}")
+
                 if audio_summary:
                     video['audio_summary'] = audio_summary
                     video['summary_source'] = video.get('summary_source', '') + ', audio'
                     logger.info(f"[{video_id}] Audio summary obtained.")
                 else:
-                    logger.error(f"[{video_id}] Audio summarization failed.")
+                    logger.error(f"[{video_id}] Audio analysis produced no summary.")
             else:
                 logger.info(f"[{video_id}] Audio analysis disabled.")
 
@@ -233,9 +270,11 @@ async def process_single_video(video, keyword, async_db: AsyncDatabase, persist_
                 except Exception as e:
                     logger.error(f"[{video_id}] Audio summary standardization error: {e}")
                     video['standardized_audio_summary'] = video.get('audio_summary', '')
-            summary_text = (video.get('standardized_audio_summary') or 
-                            video.get('standardized_summary') or 
-                            video.get('llm_summary', ''))
+            summary_text = (
+                video.get('standardized_audio_summary')
+                or video.get('standardized_summary')
+                or video.get('llm_summary', '')
+            )
             video['final_summary'] = summary_text
 
             # Step 6: 更新数据库记录
@@ -263,14 +302,11 @@ async def process_videos(keyword, top_k, youtube_service, openai_api_key, db_pat
     if dry_run:
         logger.info("Dry run mode: external API calls and DB writes are skipped.")
 
-    # 初始化数据库包装器（非 dry_run 模式下）
     async_db = AsyncDatabase(Database(db_path, logger=logger)) if not dry_run else None
-
-    # 创建退出事件并启动监听任务
     exit_event = asyncio.Event()
     exit_listener = asyncio.create_task(listen_for_exit(exit_event))
 
-    processed_videos = []  # 保存处理过的视频信息
+    processed_videos = []
     tasks = []
 
     try:
@@ -278,6 +314,7 @@ async def process_videos(keyword, top_k, youtube_service, openai_api_key, db_pat
         openai_service = OpenAIService(api_key=openai_api_key, logger=logger)
         standardizer_agent = StandardizerAgent(openai_service=openai_service, logger=logger)
         search_agent = SearchAgent(youtube_service, openai_service=openai_service, logger=logger)
+
         aggregated = await search_agent.aggregate_search(keyword)
         if asyncio.iscoroutine(aggregated):
             aggregated = await aggregated
@@ -308,7 +345,6 @@ async def process_videos(keyword, top_k, youtube_service, openai_api_key, db_pat
             await async_db.close()
         await exit_listener
 
-        # 生成处理报告
         report = {
             "processed_videos": len(processed_videos),
             "video_ids": [video.get('video_id') for video in processed_videos],
@@ -317,6 +353,7 @@ async def process_videos(keyword, top_k, youtube_service, openai_api_key, db_pat
             "total_cost": openai_service.total_cost if openai_service else 0.0,
             "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
+        os.makedirs('logs', exist_ok=True)
         report_file = os.path.join("logs", f"report_{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.json")
         with open(report_file, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=4)
@@ -336,7 +373,6 @@ if __name__ == "__main__":
         logger.error(f"Configuration error: {e}")
         sys.exit(1)
 
-    # 提取配置
     keyword = config_obj.KEYWORD
     openai_api_key = config_obj.OPENAI_API_KEY
     db_path = config_obj.DB_PATH

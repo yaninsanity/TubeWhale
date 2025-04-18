@@ -74,7 +74,7 @@ prompts:
       and YouTube search optimization. Your task is to generate creative, innovative, and highly
       relevant keyword variations that capture diverse search intents for a given base keyword.
     user: |
-      Given the base keyword '{{ base_keyword }}' and the maximum number of variations {{ max_n }},
+      Given the base keyword '{ base_keyword }' and the maximum number of variations { max_n },
       generate a list of unique and SEO-optimized keyword variations.
       Each variation should be concise, descriptive, and written on a separate line without any numbering.
       Ensure that the output is actionable for discovering trending YouTube videos.
@@ -87,8 +87,8 @@ prompts:
     user: |
       Based on the text provided below and considering the previous summary (if any), produce a refined
       and concise summary. Focus on highlighting the most important insights and actionable steps.
-      Previous Summary: "{{ previous_summary }}"
-      Text: "{{ text }}"
+      Previous Summary: "{ previous_summary }"
+      Text: "{ text }"
       Your summary should be engaging, clear, and directly useful for guide production.
 
   structured_output:
@@ -97,16 +97,16 @@ prompts:
       into a standardized JSON format. Your output must strictly adhere to the schema provided.
     user: |
       Convert the following text into a structured JSON output following exactly this schema:
-      {
+      {{
         "main_topic": "N/A",
         "key_insights": "N/A",
         "recommended_tools": "N/A",
         "best_practices": "N/A",
         "challenges_and_advice": "N/A"
-      }
+      }}
       Each field should be populated with concise and informative content derived from the text.
-      Text: "{{ text }}"
+      Text: "{text}"
 
   default:
     system: "You are a versatile assistant capable of handling a wide range of tasks with clarity and efficiency."
-    user: "{{ input }}"
+    user: "{ input }"

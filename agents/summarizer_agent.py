@@ -1,292 +1,194 @@
 #!/usr/bin/env python3
-import logging
-import json
 import asyncio
+import json
+import logging
 import re
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from tqdm import tqdm
 from utils.openAIServices import OpenAIService
-from utils.helper import async_retry  # Assume async_retry decorator is implemented
 
-# Fixed JSON template for final summary validation
-JSON_TEMPLATE = {
+# 最终 JSON 架构
+JSON_TEMPLATE: Dict[str, str] = {
     "main_topic": "N/A",
     "key_insights": "N/A",
     "recommended_tools": "N/A",
     "best_practices": "N/A",
-    "challenges_and_advice": "N/A"
+    "challenges_and_advice": "N/A",
 }
 
-def dynamic_chunk_text(text: str, target_chunk_size: int = 2000, overlap_ratio: float = 0.1) -> List[str]:
+
+def dynamic_chunk_text(
+    text: str,
+    target_chunk_size: int = 2000,
+    overlap_ratio: float = 0.1
+) -> List[str]:
     """
-    Dynamically chunk text:
-      1. Split text by newline.
-      2. Merge paragraphs into chunks roughly target_chunk_size characters.
-      3. Retain an overlap (overlap_ratio) between chunks to ensure context continuity.
-      
-    If the text contains only one paragraph that exceeds target_chunk_size, split it into fixed-size
-    chunks with the specified overlap.
+    按段落智能切分文本，若单段过长则滑窗切分。
     """
     text = text.strip()
     if not text:
         return []
-    paragraphs = re.split(r'\n+', text)
-    # Handle the case where there is only one very long paragraph.
-    if len(paragraphs) == 1 and len(paragraphs[0]) > target_chunk_size:
-        long_text = paragraphs[0]
+    paras = re.split(r'\n+', text)
+    # 单段过长
+    if len(paras) == 1 and len(paras[0]) > target_chunk_size:
+        long = paras[0]
+        ov = int(target_chunk_size * overlap_ratio)
         chunks = []
-        overlap = int(target_chunk_size * overlap_ratio)
-        start = 0
-        while start < len(long_text):
-            end = start + target_chunk_size
-            chunks.append(long_text[start:end])
-            start = end - overlap  # move back by overlap
-        logging.info(f"Dynamic chunking (single long paragraph) produced {len(chunks)} chunks.")
+        i = 0
+        while i < len(long):
+            chunks.append(long[i : i + target_chunk_size])
+            i += target_chunk_size - ov
+        logging.info(f"[Chunk] single-paragraph → {len(chunks)} chunks")
         return chunks
 
+    # 多段合并
     chunks = []
-    current_chunk = ""
-    for para in paragraphs:
-        if not current_chunk:
-            current_chunk = para
-            continue
-        tentative = current_chunk + "\n" + para
-        if len(tentative) < target_chunk_size:
-            current_chunk = tentative
+    buffer = ""
+    for p in paras:
+        if not buffer:
+            buffer = p
+        elif len(buffer) + len(p) + 1 <= target_chunk_size:
+            buffer += "\n" + p
         else:
-            if current_chunk.strip():
-                chunks.append(current_chunk)
-            overlap_length = int(len(current_chunk) * overlap_ratio)
-            if overlap_length > 0:
-                current_chunk = current_chunk[-overlap_length:] + "\n" + para
-            else:
-                current_chunk = para
-    if current_chunk.strip():
-        chunks.append(current_chunk)
-    logging.info(f"Dynamic chunking produced {len(chunks)} chunks (target ~{target_chunk_size} chars, overlap_ratio {overlap_ratio}).")
+            chunks.append(buffer)
+            ov = int(len(buffer) * overlap_ratio)
+            buffer = (buffer[-ov:] + "\n" + p) if ov else p
+    if buffer:
+        chunks.append(buffer)
+    logging.info(f"[Chunk] paragraph-based → {len(chunks)} chunks")
     return chunks
 
-# Alias for compatibility with tests.
-chunk_text_by_tokens = dynamic_chunk_text
-
-def safe_format_prompt(prompt_template: str, variables: Dict[str, Any]) -> str:
-    """
-    Safely format a prompt template. If a key (such as previous_summary) is missing,
-    a default value is provided to prevent formatting exceptions.
-    """
-    vars_copy = variables.copy()
-    if "previous_summary" not in vars_copy:
-        vars_copy["previous_summary"] = ""
-    try:
-        formatted = prompt_template.format(**vars_copy)
-    except Exception as e:
-        logging.error(f"Error formatting prompt with variables {vars_copy}: {e}")
-        formatted = f"Previous Summary: {vars_copy.get('previous_summary','')}\nText: {vars_copy.get('text','')}"
-    return formatted
 
 class SummarizerAgent:
     """
-    SummarizerAgent generates summaries for long texts. Its main functions are:
-      1. Dynamically chunking text (with configurable target size and overlap).
-      2. Concurrently calling the OpenAI API to summarize each chunk (using async_retry).
-      3. Merging all chunk summaries and validating the format (must match the fixed JSON template);
-         if invalid, reformatting is performed.
-      4. Optionally logging each chunk and the final summary into a database.
-      5. Displaying progress via tqdm.
+    SummarizerAgent：对长文本分块摘要 + 合并 + 严格 JSON 结构化输出
     """
-    def __init__(self, openai_service: OpenAIService, enable_chunking: bool = True,
-                 debug_mode: bool = False, db: Optional[Any] = None, concurrency: int = 5,
-                 target_chunk_size: int = 2000, overlap_ratio: float = 0.1,
-                 logger: Optional[logging.Logger] = None):
-        self.openai_service = openai_service
-        self.enable_chunking = enable_chunking
-        self.debug_mode = debug_mode
-        self.db = db
+
+    def __init__(
+        self,
+        service: OpenAIService,
+        *,
+        concurrency: int = 5,
+        target_chunk_size: int = 2000,
+        overlap_ratio: float = 0.1,
+        max_rounds: int = 1,
+        logger: Optional[logging.Logger] = None,
+    ):
+        self.service = service
         self.concurrency = concurrency
         self.target_chunk_size = target_chunk_size
         self.overlap_ratio = overlap_ratio
+        self.max_rounds = max_rounds
         self.logger = logger or logging.getLogger(__name__)
 
-    def chunk_text(self, text: str) -> List[str]:
-        chunks = dynamic_chunk_text(text, target_chunk_size=self.target_chunk_size,
-                                    overlap_ratio=self.overlap_ratio)
-        if self.debug_mode:
-            self.logger.debug(f"Chunk lengths: {[len(chunk) for chunk in chunks]}")
-        return chunks
+    async def summarize(
+        self,
+        text: str,
+        *,
+        model: Optional[str] = None,
+        summarization_prompt: str = "summarization",
+        output_prompt: str = "structured_output",
+    ) -> str:
+        if not text.strip():
+            raise ValueError("No text provided for summarization.")
 
-    @async_retry(max_retries=3, delay=2)
-    async def summarize_chunk(self, chunk: str, previous_summary: str = "", 
-                                model: str = "gpt-4o-mini", prompt_name: str = "summarization") -> str:
-        """
-        Call the OpenAI API to summarize a single chunk.
-        Uses safe_format_prompt to ensure the prompt format is correct.
-        If retries fail, returns an empty string.
-        """
-        if model not in self.openai_service.models:
-            fallback = self.openai_service.default_model
-            self.logger.warning(f"Model '{model}' not configured. Falling back to default '{fallback}'.")
-            model = fallback
+        model = model or self.service.default_model  # type: ignore
+        self.logger.info("▶ Begin summarization workflow")
 
-        prompt_template = self.openai_service.get_prompt(prompt_name, variables={})
-        variables = {
-            "text": chunk,
-            "previous_summary": previous_summary
-        }
-        formatted_prompt = safe_format_prompt(prompt_template, variables)
-        if self.debug_mode:
-            self.logger.debug(f"Chunk prompt (first 150 chars): {formatted_prompt[:150]}")
+        # 支持多轮递归摘要
+        previous_summary = ""
+        merged = text
+        for rnd in range(self.max_rounds):
+            chunks = dynamic_chunk_text(merged, self.target_chunk_size, self.overlap_ratio)
+            self.logger.info(f"  • Round {rnd+1}: split into {len(chunks)} chunks")
+
+            sem = asyncio.Semaphore(self.concurrency)
+            async def worker(idx: int, chunk: str):
+                async with sem:
+                    try:
+                        out = await asyncio.to_thread(
+                            lambda: self.service.completion(
+                                model=model,
+                                prompt_template=summarization_prompt,
+                                template_vars={"text": chunk, "previous_summary": previous_summary},
+                            )
+                        )
+                        return idx, out.strip()
+                    except Exception as e:
+                        self.logger.error(f"    ✗ Chunk {idx+1} failed: {e}")
+                        return idx, ""
+
+            tasks = [asyncio.create_task(worker(i, c)) for i, c in enumerate(chunks)]
+            results = [""] * len(chunks)
+            for t in tqdm(asyncio.as_completed(tasks), total=len(tasks), desc="Summarizing chunks"):
+                i, summ = await t
+                results[i] = summ
+
+            merged = "\n".join(results)
+            self.logger.info(f"  • Round {rnd+1} merged summaries")
+            previous_summary = merged
+            if self.max_rounds == 1:
+                break
+
+        # 最终结构化 JSON 输出
+        return await self._to_structured_json(merged, model, output_prompt)
+
+    async def _to_structured_json(
+        self, merged: str, model: str, output_prompt: str
+    ) -> str:
         try:
-            response_text = self.openai_service.completion(prompt=formatted_prompt, model=model)
-            response_text = response_text.strip()
-            self.logger.info(f"Chunk summarized (first 100 chars): {response_text[:100]}")
-            return response_text
-        except Exception as e:
-            self.logger.error(f"Error summarizing chunk: {e}")
-            return ""
-
-    def merge_summaries(self, summaries: List[str]) -> str:
-        merged = "\n".join(summaries)
-        self.logger.info("Merged individual chunk summaries.")
-        return merged
-
-    def validate_json_output(self, text: str) -> Optional[Dict[str, Any]]:
-        try:
-            data = json.loads(text)
-            # Ensure all keys in the JSON template exist.
-            for key, default in JSON_TEMPLATE.items():
-                if key not in data:
-                    data[key] = default
-            return data
+            data = json.loads(merged)
+            self.logger.info("  ✓ merged is valid JSON")
         except json.JSONDecodeError:
-            self.logger.error("Final merged summary is not valid JSON.")
-            return None
-
-    async def reformat_summary_as_json(self, merged_summary: str, model: str = "gpt-4o-mini") -> str:
-        """
-        If the merged summary cannot be parsed as JSON, reformat it using OpenAI.
-        """
-        fallback_template = ("Reformat the following summary into a JSON object with keys: {keys}.\n"
-                             "Summary: {summary}")
-        variables = {
-            "keys": list(JSON_TEMPLATE.keys()),
-            "summary": merged_summary
-        }
-        formatted_prompt = safe_format_prompt(fallback_template, variables)
-        if self.debug_mode:
-            self.logger.debug(f"Reformat prompt (first 150 chars): {formatted_prompt[:150]}")
-        try:
-            reformatted = self.openai_service.completion(prompt=formatted_prompt, model=model)
-            reformatted = reformatted.strip()
-            self.logger.info(f"Reformatted summary (first 100 chars): {reformatted[:100]}")
-            return reformatted
-        except Exception as e:
-            self.logger.error(f"Error reformatting summary: {e}")
-            return merged_summary
-
-    async def _process_chunk(self, idx: int, chunk: str, model: str,
-                               prompt_name: str, semaphore: asyncio.Semaphore) -> (int, str):
-        """
-        Internal method: Process a single chunk under semaphore control, call summarize_chunk,
-        and log the result into the database if provided.
-        """
-        async with semaphore:
-            summary = await self.summarize_chunk(chunk, previous_summary="", model=model, prompt_name=prompt_name)
-            if self.db:
-                record = {
-                    "process": "chunk_summary",
-                    "chunk_index": idx + 1,
-                    "summary": summary,
-                    "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                }
-                try:
-                    if hasattr(self.db, "store_data_async"):
-                        await self.db.store_data_async("summarization_logs", record)
-                    else:
-                        await asyncio.to_thread(self.db.store_data, "summarization_logs", record)
-                    self.logger.info(f"Chunk {idx+1} summary stored in DB.")
-                except Exception as db_e:
-                    self.logger.error(f"DB error for chunk {idx+1}: {db_e}")
-            return idx, summary
-
-    async def summarize(self, long_text: str, model: str = "gpt-4o-mini",
-                        prompt_name: str = "summarization") -> str:
-        """
-        Overall summarization workflow:
-          1. Dynamically chunk the long text (if enabled, otherwise use the whole text).
-          2. Concurrently call summarize_chunk for each chunk, displaying progress via tqdm.
-          3. Merge all chunk summaries and try to parse as JSON; if parsing fails, reformat.
-          4. Log the final summary in the database (if provided) and return the JSON-formatted summary.
-        """
-        if not long_text:
-            self.logger.error("No text provided for summarization.")
-            return ""
-        self.logger.info("Starting summarization process.")
-        chunks = self.chunk_text(long_text) if self.enable_chunking else [long_text]
-        semaphore = asyncio.Semaphore(self.concurrency)
-        tasks = [self._process_chunk(idx, chunk, model, prompt_name, semaphore)
-                 for idx, chunk in enumerate(chunks)]
-        results = [None] * len(tasks)
-        for future in tqdm(asyncio.as_completed(tasks), total=len(tasks), desc="Summarizing chunks"):
-            idx, summary = await future
-            results[idx] = summary
-
-        merged = self.merge_summaries(results)
-        validated = self.validate_json_output(merged)
-        if validated is None:
-            self.logger.info("Merged summary not valid JSON, attempting reformat...")
-            reformatted = await self.reformat_summary_as_json(merged, model=model)
-            validated = self.validate_json_output(reformatted)
-            final_summary = json.dumps(validated, ensure_ascii=False, indent=2) if validated else merged
-        else:
-            final_summary = json.dumps(validated, ensure_ascii=False, indent=2)
-        self.logger.info("Final summarization process completed.")
-        if self.db:
-            final_record = {
-                "process": "final_summary",
-                "summary": final_summary,
-                "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            }
+            self.logger.warning("  ⚠ merged not valid JSON → calling structured_output prompt")
+            formatted = await asyncio.to_thread(
+                lambda: self.service.completion(
+                    model=model,
+                    prompt_template=output_prompt,
+                    template_vars={"text": merged},
+                )
+            )
             try:
-                if hasattr(self.db, "store_data_async"):
-                    await self.db.store_data_async("summarization_logs", final_record)
-                else:
-                    await asyncio.to_thread(self.db.store_data, "summarization_logs", final_record)
-                self.logger.info("Final summary stored in DB.")
-            except Exception as db_e:
-                self.logger.error(f"DB error for final summary: {db_e}")
-        return final_summary
+                data = json.loads(formatted)
+                self.logger.info("  ✓ structured_output produced valid JSON")
+            except json.JSONDecodeError as e:
+                self.logger.error(f"  ✗ structured_output JSON parse failed: {e}")
+                return merged
+
+        for k, v in JSON_TEMPLATE.items():
+            data.setdefault(k, v)
+        final = json.dumps(data, ensure_ascii=False, indent=2)
+        self.logger.info("▶ Summarization completed")
+        return final
+
 
 def gpt_summarizer_agent(
-    long_text: str, *,
-    model: str = "gpt-4o-mini",
-    openai_service: Optional[OpenAIService] = None,
-    enable_chunking: bool = True,
-    debug_mode: bool = False,
-    prompt_name: str = "summarization",
-    db: Optional[Any] = None,
+    long_text: str,
+    *,
+    service: OpenAIService,
+    model: Optional[str] = None,
+    summarization_prompt: str = "summarization",
+    output_prompt: str = "structured_output",
     concurrency: int = 5,
     target_chunk_size: int = 2000,
     overlap_ratio: float = 0.1,
-    logger: Optional[logging.Logger] = None
+    max_rounds: int = 1,
+    logger: Optional[logging.Logger] = None,
 ) -> asyncio.Future:
-    """
-    Factory function: constructs a SummarizerAgent instance and asynchronously calls summarize
-    to generate the final summary.
-    """
-    if openai_service is None:
-        raise ValueError("An OpenAIService instance must be provided.")
     agent = SummarizerAgent(
-        openai_service=openai_service,
-        enable_chunking=enable_chunking,
-        debug_mode=debug_mode,
-        db=db,
+        service,
         concurrency=concurrency,
         target_chunk_size=target_chunk_size,
         overlap_ratio=overlap_ratio,
-        logger=logger
+        max_rounds=max_rounds,
+        logger=logger,
     )
-    return asyncio.ensure_future(agent.summarize(long_text, model=model, prompt_name=prompt_name))
-
-__all__ = ["SummarizerAgent", "gpt_summarizer_agent", "dynamic_chunk_text", "chunk_text_by_tokens"]
+    return asyncio.ensure_future(
+        agent.summarize(
+            long_text,
+            model=model,
+            summarization_prompt=summarization_prompt,
+            output_prompt=output_prompt,
+        )
+    )
