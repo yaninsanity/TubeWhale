@@ -12,5 +12,11 @@ youtube_dl
 yt-dlp
 pydub
 aiolimiter
-audioop-lts
+pytest
 # sqlite3-rich 
+pytest-asyncio
+sqlalchemy
+pytube
+browser_cookie3
+ffmpeg
+yt_dlp

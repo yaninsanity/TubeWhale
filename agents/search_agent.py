@@ -1,555 +1,270 @@
-import logging
+#!/usr/bin/env python3
 import asyncio
-import ssl
-from openai import AsyncOpenAI
-from googleapiclient.errors import HttpError
-from utils.youtube_api import get_youtube_service
-from utils.database import store_ai_interaction
+import logging
 from datetime import datetime
-from ssl import SSLError
-from concurrent.futures import ThreadPoolExecutor
-from asyncio import Semaphore
-from aiolimiter import AsyncLimiter
-import json
-import sys
-import os
+from typing import Dict, Any, Optional, List
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-)
+# 假设 YouTubeService 与 OpenAIService 已经实现
+from utils.openAIServices import OpenAIService
+from utils.youtube import YouTubeService
 
-# Load environment variables from .env file
-from dotenv import load_dotenv
-load_dotenv()
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
-# Load YouTube API key
-youtube_api_key = os.getenv("YOUTUBE_API_KEY")
-if not youtube_api_key:
-    logging.error("YouTube API key not found. Please set YOUTUBE_API_KEY in your environment variables.")
-    sys.exit(1)
-
-# Load OpenAI API key
-openai_api_key = os.getenv("OPENAI_API_KEY")
-if not openai_api_key:
-    logging.error("OpenAI API key not found. Please set OPENAI_API_KEY in your environment variables.")
-    sys.exit(1)
-
-# -- SSL Self-Healing Globals --
-openai_unverified = False
-youtube_unverified = False
-
-# Initialize OpenAI client
-aclient = AsyncOpenAI(api_key=openai_api_key)
-
-# Initialize single YouTube Data API client (may rebuild on SSL error)
-youtube_service = get_youtube_service(youtube_api_key)
-
-# ---------------------------
-# Initialize ThreadPoolExecutor with a limited number of workers
-# ---------------------------
-# Read SEARCH_CONCURRENCY from .env（Default 3）
-SEARCH_CONCURRENCY = int(os.getenv("SEARCH_CONCURRENCY", "3"))
-semaphore = Semaphore(SEARCH_CONCURRENCY)
-
-# Read From .ENV (default 3）
-EXECUTOR_MAX_WORKERS = int(os.getenv("SEARCH_EXECUTOR_MAX_WORKERS", "3"))
-executor = ThreadPoolExecutor(max_workers=EXECUTOR_MAX_WORKERS)
-
-# Rate limiter (e.g., max 15 requests per second)
-rate_limiter = AsyncLimiter(max_rate=15, time_period=1)
-
-# Flag to indicate if quota is exceeded
-quota_exceeded = False
-
-# ---------------------------
-# Helper: Build an unverified YouTube service for SSL fallback
-# ---------------------------
-from googleapiclient.discovery import build
-from googleapiclient.http import build_http
-
-def build_unverified_youtube_service(api_key):
-    # WARNING: disabling SSL verification is insecure.
-    # Only use as a last resort fallback.
-    unverified_context = ssl._create_unverified_context()
-    http = build_http()
-    http.ssl_context = unverified_context
-    logging.warning("Using unverified SSL context for YouTube. This is insecure.")
-    return build("youtube", "v3", developerKey=api_key, http=http)
-
-# ---------------------------
-# Helper: Turn off OpenAI SSL verification (Insecure fallback)
-# ---------------------------
-import openai
-
-def disable_openai_ssl_verification():
-    global openai_unverified
-    openai.verify_ssl = False
-    openai_unverified = True
-    logging.warning("Disabled OpenAI SSL verification. This is insecure.")
-
-# Retry decorator with exponential backoff
-def retry(max_retries=3, delay=2, backoff_factor=2, exceptions=(Exception,)):
-    def decorator(func):
-        async def wrapper(*args, **kwargs):
-            current_delay = delay
-            for attempt in range(1, max_retries + 1):
-                try:
-                    return await func(*args, **kwargs)
-                except exceptions as e:
-                    # Special handling for HttpError
-                    if isinstance(e, HttpError):
-                        error_content = e.content.decode('utf-8') if e.content else 'No content'
-                        if 'quotaExceeded' in str(e):
-                            logging.error(f"Quota exceeded: {error_content}")
-                            raise e  # Stop further processing
-                    if attempt == max_retries:
-                        logging.error(f"Error in {func.__name__}: {e}. Exceeded maximum retries.")
-                        raise
-                    else:
-                        logging.warning(f"Error in {func.__name__}: {e}. Retrying {attempt}/{max_retries} after {current_delay} seconds...")
-                        await asyncio.sleep(current_delay)
-                        current_delay *= backoff_factor
-        return wrapper
-    return decorator
-
-@retry(max_retries=3, delay=2, backoff_factor=2, exceptions=(Exception,))
-async def keyword_generator_agent(base_keyword, max_n, api_key, conn=None):
+class SearchAgent:
     """
-    Generate keyword variations using OpenAI's API.
-
-    Parameters:
-        base_keyword (str): The base keyword for generating variations.
-        max_n (int): Maximum number of keyword variations to generate.
-        api_key (str): OpenAI API key.
-        conn (optional): Database connection object.
-
-    Returns:
-        list: List of generated keyword variations.
+    SearchAgent 负责协调 YouTube 搜索与 OpenAI 文本生成，提供如下功能：
+      1. 关键词生成：根据用户输入生成多个关键词变体（Brainstorm）。
+      2. 聚合搜索：对每个关键词调用 YouTubeService 搜索视频，结果以字典形式存储（keyword -> [results]）。
+      3. 结果去重：将各关键词搜索结果合并后，基于 video_id 去重，并累计各关键词返回数量作为权重。
+      4. 结果精炼：对去重后的结果进行排序（先按权重，再按发布时间）。
+      5. 摘要生成：调用 OpenAIService 的异步接口生成聚合结果摘要。
+      6. 结果记录：将搜索过程中的各个步骤记录到数据库（如 AI 交互记录、搜索日志）。
     """
-    logging.info(f"Generating up to {max_n} variations for base keyword: '{base_keyword}'")
 
-    global openai_unverified
-
-    try:
-        # Define system prompt and user message
-        messages = [
-            {"role": "system", "content": (
-                "You are a domain expert specializing in professional problem-solving and brainstorming. "
-                "Generate relevant and highly accurate keyword variations for the domain-specific keyword provided."
-            )},
-            {"role": "user", "content": (
-                f"Generate up to {max_n} relevant keyword variations for the base keyword '{base_keyword}' "
-                f"to search for high topic-related YouTube videos. Provide each keyword on a separate line without numbering."
-            )}
-        ]
-
-        logging.info(f"Sending prompt to OpenAI API for keyword generation.")
-
-        # Local fallback attempt if we get SSLError
-        attempt_done = False
-        while not attempt_done:
-            try:
-                response = await aclient.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=messages,
-                    max_tokens=150,
-                    temperature=0.7
-                )
-                attempt_done = True
-            except SSLError as ssl_err:
-                logging.error(f"SSL error when communicating with OpenAI: {ssl_err}")
-                # If we haven't disabled SSL yet for openAI, do so and retry
-                if not openai_unverified:
-                    disable_openai_ssl_verification()
-                else:
-                    # Already disabled, still failing -> raise
-                    raise
-
-        content = response.choices[0].message.content.strip()
-        generated_keywords = content.split("\n")
-        generated_keywords = list(set(filter(None, (kw.strip() for kw in generated_keywords))))
-        generated_keywords = generated_keywords[:max_n]
-
-        logging.info(f"Generated {len(generated_keywords)} keyword variations: {generated_keywords}")
-
-        # Record AI interaction to the database if connection is provided
-        if conn:
-            store_ai_interaction(
-                conn,
-                "\n".join([msg['content'] for msg in messages]),  # Input
-                "\n".join(generated_keywords),  # Output
-                "keyword_generation",  # Interaction type
-                datetime.utcnow()  # Timestamp
-            )
-            logging.info(f"AI interaction of type 'keyword_generation' stored successfully.")
-
-        return generated_keywords
-
-    except Exception as e:
-        logging.error(f"Error generating keywords with OpenAI: {e}")
-        logging.exception(e)
-        return [base_keyword]  # Fallback to base keyword in case of error
-
-@retry(max_retries=3, delay=5, backoff_factor=2, exceptions=(SSLError, asyncio.TimeoutError))
-async def search_youtube_videos(keyword, youtube_api_key, top_k, timeout=30):
-    """
-    Search YouTube for videos matching the given keyword.
-
-    Parameters:
-        keyword (str): The search keyword.
-        youtube_api_key (str): YouTube Data API key.
-        top_k (int): Maximum number of videos to retrieve.
-        timeout (int): Timeout for each API call in seconds.
-
-    Returns:
-        list: List of video details dictionaries.
-    """
-    global quota_exceeded, youtube_service, youtube_unverified
-    if quota_exceeded:
-        logging.error("Quota has been exceeded. Skipping further YouTube searches.")
-        return []
-
-    async with semaphore, rate_limiter:
-        youtube = youtube_service
-        logging.info(f"Fetching videos for keyword: '{keyword}' with top_k={top_k}")
-
-        videos = []
-        next_page_token = None
-        fetched_videos = 0
-        max_results_per_page = 50  # YouTube API maximum results per page
-
-        while fetched_videos < top_k and not quota_exceeded:
-            results = min(max_results_per_page, top_k - fetched_videos)
-
-            def make_search_request():
-                return youtube.search().list(
-                    part="snippet",
-                    q=keyword,
-                    maxResults=results,
-                    type='video',
-                    videoEmbeddable='true',
-                    videoSyndicated='true',
-                    pageToken=next_page_token
-                ).execute()
-
-            try:
-                search_response = await asyncio.wait_for(
-                    asyncio.get_event_loop().run_in_executor(executor, make_search_request),
-                    timeout=timeout
-                )
-            except asyncio.TimeoutError as e:
-                logging.warning(f"Timeout during search request for keyword '{keyword}': {e}")
-                logging.warning("This may be related to network issues or SSL certificate problems.")
-                raise e  # Will be caught by retry decorator
-            except SSLError as e:
-                logging.error(f"SSL error during search request for keyword '{keyword}': {e}")
-                logging.error("Attempting a fallback to an unverified SSL context.")
-                if not youtube_unverified:
-                    youtube_service = build_unverified_youtube_service(youtube_api_key)
-                    youtube_unverified = True
-                    youtube = youtube_service
-                    # Re-do this iteration immediately:
-                    continue
-                else:
-                    raise e
-            except HttpError as e:
-                error_content = e.content.decode('utf-8') if e.content else 'No content'
-                if 'quotaExceeded' in str(e):
-                    logging.error(f"Quota exceeded for YouTube API during search for keyword '{keyword}': {error_content}")
-                    quota_exceeded = True
-                    raise e  # Stop further processing
-                elif 'videoNotFound' in str(e):
-                    logging.error(f"One or more videos not found for keyword '{keyword}': {error_content}")
-                    return videos
-                else:
-                    logging.error(f"HTTP Error during search for keyword '{keyword}': {error_content}")
-                    return videos
-            except Exception as e:
-                logging.error(f"Unexpected error during search for keyword '{keyword}': {e}")
-                logging.exception(e)
-                return videos  # Return current videos even if an unexpected error occurs
-
-            # Parse search response
-            for item in search_response.get('items', []):
-                video_id = item['id'].get('videoId', '')
-                if video_id:
-                    video_data = {
-                        'video_id': video_id,
-                        'title': item['snippet'].get('title', 'N/A'),
-                        'description': item['snippet'].get('description', 'N/A'),
-                        'publish_time': item['snippet'].get('publishedAt', 'N/A'),
-                        'channel_title': item['snippet'].get('channelTitle', 'N/A')
-                    }
-                    videos.append(video_data)
-                    fetched_videos += 1
-
-                    if fetched_videos >= top_k:
-                        break
-
-            logging.info(f"Retrieved {len(videos)} videos so far for keyword: '{keyword}'")
-
-            # Check for next page
-            next_page_token = search_response.get('nextPageToken')
-            if not next_page_token:
-                logging.info("No more pages available.")
-                break
-
-        if not videos:
-            logging.warning(f"No videos found for keyword: '{keyword}'")
-
-        return videos
-
-@retry(max_retries=3, delay=5, backoff_factor=2, exceptions=(SSLError, asyncio.TimeoutError))
-async def get_videos_statistics(youtube_api_key, video_ids, timeout=30):
-    """
-    Fetch statistics for a list of YouTube video IDs.
-
-    Parameters:
-        youtube_api_key (str): YouTube Data API key.
-        video_ids (list): List of video IDs.
-        timeout (int): Timeout for each API call in seconds.
-
-    Returns:
-        dict: Mapping of video IDs to their statistics.
-    """
-    global quota_exceeded, youtube_service, youtube_unverified
-    if quota_exceeded:
-        logging.error("Quota has been exceeded. Skipping fetching video statistics.")
-        return {}
-
-    async with semaphore, rate_limiter:
-        youtube = youtube_service
-        logging.info(f"Fetching statistics for {len(video_ids)} videos.")
-
-        statistics_map = {}
-        batch_size = 50  # YouTube API limit per request
-
-        i = 0
-        while i < len(video_ids):
-            batch_ids = video_ids[i:i + batch_size]
-
-            def make_videos_request():
-                return youtube.videos().list(
-                    part="statistics,contentDetails",
-                    id=",".join(batch_ids)
-                ).execute()
-
-            try:
-                videos_response = await asyncio.wait_for(
-                    asyncio.get_event_loop().run_in_executor(executor, make_videos_request),
-                    timeout=timeout
-                )
-            except asyncio.TimeoutError as e:
-                logging.warning(f"Timeout during videos.list request for batch {batch_ids}: {e}")
-                logging.warning("This may be related to network issues or SSL certificate problems.")
-                raise e  # Will be caught by retry decorator
-            except SSLError as e:
-                logging.error(f"SSL error during videos.list request for batch {batch_ids}: {e}")
-                logging.error("Attempting fallback to unverified SSL context.")
-                if not youtube_unverified:
-                    youtube_service = build_unverified_youtube_service(youtube_api_key)
-                    youtube_unverified = True
-                    youtube = youtube_service
-                    continue  # re-try this batch
-                else:
-                    raise e
-            except HttpError as e:
-                error_content = e.content.decode('utf-8') if e.content else 'No content'
-                if 'quotaExceeded' in str(e):
-                    logging.error(f"Quota exceeded for YouTube API during videos.list request: {error_content}")
-                    quota_exceeded = True
-                    raise e  # Stop further processing
-                elif 'videoNotFound' in str(e):
-                    logging.error(f"One or more videos not found during videos.list request: {error_content}")
-                    i += batch_size  # skip this batch
-                    continue
-                else:
-                    logging.error(f"HTTP Error during videos.list request: {error_content}")
-                    i += batch_size  # skip this batch
-                    continue
-            except Exception as e:
-                logging.error(f"Unexpected error during videos.list request for batch {batch_ids}: {e}")
-                logging.exception(e)
-                i += batch_size  # skip this batch
-                continue
-
-            # Parse videos_response
-            for video in videos_response.get('items', []):
-                vid = video.get('id')
-                statistics = video.get('statistics', {})
-                content_details = video.get('contentDetails', {})
-                try:
-                    statistics_map[vid] = {
-                        'view_count': int(statistics.get('viewCount', 0)),
-                        'like_count': int(statistics.get('likeCount', 0)),
-                        'comment_count': int(statistics.get('commentCount', 0)),
-                        'duration': content_details.get('duration', 'N/A')
-                    }
-                except ValueError as ve:
-                    logging.error(f"ValueError while parsing statistics for video '{vid}': {ve}")
-                except Exception as ex:
-                    logging.error(f"Unexpected error while parsing statistics for video '{vid}': {ex}")
-
-            i += batch_size
-
-        logging.info(f"Fetched statistics for {len(statistics_map)} videos.")
-        return statistics_map
-
-def aggregate_video_metadata(videos):
-    """
-    Aggregate metadata from a list of videos.
-
-    Parameters:
-        videos (list): List of video dictionaries with metadata.
-
-    Returns:
-        dict: Aggregated metadata including total and average views, likes, and comments.
-    """
-    logging.info("Aggregating video metadata.")
-
-    if not videos:
-        logging.warning("No videos available for aggregation.")
-        return {
-            'total_views': 0,
-            'total_likes': 0,
-            'total_comments': 0,
-            'average_views': 0,
-            'average_likes': 0,
-            'average_comments': 0
+    def __init__(
+        self,
+        youtube_service: YouTubeService,
+        openai_service: OpenAIService,
+        db: Optional[Any] = None,  # 支持异步数据库对象
+        settings: Optional[Dict[str, Any]] = None,
+        logger: Optional[logging.Logger] = None
+    ):
+        self.youtube_service = youtube_service
+        self.openai_service = openai_service
+        self.db = db
+        self.settings = settings or {
+            "default_filter": {"videoEmbeddable": "true", "videoSyndicated": "true"},
+            "max_results": 10,
+            "enable_brainstorm": True,
+            "brainstorm_prompt_template": "keyword_generation",
+            "max_keywords": 5,
+            "enable_refine": True,
+            "order_by": "weight",
+            "order_direction": "desc",
+            "enable_optimization": True,
+            "enable_summary": True,
         }
+        self._last_search_result: Optional[Dict[str, Any]] = None
+        self.logger = logger or self._get_default_logger()
+        self.logger.info("[SearchAgent] Initialized with settings: %s", self.settings)
 
-    total_views = sum(video.get('view_count', 0) for video in videos)
-    total_likes = sum(video.get('like_count', 0) for video in videos)
-    total_comments = sum(video.get('comment_count', 0) for video in videos)
-    num_videos = len(videos)
-
-    aggregated_metadata = {
-        'total_views': total_views,
-        'total_likes': total_likes,
-        'total_comments': total_comments,
-        'average_views': total_views // num_videos if num_videos > 0 else 0,
-        'average_likes': total_likes // num_videos if num_videos > 0 else 0,
-        'average_comments': total_comments // num_videos if num_videos > 0 else 0
-    }
-
-    logging.info(f"Aggregated metadata: {aggregated_metadata}")
-    return aggregated_metadata
-async def multiagent_search(base_keyword, max_n, top_k, youtube_api_key, openai_api_key, conn=None, dry_run=False, pure_youtube=False):
-    """
-    Perform a multi-agent search by generating keyword variations and searching YouTube for videos.
-
-    Parameters:
-        base_keyword (str): The base keyword for generating variations.
-        max_n (int): Maximum number of keyword variations to generate.
-        top_k (int): Maximum number of videos to retrieve per keyword.
-        youtube_api_key (str): YouTube Data API key.
-        openai_api_key (str): OpenAI API key.
-        conn (optional): Database connection object.
-        dry_run (bool): If True, skip API calls and data persistence.
-        pure_youtube (bool): If True，no brainstorm search mode。
-
-    Returns:
-        tuple: (generated_keywords, final_search_results)
-    """
-    logging.info(f"Starting multi-agent search for keyword: '{base_keyword}'")
-
-    if dry_run:
-        logging.info("Dry run mode enabled. Skipping API calls.")
-        return [], {}
-
-    # ★ 新增：如果是纯 YouTube 模式，直接使用基础关键词
-    if pure_youtube:
-        logging.info("Pure YouTube mode enabled. Skipping AI keyword generation.")
-        generated_keywords = [base_keyword]
-    else:
-        generated_keywords = await keyword_generator_agent(base_keyword, max_n, openai_api_key, conn)
-
-    if not generated_keywords:
-        logging.error("No keywords generated.")
-        return [], {}
-
-    search_results = {}
-    all_videos = []
-
-    # Step 2: Perform YouTube searches concurrently
-    tasks = [search_youtube_videos(keyword, youtube_api_key, top_k) for keyword in generated_keywords]
-    # Gather results with exception handling
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-
-    for idx, result in enumerate(results):
-        keyword = generated_keywords[idx]
-        if isinstance(result, Exception):
-            logging.error(f"Error during YouTube search for keyword '{keyword}': {result}")
-            continue
-        if result:
-            search_results[keyword] = {'videos': result}
-            all_videos.extend(result)
-
-    logging.info(f"Search completed for {len(search_results)} keywords. Total videos collected: {len(all_videos)}")
-
-    if not all_videos:
-        logging.error("No videos collected from search.")
-        return generated_keywords, {}
-
-    # Step 3: Fetch metadata for all collected videos
-    video_ids = list(set(video['video_id'] for video in all_videos))
-    statistics_map = await get_videos_statistics(youtube_api_key, video_ids)
-
-    # Attach metadata to each video
-    for video in all_videos:
-        video_id = video['video_id']
-        metadata = statistics_map.get(video_id, {})
-        video['view_count'] = metadata.get('view_count', 0)
-        video['like_count'] = metadata.get('like_count', 0)
-        video['comment_count'] = metadata.get('comment_count', 0)
-        video['duration'] = metadata.get('duration', 'N/A')
-
-    # Step 4: 按观看数降序排序视频
-    sorted_videos = sorted(all_videos, key=lambda x: x.get('view_count', 0), reverse=True)
-    top_n = min(top_k * max_n, len(sorted_videos))
-    selected_videos = sorted_videos[:top_n]
-    logging.info(f"Selected top {top_n} videos after ranking.")
-
-    # Step 5: Aggregate metadata
-    aggregated_metadata = aggregate_video_metadata(selected_videos)
-
-    final_search_results = {
-        'videos': selected_videos,
-        'aggregated_metadata': aggregated_metadata
-    }
-
-    return generated_keywords, final_search_results
-
-
-# Example of how to run the async function
-if __name__ == "__main__":
-    # Example usage
-    async def main():
-        base_keyword = "Arizona Fishing"
-        max_n = 35  # Adjust based on your needs
-        top_k = 25  # Adjust based on your API quota
-        youtube_api_key_local = youtube_api_key  # From .env
-        openai_api_key_local = openai_api_key  # From .env
-        conn = None  # Replace with your database connection if needed
-
+    def _get_prompt_content(
+        self,
+        prompt_template: str,
+        template_vars: Optional[Dict[str, Any]] = None,
+        extra_text: Optional[str] = None
+    ) -> str:
         try:
-            generated_keywords, final_search_results = await multiagent_search(
-                base_keyword, max_n, top_k, youtube_api_key_local, openai_api_key_local, conn, dry_run=False
-            )
-
-            print("Generated Keywords:", generated_keywords)
-            print("Final Search Results:", json.dumps(final_search_results, indent=4, ensure_ascii=False))
-        except HttpError as e:
-            logging.error(f"HTTP Error encountered in main: {e}")
-        except SSLError as e:
-            logging.error(f"SSL Error encountered in main: {e}")
-            logging.error("Please ensure your certificates are installed correctly or update them.")
+            raw_prompt = self.openai_service.get_prompt(prompt_template, variables=template_vars)
+            prompt_text = raw_prompt + (f"\n{extra_text}" if extra_text else "")
+            return prompt_text
         except Exception as e:
-            logging.error(f"Unexpected error encountered in main: {e}")
+            logger.error(f"[SearchAgent] Error getting prompt content: {e}")
+            return ""
 
-    try:
-        asyncio.run(main())
-    except Exception as e:
-        logging.error(f"Script terminated due to an unexpected error: {e}")
+    async def generate_keywords(self, base_keyword: str) -> List[str]:
+        """
+        异步调用 OpenAIService 生成关键词列表，并记录 AI 交互日志。
+        """
+        if not self.settings.get("enable_brainstorm", True):
+            logger.info("[SearchAgent] Brainstorm disabled; returning original keyword.")
+            return [base_keyword]
+        try:
+            logger.info(f"[SearchAgent] Generating keywords for base keyword: {base_keyword}")
+            prompt_vars = {
+                "base_keyword": base_keyword,
+                "max_n": self.settings.get("max_keywords", 5)
+            }
+            prompt_text = self._get_prompt_content(
+                prompt_template=self.settings["brainstorm_prompt_template"],
+                template_vars=prompt_vars
+            )
+            keywords_response = await self.openai_service.async_completion(
+                prompt=prompt_text,
+                prompt_template=self.settings["brainstorm_prompt_template"]
+            )
+            keywords_response = str(keywords_response)
+            keywords = [kw.strip() for kw in keywords_response.strip().split("\n") if kw.strip()]
+            if not keywords:
+                logger.warning("[SearchAgent] No keywords generated; using original keyword.")
+                keywords = [base_keyword]
+            logger.info(f"[SearchAgent] Generated keyword variations: {keywords}")
+            # 记录 AI 交互（假设数据库对象提供 store_ai_interaction 方法）
+            if self.db and hasattr(self.db, "store_ai_interaction"):
+                await self.db.store_ai_interaction(
+                    input_data={"base_keyword": base_keyword, "prompt": prompt_text},
+                    output_data={"generated_keywords": keywords},
+                    interaction_type="keyword_generation",
+                    tokens_used=0,   # 请替换为实际 token 数量
+                    cost=0.0,        # 请替换为实际成本
+                    duration_ms=0    # 请替换为实际耗时
+                )
+            # 如有其他搜索日志记录需求，也可调用 db.store_search_log(...)
+            return keywords
+        except Exception as e:
+            logger.error(f"[SearchAgent] Exception during keyword generation: {e}")
+            return [base_keyword]
+
+    async def aggregate_search(self, base_keyword: str, filters: Optional[Dict[str, Any]] = None) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        异步聚合搜索：先生成关键词，再对每个关键词进行搜索，并记录每个关键词的搜索结果。
+        """
+        logger.info(f"[SearchAgent] Aggregating search results for base keyword: {base_keyword}")
+        keywords = await self.generate_keywords(base_keyword)
+        aggregated: Dict[str, List[Dict[str, Any]]] = {}
+        for kw in keywords:
+            results = self.search_by_keyword(kw, filters=filters)
+            aggregated[kw] = results
+            logger.info(f"[SearchAgent] Aggregated {len(results)} results for keyword: {kw}")
+        return aggregated
+
+    def search_by_keyword(self, keyword: str, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """
+        调用 YouTubeService 根据关键词搜索视频，并返回视频列表。
+        """
+        try:
+            logger.info(f"[SearchAgent] Searching videos for keyword: {keyword}")
+            max_results = self.settings.get("max_results", 15)
+            effective_filters = filters or self.settings.get("default_filter", {})
+            response = self.youtube_service.search_videos(q=keyword, max_results=max_results, filters=effective_filters)
+            results = [{
+                "search_keyword": keyword,
+                "video_id": item["id"]["videoId"],
+                "title": item["snippet"]["title"],
+                "description": item["snippet"]["description"],
+                "publish_time": item["snippet"]["publishedAt"],
+            } for item in response.get("items", [])]
+            logger.info(f"[SearchAgent] Keyword '{keyword}' returned {len(results)} videos.")
+            return results
+        except Exception as e:
+            logger.error(f"[SearchAgent] Error during search for keyword '{keyword}': {e}")
+            return []
+
+    def deduplicate_results(self, aggregated: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+        """
+        对聚合的搜索结果根据 video_id 去重，并累计各关键词返回结果数量作为权重。
+        """
+        logger.info("[SearchAgent] Starting deduplication of results.")
+        dedup = {}
+        for kw, results in aggregated.items():
+            for item in results:
+                vid = item.get("video_id")
+                if vid not in dedup:
+                    item["weight"] = len(results)
+                    dedup[vid] = item
+                else:
+                    dedup[vid]["weight"] += len(results)
+        total_items = sum(len(v) for v in aggregated.values())
+        logger.info(f"[SearchAgent] Deduplicated {total_items} aggregated items to {len(dedup)} unique videos.")
+        return list(dedup.values())
+
+    def optimize_variations(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        按照设定的排序规则对搜索结果进行优化排序。
+        """
+        logger.info("[SearchAgent] Optimizing result variations.")
+        order_by = self.settings.get("order_by", "weight")
+        reverse = (self.settings.get("order_direction", "desc") == "desc")
+        try:
+            optimized = sorted(results, key=lambda v: v.get(order_by, 0), reverse=reverse)
+            logger.info(f"[SearchAgent] Optimized results using order_by='{order_by}' direction {'desc' if reverse else 'asc'}.")
+            return optimized
+        except Exception as e:
+            logger.error(f"[SearchAgent] Error during optimization: {e}")
+            return results
+
+    def refine_results(self, results: List[Dict[str, Any]], top_n: int = 5) -> List[Dict[str, Any]]:
+        """
+        根据发布时间等因素对搜索结果进一步精炼，返回前 N 个结果。
+        """
+        logger.info("[SearchAgent] Refining results.")
+        if not self.settings.get("enable_refine", True):
+            logger.info("[SearchAgent] Refinement disabled; returning original results.")
+            return results
+        if self.settings.get("enable_optimization", True):
+            results = self.optimize_variations(results)
+        refined = sorted(results, key=lambda v: v.get("publish_time", ""), reverse=True)
+        logger.info(f"[SearchAgent] Refined results to top {top_n} items.")
+        return refined[:top_n]
+
+    async def summarize_results(self, results: List[Dict[str, Any]]) -> str:
+        """
+        调用 OpenAIService 生成聚合结果摘要。
+        """
+        logger.info("[SearchAgent] Generating summary of results.")
+        if not self.settings.get("enable_summary", True):
+            logger.info("[SearchAgent] Summary generation disabled.")
+            return ""
+        if not results:
+            logger.info("[SearchAgent] No results found for summarization.")
+            return "No videos found to summarize."
+
+        # 根据关键词将视频标题分组，构造摘要输入
+        keyword_groups: Dict[str, List[str]] = {}
+        for item in results:
+            kw = item.get("search_keyword", "unknown")
+            keyword_groups.setdefault(kw, []).append(item["title"])
+        summary_lines = []
+        for kw, titles in keyword_groups.items():
+            summary_lines.append(f"Keyword '{kw}' yielded {len(titles)} videos:")
+            for title in titles:
+                summary_lines.append(f"  - {title}")
+        summary_input = "\n".join(summary_lines)
+
+        template = "structured_output" if "structured_output" in self.openai_service.prompts else "summarization"
+        prompt = self._get_prompt_content(template, template_vars={"text": summary_input})
+        try:
+            summary_text = await self.openai_service.async_completion(
+                prompt=prompt,
+                prompt_template=template
+            )
+            logger.info("[SearchAgent] Generated summary for aggregated results.")
+        except Exception as e:
+            logger.error(f"[SearchAgent] Error during summary generation: {e}")
+            summary_text = "Summary generation failed."
+        return summary_text
+
+    async def execute_search(self, base_keyword: str, filters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        执行完整的搜索流程：生成关键词、搜索、去重、精炼、摘要生成，并将搜索结果记录到数据库。
+        """
+        logger.info(f"[SearchAgent] Executing full search workflow for keyword '{base_keyword}'.")
+        start_time = datetime.now()
+        aggregated = await self.aggregate_search(base_keyword, filters=filters)
+        deduped = self.deduplicate_results(aggregated)
+        refined = self.refine_results(deduped)
+        summary_text = await self.summarize_results(refined)
+        total_time = (datetime.now() - start_time).total_seconds()
+        logger.info(f"[SearchAgent] Search workflow completed in {total_time:.2f} seconds.")
+        result = {
+            "keywords_searched": list(aggregated.keys()),
+            "aggregated_by_keyword": aggregated,
+            "deduplicated_results": deduped,
+            "refined_results": refined,
+            "total_unique_videos": len(deduped),
+            "summary": summary_text,
+            "execution_time_seconds": total_time
+        }
+        self._last_search_result = result
+
+        # 将搜索摘要记录到数据库（如果数据库对象提供相关方法）
+        if self.db and hasattr(self.db, "store_keyword_analysis"):
+            try:
+                record = {
+                    "keyword": base_keyword,
+                    "critique": summary_text,
+                    "total_views": len(refined),
+                    "total_likes": 0,
+                    "weighted_score": 0.0,
+                    "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                }
+                await self.db.store_keyword_analysis([record])
+                logger.info("[SearchAgent] Search summary recorded in database.")
+            except Exception as e:
+                logger.error(f"[SearchAgent] Failed to record search summary: {e}")
+        return result
+
+    @property
+    def last_search_result(self) -> Optional[Dict[str, Any]]:
+        return self._last_search_result

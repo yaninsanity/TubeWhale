@@ -1,340 +1,390 @@
-import sqlite3
+import os
+import json
 import logging
-from datetime import datetime
-import json  # Add this import for JSON serialization
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
 
-# 初始化数据库
-def init_db(db_path):
-    logging.info("Initializing database.")
-    try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
+from sqlalchemy import create_engine, Column, Integer, String, Text, Float, Boolean, ForeignKey, MetaData
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
-        # 创建视频信息表
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS videos (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                video_id TEXT UNIQUE NOT NULL,
-                title TEXT NOT NULL,
-                description TEXT,
-                publish_time TEXT,
-                channel_title TEXT,
-                tags TEXT,
-                category_id TEXT,
-                duration TEXT,
-                dimension TEXT,
-                definition TEXT,
-                caption TEXT,
-                licensed_content BOOLEAN,
-                view_count INTEGER DEFAULT 0,
-                like_count INTEGER DEFAULT 0,
-                comment_count INTEGER DEFAULT 0,
-                weighted_score REAL DEFAULT 0,
-                default_audio_language TEXT,
-                country_code TEXT,
-                timestamp TEXT,
-                llm_summary TEXT,  -- AI-generated summary
-                transcript TEXT,  -- Raw transcript from video (if exists)
-                is_transcript INTEGER DEFAULT 0,  -- Boolean flag, 0 for False, 1 for True
-                audio_summary TEXT  -- Audio-based summary (if exists)
-            );
-        ''')
+Base = declarative_base()
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+if not logger.handlers: 
+    logger.addHandler(logging.StreamHandler())
+    logger.info("Logger initialized for database module.")
 
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS ai_interactions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                input_data TEXT NOT NULL,      -- JSON serialized input data
-                output_data TEXT NOT NULL,     -- JSON serialized output data
-                interaction_type TEXT NOT NULL, -- Type of interaction (e.g., 'keyword_search', 'summarization')
-                timestamp TEXT NOT NULL         -- Timestamp of the interaction
-            );
-        ''')
-        # 创建评论信息表
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS comments (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                video_id TEXT NOT NULL,
-                comment_id TEXT NOT NULL,
-                author TEXT NOT NULL,
-                comment_text TEXT NOT NULL,
-                like_count INTEGER DEFAULT 0,
-                publish_time TEXT,
-                viewer_rating TEXT,
-                moderation_status TEXT,
-                parent_id TEXT,
-                FOREIGN KEY(video_id) REFERENCES videos(video_id) ON DELETE CASCADE,
-                FOREIGN KEY(parent_id) REFERENCES comments(comment_id) ON DELETE CASCADE
+
+# -------------------------------
+# ORM 模型定义
+# -------------------------------
+class Video(Base):
+    __tablename__ = "videos"
+    id = Column(Integer, primary_key=True)
+    video_id = Column(String, unique=True, nullable=False, index=True)
+    title = Column(String, nullable=False)
+    description = Column(Text)
+    publish_time = Column(String)
+    channel_title = Column(String)
+    tags = Column(Text)
+    category_id = Column(String)
+    duration = Column(String)
+    dimension = Column(String)
+    definition = Column(String)
+    caption = Column(String)
+    licensed_content = Column(Boolean, default=False)
+    view_count = Column(Integer, default=0)
+    like_count = Column(Integer, default=0)
+    comment_count = Column(Integer, default=0)
+    weighted_score = Column(Float, default=0.0)
+    default_audio_language = Column(String)
+    country_code = Column(String)
+    timestamp = Column(String)  # 格式 '%Y-%m-%d %H:%M:%S'
+    llm_summary = Column(Text)
+    transcript = Column(Text)
+    is_transcript = Column(Integer, default=0)
+    audio_summary = Column(Text)
+    ai_cost = Column(Float, default=0.0)
+
+    comments = relationship("Comment", back_populates="video", cascade="all, delete")
+    transcripts = relationship("Transcript", back_populates="video", cascade="all, delete")
+    process_logs = relationship("VideoProcessLog", back_populates="video", cascade="all, delete")
+
+class AIInteraction(Base):
+    __tablename__ = "ai_interactions"
+    id = Column(Integer, primary_key=True)
+    input_data = Column(Text, nullable=False)
+    output_data = Column(Text, nullable=False)
+    interaction_type = Column(String, nullable=False)
+    tokens_used = Column(Integer, default=0)
+    cost = Column(Float, default=0.0)
+    request_time = Column(String, nullable=False)
+    response_time = Column(String, nullable=False)
+    duration_ms = Column(Integer, default=0)
+
+class Comment(Base):
+    __tablename__ = "comments"
+    id = Column(Integer, primary_key=True)
+    video_id = Column(String, ForeignKey("videos.video_id", ondelete="CASCADE"), nullable=False, index=True)
+    comment_id = Column(String, nullable=False)
+    author = Column(String, nullable=False)
+    comment_text = Column(Text, nullable=False)
+    like_count = Column(Integer, default=0)
+    publish_time = Column(String)
+    viewer_rating = Column(String, default="none")
+    moderation_status = Column(String, default="published")
+    parent_id = Column(String, nullable=True)
+
+    video = relationship("Video", back_populates="comments")
+
+class KeywordAnalysis(Base):
+    __tablename__ = "keyword_analysis"
+    id = Column(Integer, primary_key=True)
+    keyword = Column(String, nullable=False)
+    critique = Column(Text)
+    total_views = Column(Integer, default=0)
+    total_likes = Column(Integer, default=0)
+    weighted_score = Column(Float, default=0.0)
+    timestamp = Column(String, nullable=False)
+
+class Transcript(Base):
+    __tablename__ = "transcripts"
+    id = Column(Integer, primary_key=True)
+    video_id = Column(String, ForeignKey("videos.video_id", ondelete="CASCADE"), nullable=False, index=True)
+    transcript = Column(Text, nullable=False)
+    summary = Column(Text, nullable=False)
+    timestamp = Column(String, nullable=False)
+
+    video = relationship("Video", back_populates="transcripts")
+
+class BrainstormedTopic(Base):
+    __tablename__ = "brainstormed_topics"
+    id = Column(Integer, primary_key=True)
+    keyword = Column(String, nullable=False)
+    topics = Column(Text)
+    critique = Column(Text)
+    topic_score = Column(Float, default=0.0)
+    timestamp = Column(String, nullable=False)
+
+class VideoProcessLog(Base):
+    __tablename__ = "video_process_logs"
+    id = Column(Integer, primary_key=True)
+    video_id = Column(String, ForeignKey("videos.video_id", ondelete="CASCADE"), nullable=False, index=True)
+    step = Column(String, nullable=False)
+    status = Column(String, nullable=False)
+    details = Column(Text)
+    timestamp = Column(String, nullable=False)
+
+    video = relationship("Video", back_populates="process_logs")
+
+# -------------------------------
+# Database 封装类
+# -------------------------------
+class Database:
+    """
+    数据库封装类，负责初始化数据库及所有数据的存储与更新操作，
+    包括视频元数据、AI 交互、评论、关键词分析、转录摘要、头脑风暴话题及处理日志。
+    """
+    def __init__(self, db_path: str, logger: logging.Logger, recreate: bool = False):
+        self.logger = logger or logging.getLogger(__name__)  # 默认使用当前模块的日志器
+        self.logger.info("Initializing database with path: %s", db_path)
+        self.engine = create_engine(f"sqlite:///{db_path}", echo=False, future=True)
+        if recreate:
+            self.logger.info("Recreating database: dropping all tables.")
+            Base.metadata.drop_all(self.engine)
+        Base.metadata.create_all(self.engine)
+        self.Session = sessionmaker(bind=self.engine, future=True)
+        self.logger.info("Database tables created.")
+
+    def get_session(self):
+        return self.Session()
+
+    def close(self):
+        self.logger.info("Database closed (engine will be disposed on program exit).")
+
+    def _commit_session(self, session, action_desc: str):
+        try:
+            session.commit()
+            self.logger.info("%s succeeded.", action_desc)
+        except Exception as e:
+            session.rollback()
+            self.logger.error("%s failed: %s", action_desc, e)
+            raise
+        finally:
+            session.close()
+
+    def should_update_video_metadata(self, video_id: str, period_days: int = 7) -> bool:
+        """
+        如果视频在 period_days 内已经更新过且已有 transcript 或 llm_summary，则跳过更新。
+        否则返回 True 允许更新。
+        """
+        with self.get_session() as session:
+            video = session.query(Video).filter(Video.video_id == video_id).first()
+            if video and video.timestamp:
+                last_update = datetime.strptime(video.timestamp, '%Y-%m-%d %H:%M:%S')
+                # 如果上次更新时间在 period_days 以内
+                if datetime.now() - last_update < timedelta(days=period_days):
+                    # 仅当已有 transcript 或 llm_summary 时才跳过
+                    if (video.transcript and video.transcript.strip()) or (video.llm_summary and video.llm_summary.strip()):
+                        self.logger.info(
+                            "Video %s updated on %s with existing summary; skipping update.",
+                            video_id, video.timestamp
+                        )
+                        return False
+            return True
+
+    def store_video_metadata(self, video_metadata: dict):
+        session = self.get_session()
+        try:
+            # Sanitizing data (ensuring default values for missing fields)
+            video_metadata['view_count'] = int(video_metadata.get('view_count', 0)) or 0
+            video_metadata['like_count'] = int(video_metadata.get('like_count', 0)) or 0
+            video_metadata['comment_count'] = int(video_metadata.get('comment_count', 0)) or 0
+            video_metadata['weighted_score'] = round(
+                (video_metadata['view_count'] * 0.1) +
+                (video_metadata['like_count'] * 0.5) +
+                (video_metadata['comment_count'] * 0.4), 2
             )
-        ''')
-
-        conn.commit()
-        logging.info("Database initialized.")
-        return conn
-    except sqlite3.Error as e:
-        logging.error(f"Failed to initialize the database: {e}")
-        raise
-
-# 存储视频信息到数据库
-def store_video_metadata(conn, video_metadata):
-    if not conn:
-        logging.error("Connection is None. Cannot store video metadata.")
-        return
-    
-    # 设置默认值，避免 None 造成的错误
-    video_metadata['view_count'] = int(video_metadata.get('view_count', 0)) or 0
-    video_metadata['like_count'] = int(video_metadata.get('like_count', 0)) or 0
-    video_metadata['comment_count'] = int(video_metadata.get('comment_count', 0)) or 0
-
-    # 计算 weighted_score：这里的公式可以自定义
-    video_metadata['weighted_score'] = round((video_metadata['view_count'] * 0.1) + (video_metadata['like_count'] * 0.5) + (video_metadata['comment_count'] * 0.4), 2)
-
-    logging.info(f"Storing metadata for video ID: {video_metadata['id']}")
-    try:
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT OR REPLACE INTO videos 
-            (video_id, title, description, publish_time, channel_title, tags, category_id, duration, dimension, 
-             definition, caption, licensed_content, view_count, like_count, comment_count, weighted_score, 
-             default_audio_language, country_code, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            video_metadata['id'],  # 视频ID
-            video_metadata['snippet'].get('title', 'N/A'),  # 视频标题
-            video_metadata['snippet'].get('description', 'N/A'),  # 视频描述
-            video_metadata['snippet'].get('publishedAt', 'N/A'),  # 发布日期
-            video_metadata['snippet'].get('channelTitle', 'N/A'),  # 频道名称
-            ','.join(video_metadata['snippet'].get('tags', [])),  # 视频标签
-            video_metadata['snippet'].get('categoryId', 'N/A'),  # 视频分类
-            video_metadata['contentDetails'].get('duration', 'N/A'),  # 视频时长
-            video_metadata['contentDetails'].get('dimension', 'N/A'),  # 视频维度
-            video_metadata['contentDetails'].get('definition', 'N/A'),  # 清晰度
-            video_metadata['contentDetails'].get('caption', 'false'),  # 是否有字幕
-            video_metadata['contentDetails'].get('licensedContent', False),  # 是否为授权内容
-            video_metadata['view_count'],  # 观看次数
-            video_metadata['like_count'],  # 点赞次数
-            video_metadata['comment_count'],  # 评论次数
-            video_metadata['weighted_score'],  # 自定义加权评分
-            video_metadata['snippet'].get('defaultAudioLanguage', 'N/A'),  # 默认音频语言
-            video_metadata['snippet'].get('defaultLanguage', 'N/A'),  # 国家代码
-            datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # 插入时间戳
-        ))
-        conn.commit()
-        logging.info(f"Metadata stored for video ID: {video_metadata['id']}")
-    except sqlite3.Error as e:
-        conn.rollback()
-        logging.error(f"Failed to store video metadata for video ID {video_metadata['id']}: {e}")
-        raise
-
-# 批量存储评论信息到数据库
-def store_comments(conn, video_id, comments):
-    if not conn:
-        logging.error("Connection is None. Cannot store comments.")
-        return
-    
-    logging.info(f"Storing comments for video ID: {video_id}")
-    cursor = conn.cursor()
-
-    if not comments:
-        logging.warning(f"No comments found for video ID: {video_id}")
-        return
-
-    try:
-        cursor.execute('BEGIN')
-        for comment in comments:
-            cursor.execute('''
-                INSERT INTO comments (video_id, comment_id, author, comment_text, like_count, publish_time, viewer_rating, moderation_status, parent_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                video_id, 
-                comment['comment_id'],  # 唯一的 comment_id
-                comment['author'], 
-                comment['text'], 
-                comment.get('like_count', 0) or 0, 
-                comment['publish_time'],
-                comment.get('viewer_rating', 'none'),  # 存储观看者的评分
-                comment.get('moderation_status', 'published'),  # 存储审核状态
-                comment['parent_id']  # 直接从 comment 字典中获取 parent_id
-            ))
-
-        conn.commit()
-        logging.info(f"Comments stored for video ID: {video_id}")
-    except sqlite3.Error as e:
-        conn.rollback()
-        logging.error(f"Failed to store comments for video ID {video_id}: {e}")
-        raise
-
-# 存储脑暴结果
-def store_brainstormed_topics(conn, topics, critique, topic_score):
-    if not conn:
-        logging.error("Connection is None. Cannot store brainstormed topics.")
-        return
-    
-    logging.info("Storing brainstormed topics.")
-    cursor = conn.cursor()
-
-    if not topics or not isinstance(topics, list) or len(topics) == 0:
-        logging.error("Topics list is empty or invalid.")
-        return
-
-    try:
-        topics_str = ', '.join(str(topic) for topic in topics)
-
-        cursor.execute('BEGIN')
-        cursor.execute('''
-            INSERT INTO brainstormed_topics (keyword, topics, critique, topic_score, timestamp)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (
-            topics[0],  
-            topics_str,  
-            critique,  
-            topic_score or 0,  
-            datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        ))
-        conn.commit()
-        logging.info("Brainstormed topics stored.")
-    except sqlite3.Error as e:
-        conn.rollback()
-        logging.error(f"Failed to store brainstormed topics: {e}")
-        raise
-
-def store_ai_interaction(conn, input_data, output_data, interaction_type, timestamp):
-    if not conn:
-        logging.error("Connection is None. Cannot store AI interaction.")
-        return
-    
-    logging.info(f"Storing AI interaction of type: {interaction_type}")
-    
-    try:
-        cursor = conn.cursor()
-        
-        # Serialize input and output data to JSON format, ensuring proper serialization
-        input_json = json.dumps(input_data, default=str)  # Convert input_data to JSON
-        output_json = json.dumps(output_data, default=str)  # Convert output_data to JSON
-
-        # Inserting into the database
-        cursor.execute('''
-            INSERT INTO ai_interactions (input_data, output_data, interaction_type, timestamp)
-            VALUES (?, ?, ?, ?)
-        ''', (input_json, output_json, interaction_type, timestamp))
-        
-        conn.commit()
-        logging.info(f"AI interaction of type {interaction_type} stored successfully.")
-    
-    except sqlite3.Error as e:
-        conn.rollback()  # Roll back in case of error
-        logging.error(f"Failed to store AI interaction: {e}")
-        raise  # Reraise exception to handle it properly elsewhere
-
-# 存储关键词分析结果
-def store_keyword_analysis(conn, keyword_analysis):
-    if not conn:
-        logging.error("Connection is None. Cannot store keyword analysis.")
-        return
-    
-    logging.info("Storing keyword analysis in the database.")
-    cursor = conn.cursor()
-
-    try:
-        cursor.execute('BEGIN')
-        for analysis in keyword_analysis:
-            cursor.execute('''
-                INSERT INTO keyword_analysis (keyword, critique, total_views, total_likes, weighted_score, timestamp)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (
-                analysis['keyword'], 
-                analysis['critique'], 
-                analysis.get('total_views', 0) or 0,  
-                analysis.get('total_likes', 0) or 0,
-                analysis.get('weighted_score', 0) or 0,  
-                datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            ))
-        conn.commit()
-        logging.info("Keyword analysis stored successfully.")
-    except sqlite3.Error as e:
-        conn.rollback()
-        logging.error(f"Failed to store keyword analysis: {e}")
-        raise
-
-# 存储音频转录和总结
-def store_transcript_summary(conn, video_id, transcript, summary):
-    if not conn:
-        logging.error("Connection is None. Cannot store transcript and summary.")
-        return
-    
-    logging.info(f"Storing transcript and summary for video ID: {video_id}")
-    cursor = conn.cursor()
-
-    if not isinstance(video_id, str) or not video_id:
-        logging.error(f"Invalid video_id: {video_id}")
-        return
-    
-    if not isinstance(transcript, str) or not transcript.strip():
-        logging.error(f"Invalid or empty transcript for video ID: {video_id}")
-        return
-    
-    if not isinstance(summary, str) or not summary.strip():
-        logging.error(f"Invalid or empty summary for video ID: {video_id}")
-        return
-
-    try:
-        cursor.execute('BEGIN')
-        cursor.execute('''
-            INSERT INTO transcripts (video_id, transcript, summary, timestamp)
-            VALUES (?, ?, ?, ?)
-        ''', (
-            video_id,  
-            transcript.strip(),  
-            summary.strip(),  
-            datetime.now().strftime('%Y-%m-%d %H:%M:%S')  
-        ))
-        conn.commit()
-        logging.info(f"Transcript and summary successfully stored for video ID: {video_id}")
-    except sqlite3.Error as e:
-        conn.rollback()
-        logging.error(f"Failed to store transcript and summary for video ID {video_id}: {e}")
-        raise
-
-# 通用存储数据函数
-def store_data(conn, table_name, data_dict):
-    if not conn:
-        logging.error("Connection is None. Cannot store data.")
-        return
-    
-    logging.info(f"Storing data in table: {table_name}")
-    cursor = conn.cursor()
-
-    columns = ', '.join(data_dict.keys())
-    placeholders = ', '.join(['?' for _ in data_dict])
-    values = list(data_dict.values())
-
-    try:
-        cursor.execute('BEGIN')
-        cursor.execute(f'''
-            INSERT INTO {table_name} ({columns})
-            VALUES ({placeholders})
-        ''', values)
-        conn.commit()
-        logging.info(f"Data successfully stored in {table_name}")
-    except sqlite3.Error as e:
-        conn.rollback()
-        logging.error(f"Failed to store data in {table_name}: {e}")
-        raise
+            current_ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            session.expire_on_commit = False
+            video = session.query(Video).filter(Video.video_id == video_metadata['id']).first()
+            if not video:
+                video = Video(video_id=video_metadata['id'])
+            video.title = video_metadata['snippet'].get('title', 'N/A')
+            video.description = video_metadata['snippet'].get('description', 'N/A')
+            video.publish_time = video_metadata['snippet'].get('publishedAt', 'N/A')
+            video.channel_title = video_metadata['snippet'].get('channelTitle', 'N/A')
+            video.tags = ','.join(video_metadata['snippet'].get('tags', []))
+            video.category_id = video_metadata['snippet'].get('categoryId', 'N/A')
+            video.duration = video_metadata['contentDetails'].get('duration', 'N/A')
+            video.dimension = video_metadata['contentDetails'].get('dimension', 'N/A')
+            video.definition = video_metadata['contentDetails'].get('definition', 'N/A')
+            video.caption = video_metadata['contentDetails'].get('caption', 'false')
+            video.licensed_content = video_metadata['contentDetails'].get('licensedContent', False)
+            video.view_count = video_metadata['view_count']
+            video.like_count = video_metadata['like_count']
+            video.comment_count = video_metadata['comment_count']
+            video.weighted_score = video_metadata['weighted_score']
+            video.default_audio_language = video_metadata['snippet'].get('defaultAudioLanguage', 'N/A')
+            video.country_code = video_metadata['snippet'].get('defaultLanguage', 'N/A')
+            video.timestamp = current_ts
+            video.llm_summary = video_metadata.get('llm_summary')
+            video.transcript = video_metadata.get('transcript')
+            video.is_transcript = video_metadata.get('is_transcript', 0)
+            video.audio_summary = video_metadata.get('audio_summary')
+            video.ai_cost = video_metadata.get('ai_cost', 0.0)
+            session.merge(video)
+            self._commit_session(session, f"Storing metadata for video ID: {video_metadata['id']}")
+        except Exception:
+            session.rollback()
+            raise
 
 
-def update_video_metadata(conn, video_id, llm_summary, transcript, audio_summary=None):
-    is_transcript = 1 if transcript else 0  # 1 if transcript exists, else 0
-    try:
-        cursor = conn.cursor()
-        cursor.execute('''
-            UPDATE videos
-            SET llm_summary = ?, transcript = ?, is_transcript = ?, audio_summary = ?
-            WHERE video_id = ?
-        ''', (llm_summary, transcript, is_transcript, audio_summary, video_id))
-        
-        conn.commit()
-        logging.info(f"Video {video_id} metadata updated with AI summary and transcript.")
-    
-    except Exception as e:
-        logging.error(f"Failed to update video metadata for {video_id}: {e}")
-        conn.rollback()
-        raise e
+    def update_video_metadata(self, video_id: str, llm_summary: str, transcript: str,
+                              audio_summary: str = None, ai_cost: float = 0.0):
+        if not self.should_update_video_metadata(video_id):
+            logger.info("Skipping update for video %s (recent update).", video_id)
+            return
+        session = self.get_session()
+        try:
+            video = session.query(Video).filter(Video.video_id == video_id).first()
+            if video:
+                video.llm_summary = llm_summary
+                video.transcript = transcript
+                video.is_transcript = 1 if transcript else 0
+                video.audio_summary = audio_summary
+                video.ai_cost = ai_cost
+                video.timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                self._commit_session(session, f"Updating metadata for video {video_id}")
+            else:
+                logger.error("Video %s not found for update.", video_id)
+        except Exception:
+            session.rollback()
+            raise
+
+    def store_comments(self, video_id: str, comments: List[Dict[str, Any]]):
+        session = self.get_session()
+        try:
+            for comment in comments:
+                new_comment = Comment(
+                    video_id=video_id,
+                    comment_id=comment['comment_id'],
+                    author=comment['author'],
+                    comment_text=comment['text'],
+                    like_count=int(comment.get('like_count', 0)) or 0,
+                    publish_time=comment['publish_time'],
+                    viewer_rating=comment.get('viewer_rating', 'none'),
+                    moderation_status=comment.get('moderation_status', 'published'),
+                    parent_id=comment.get('parent_id')
+                )
+                session.add(new_comment)
+            self._commit_session(session, f"Storing comments for video {video_id}")
+        except Exception:
+            session.rollback()
+            raise
+
+    def store_brainstormed_topics(self, topics: List[str], critique: str, topic_score: float):
+        if not topics:
+            logger.error("Topics list is empty or invalid.")
+            return
+        session = self.get_session()
+        try:
+            topics_str = ', '.join(topics)
+            new_topic = BrainstormedTopic(
+                keyword=topics[0],
+                topics=topics_str,
+                critique=critique,
+                topic_score=topic_score or 0.0,
+                timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            )
+            session.add(new_topic)
+            self._commit_session(session, "Storing brainstormed topics")
+        except Exception:
+            session.rollback()
+            raise
+
+    def store_transcript_summary(self, video_id: str, transcript: str, summary: str):
+        if not video_id or not transcript.strip() or not summary.strip():
+            logger.error("Invalid input for transcript summary storage.")
+            return
+        session = self.get_session()
+        try:
+            new_record = Transcript(
+                video_id=video_id,
+                transcript=transcript.strip(),
+                summary=summary.strip(),
+                timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            )
+            session.add(new_record)
+            self._commit_session(session, f"Storing transcript and summary for video {video_id}")
+        except Exception:
+            session.rollback()
+            raise
+
+    def store_ai_interaction(self, input_data: Dict[str, Any], output_data: Dict[str, Any],
+                             interaction_type: str, tokens_used: int = 0, cost: float = 0.0,
+                             timestamp: Optional[str] = None, duration_ms: int = 0):
+        session = self.get_session()
+        try:
+            now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            new_interaction = AIInteraction(
+                input_data=json.dumps(input_data, default=str),
+                output_data=json.dumps(output_data, default=str),
+                interaction_type=interaction_type,
+                tokens_used=tokens_used,
+                cost=cost,
+                request_time=timestamp if timestamp else now_str,
+                response_time=now_str,
+                duration_ms=duration_ms
+            )
+            session.add(new_interaction)
+            self._commit_session(session, f"Storing AI interaction for type {interaction_type}")
+        except Exception:
+            session.rollback()
+            raise
+
+    def store_keyword_analysis(self, keyword_analysis: List[Dict[str, Any]]):
+        session = self.get_session()
+        try:
+            for analysis in keyword_analysis:
+                new_entry = KeywordAnalysis(
+                    keyword=analysis['keyword'],
+                    critique=analysis['critique'],
+                    total_views=int(analysis.get('total_views', 0)) or 0,
+                    total_likes=int(analysis.get('total_likes', 0)) or 0,
+                    weighted_score=float(analysis.get('weighted_score', 0)) or 0.0,
+                    timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                )
+                session.add(new_entry)
+            self._commit_session(session, "Storing keyword analysis")
+        except Exception:
+            session.rollback()
+            raise
+
+    def store_video_process_log(self, video_id: str, step: str, status: str, details: str = ""):
+        session = self.get_session()
+        try:
+            new_log = VideoProcessLog(
+                video_id=video_id,
+                step=step,
+                status=status,
+                details=details,
+                timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            )
+            session.add(new_log)
+            self._commit_session(session, f"Storing process log for video {video_id}, step '{step}'")
+        except Exception:
+            session.rollback()
+            raise
+
+    def store_data(self, table_name: str, data_dict: Dict[str, Any]):
+        session = self.get_session()
+        try:
+            metadata = MetaData()
+            metadata.reflect(bind=self.engine)
+            
+            if table_name not in metadata.tables:
+                self.logger.error(f"Table '{table_name}' not found in database.")
+                raise Exception(f"Table '{table_name}' not found in database.")
+            
+            table = metadata.tables[table_name]
+            
+            # Sanitize the data_dict to match the expected column names
+            for key in list(data_dict.keys()):
+                if key not in table.columns:
+                    self.logger.warning(f"Column '{key}' does not exist in table '{table_name}', removing it.")
+                    del data_dict[key]
+            
+            # Insert the data into the table
+            ins = table.insert().values(**data_dict)
+            session.execute(ins)
+            
+            # Commit changes to the database
+            self._commit_session(session, f"Storing data in table {table_name}")
+        except Exception as e:
+            session.rollback()
+            self.logger.error(f"Failed to store data in table {table_name}: {e}")
+            raise
+        finally:
+            session.close()
+            self.logger.info(f"Data stored successfully in table {table_name}.")

@@ -6,3 +6,6 @@
 .idea
 /downloads
 /logs
+.coverage*
+__pycache__
+.pytest_cache

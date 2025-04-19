@@ -1,0 +1,112 @@
+models:
+  gpt-4:
+    model_name: "gpt-4"
+    type: "text"
+    context_length: 8192        # 8K 模型上下文长度
+    max_tokens: 8192
+    temperature: 0.7
+    price:
+      prompt: 30.00           # $30 per million input tokens
+      completion: 60.00       # $60 per million output tokens
+
+  whisper-1:
+    model_name: "whisper-1"
+    type: "audio"
+    price:
+      prompt: 0.006           # $0.006 per minute (audio transcription)
+      completion: 0.0
+
+  gpt-4-turbo:
+    model_name: "gpt-4-turbo"
+    type: "text"
+    context_length: 8192
+    max_tokens: 8192
+    temperature: 0.7
+    price:
+      prompt: 1.50            # $1.50 per million input tokens
+      completion: 3.00        # $3.00 per million output tokens
+
+  gpt-4-32k:
+    model_name: "gpt-4-32k"
+    type: "text"
+    context_length: 32768     # 32K 模型上下文长度
+    max_tokens: 32768
+    temperature: 0.7
+    price:
+      prompt: 60.00           # $60 per million input tokens
+      completion: 120.00      # $120 per million output tokens
+
+  gpt-4o:
+    model_name: "gpt-4o"
+    type: "text"
+    context_length: 8192
+    max_tokens: 8192
+    temperature: 0.7
+    price:
+      prompt: 2.50            # 旧版定价，单位：每百万 token
+      completion: 10.00
+
+  gpt-4o-mini:
+    model_name: "gpt-4o-mini"
+    type: "text"
+    context_length: 16385
+    max_tokens: 4096
+    temperature: 0.7
+    price:
+      prompt: 0.15            # 旧版定价，单位：每百万 token
+      completion: 0.60
+
+  image-model:
+    model_name: "image-model-001"
+    type: "image"
+    context_length: 512
+    max_tokens: 0
+    temperature: 0.0
+    price:
+      prompt: 0.0
+      completion: 0.0
+    api_key: "dummy_api_key_image"
+
+prompts:
+  keyword_generation:
+    system: >
+      You are a seasoned digital marketing and SEO expert with deep insights into video trends
+      and YouTube search optimization. Your task is to generate creative, innovative, and highly
+      relevant keyword variations that capture diverse search intents for a given base keyword.
+    user: |
+      Given the base keyword '{ base_keyword }' and the maximum number of variations { max_n },
+      generate a list of unique and SEO-optimized keyword variations.
+      Each variation should be concise, descriptive, and written on a separate line without any numbering.
+      Ensure that the output is actionable for discovering trending YouTube videos.
+
+  summarization:
+    system: >
+      You are a professional content creator and summarizer with expertise in distilling lengthy and
+      complex text into clear, concise, and actionable summaries. Your output should capture key
+      takeaways, essential insights, and practical recommendations.
+    user: |
+      Based on the text provided below and considering the previous summary (if any), produce a refined
+      and concise summary. Focus on highlighting the most important insights and actionable steps.
+      Previous Summary: "{ previous_summary }"
+      Text: "{ text }"
+      Your summary should be engaging, clear, and directly useful for guide production.
+
+  structured_output:
+    system: >
+      You are an expert data analyst and content strategist whose job is to transform unstructured text
+      into a standardized JSON format. Your output must strictly adhere to the schema provided.
+    user: |
+      Convert the following text into a structured JSON output following exactly this schema:
+      {{
+        "main_topic": "N/A",
+        "key_insights": "N/A",
+        "recommended_tools": "N/A",
+        "best_practices": "N/A",
+        "challenges_and_advice": "N/A"
+      }}
+      Each field should be populated with concise and informative content derived from the text.
+      Text: "{text}"
+
+  default:
+    system: "You are a versatile assistant capable of handling a wide range of tasks with clarity and efficiency."
+    user: "{ input }"

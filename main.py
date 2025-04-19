@@ -1,481 +1,437 @@
-import asyncio
-import logging
+#!/usr/bin/env python3
+"""
+主流程：处理多个视频
+本模块负责：
+  1. 初始化各项服务（数据库、YouTube、OpenAI、各 Agent）
+  2. 调用搜索、转录、评论、音频分析、摘要标准化等 Agent，完成视频信息提取
+  3. 异步处理多个视频，支持用户输入"exit"退出并生成处理报告
+"""
+
 import os
 import sys
 import json
+import logging
+import asyncio
 import traceback
 from datetime import datetime
-
-from dotenv import load_dotenv, dotenv_values
 from tqdm import tqdm
+import multiprocessing
+import argparse
 
-# === Your internal modules ===
-from utils.database import init_db, store_video_metadata, store_comments, update_video_metadata
-from agents.search_agent import multiagent_search
-from agents.transcript_agent import fetch_transcript
-from agents.summarization_agent import gpt_summarizer_agent, chunk_text_by_tokens
-from agents.filter_agent import filter_videos
-from agents.audio_agent import transcribe_audio_to_summary
-from agents.standardizer_agent import standardizer_agent
-from utils.youtube_fetcher import fetch_all_comments, fetch_video_metadata
-from utils.helper import retry, print_startup_banner
-import openai
+# 内部模块
+from utils.async_database import AsyncDatabase  # 异步数据库包装器
+from utils.database import Database              # 同步数据库，由 AsyncDatabase 包装
+from agents.search_agent import SearchAgent
+from agents.transcript_agent import run_transcript
+from agents.summarizer_agent import gpt_summarizer_agent  # 异步 LLM 摘要接口
+from agents.audio_agent import AudioProcessingAgent
+from agents.standardizer_agent import StandardizerAgent
+from utils.youtube import YouTubeService
+from utils.helper import print_startup_banner
+from utils.config import Config
 
-# -------------------------------------------------------------------------------
-# Load environment variables using load_dotenv (for process-level env) and dotenv_values (for our config dict)
-# -------------------------------------------------------------------------------
+from dotenv import load_dotenv
 load_dotenv()
-config = dotenv_values(".env")  # Read .env into a dictionary
 
 # -------------------------------------------------------------------------------
-# Initialize logging
+# 配置多进程启动方式
 # -------------------------------------------------------------------------------
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-# Create logs directory and file
-if not os.path.exists('logs'):
-    os.makedirs('logs')
-timestamp = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-log_filename = os.path.join('logs', f'{timestamp}.log')
-file_handler = logging.FileHandler(log_filename, mode='w', encoding='utf-8')
-file_handler.setLevel(logging.INFO)
-file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-file_handler.setFormatter(file_formatter)
-logging.getLogger().addHandler(file_handler)
-
-# Global semaphore (will be set later from CLI or config)
-semaphore = None
+try:
+    multiprocessing.set_start_method("fork", force=True)
+except RuntimeError:
+    pass
 
 # -------------------------------------------------------------------------------
-# CLI Arguments Parser
+# 配置 logger：同时输出到控制台和文件（外部传入各模块）
+# -------------------------------------------------------------------------------
+def get_logger():
+    logger = logging.getLogger("MainLogger")
+    logger.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+
+    # 避免重复添加 handler
+    if not logger.handlers:
+        # 控制台 handler
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.INFO)
+        console_handler.setFormatter(formatter)
+        logger.addHandler(console_handler)
+
+        # 文件 handler
+        os.makedirs('logs', exist_ok=True)
+        timestamp = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+        log_filename = os.path.join('logs', f'{timestamp}.log')
+        file_handler = logging.FileHandler(log_filename, mode='w', encoding='utf-8')
+        file_handler.setLevel(logging.INFO)
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+    return logger
+
+logger = get_logger()
+
+# -------------------------------------------------------------------------------
+# 全局信号量（控制并发数，从环境变量或配置中读取）
+# -------------------------------------------------------------------------------
+try:
+    concurrency = int(os.getenv("CONCURRENCY", "3"))
+except Exception:
+    concurrency = 3
+semaphore = asyncio.Semaphore(concurrency)
+
+# -------------------------------------------------------------------------------
+# CLI 参数解析
 # -------------------------------------------------------------------------------
 def parse_cli_arguments():
-    """
-    Parse command-line arguments, which can override the defaults in the .env file.
-    """
-    import argparse
     parser = argparse.ArgumentParser(
         description="YouTube Summarization Pipeline",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
-
-    parser.add_argument("--keyword", type=str, help="Base search keyword; if not provided, uses KEYWORD from .env")
-    parser.add_argument("--top_k", type=int, help="Number of videos to retrieve per keyword variation (default from TOP_K in .env)")
-    parser.add_argument("--filter_type", type=str, help="Filtering/sorting method for search results (e.g., view_count)")
-    parser.add_argument("--youtube_api_key", type=str, help="YouTube Data API Key; if not provided, read from .env")
-    parser.add_argument("--openai_api_key", type=str, help="OpenAI API Key; if not provided, read from .env")
-    parser.add_argument("--db_path", type=str, help="Path to the database; default from .env")
-    parser.add_argument("--persist_agent_summaries", action="store_true", help="Persist agent results; if set, then True")
-    parser.add_argument("--no_persist_agent_summaries", action="store_true", help="Explicitly set persist_agent_summaries to False")
-    parser.add_argument("--full_audio_analysis", action="store_true", help="Enable full audio analysis; if set, then True")
-    parser.add_argument("--no_full_audio_analysis", action="store_true", help="Explicitly set full_audio_analysis to False")
-    parser.add_argument("--dry_run", action="store_true", help="If set, skip external API calls and do not write to database")
-    parser.add_argument("--no_dry_run", action="store_true", help="Explicitly set dry_run to False")
-    parser.add_argument("--max_n", type=int, help="Number of keyword variations to generate; default from .env")
-    parser.add_argument("--concurrency", type=int, help="Number of concurrent tasks; overrides CONCURRENCY in .env")
-    # ★ New: Pure YouTube mode flag. When enabled, the system uses only the base keyword without AI expansion and disables audio analysis.
-    parser.add_argument("--pure_youtube", action="store_true", help="Pure YouTube mode: use only the base keyword (disable AI expansion and audio analysis).")
-
+    parser.add_argument("--pure_youtube", action="store_true", help="Pure YouTube mode: disable AI expansion and audio analysis.")
+    parser.add_argument("--dry_run", action="store_true", help="Dry run mode: skip external API calls and DB writes.")
     return parser.parse_args()
 
 # -------------------------------------------------------------------------------
-# Retry-decorated async functions
+# 异步监听退出命令
 # -------------------------------------------------------------------------------
-@retry(max_retries=3, delay=2)
-async def fetch_transcript_with_retry(video_id):
-    try:
-        return await fetch_transcript(video_id)
-    except Exception as e:
-        logging.error(f"Failed to fetch transcript for video {video_id}: {e}")
-        raise
-
-@retry(max_retries=3, delay=2)
-async def summarize_with_retry(transcript):
-    try:
-        summary = await gpt_summarizer_agent(transcript)
-        logging.info("Summary generated successfully.")
-        return summary
-    except Exception as e:
-        logging.error(f"Error during summarization: {e}")
-        return None
+async def listen_for_exit(exit_event: asyncio.Event):
+    logger.info("Type 'exit' and press Enter to gracefully stop processing new videos.")
+    user_input = await asyncio.to_thread(input, "")
+    if user_input.strip().lower() == "exit":
+        logger.info("Exit command received. New videos will not be scheduled; waiting for current tasks to finish.")
+        exit_event.set()
 
 # -------------------------------------------------------------------------------
-# Process a single video
+# 单个视频处理流程（异步调用各 Agent 接口）
 # -------------------------------------------------------------------------------
-async def process_single_video(
-    video,
-    openai_api_key,
-    keyword,
-    conn,
-    persist_agent_summaries,
-    full_audio_analysis,
-    dry_run,
-    youtube_api_key
-):
+async def process_single_video(video, keyword, async_db: AsyncDatabase, persist_summaries,
+                               full_audio_analysis, dry_run, youtube_service, openai_service, standardizer_agent):
     video_id = video['video_id']
     step = ""
     try:
         async with semaphore:
-            # Step 1: Fetch and store video metadata
+            # Step 1: 获取视频元数据
             step = "fetch_metadata"
-            logging.info(f"Fetching metadata for video {video_id}.")
-
+            logger.info(f"[{video_id}] Fetching metadata.")
             if not dry_run:
-                video_metadata = fetch_video_metadata(video_id, youtube_api_key)
+                video_metadata = youtube_service.fetch_video_metadata(video_id)
             else:
                 video_metadata = {
                     "video_id": video_id,
                     "title": f"Dummy title for {video_id} [dry_run]",
-                    "description": "No real metadata fetched in dry_run.",
+                    "description": "Dummy description.",
                     "publish_date": "2025-01-01",
-                    "channel_id": "dummy_channel_id",
+                    "channel_id": "dummy_channel",
                     "view_count": 999,
                     "like_count": 999,
-                    "comment_count": 999
+                    "comment_count": 999,
+                    "snippet": {
+                        "title": f"Dummy title for {video_id}",
+                        "description": "Dummy description.",
+                        "publishedAt": "2025-01-01",
+                        "channelTitle": "dummy_channel",
+                        "tags": [],
+                        "categoryId": "N/A",
+                        "defaultAudioLanguage": "en",
+                        "defaultLanguage": "en"
+                    },
+                    "contentDetails": {
+                        "duration": "N/A",
+                        "dimension": "2d",
+                        "definition": "hd",
+                        "caption": "false",
+                        "licensedContent": False
+                    }
                 }
+            if video_metadata and not dry_run and persist_summaries:
+                await async_db.store_video_metadata(video_metadata)
+            video['metadata'] = video_metadata
 
-            if video_metadata and not dry_run and persist_agent_summaries:
-                store_video_metadata(conn, video_metadata)
-
-            # Step 2: Fetch transcript or audio summary
-            step = "fetch_transcript_or_audio"
-            logging.info(f"Attempting to fetch transcript for video {video_id}.")
-            transcript = None
+            # Step 2: 获取 transcript 及 LLM 生成摘要
+            step = "fetch_transcript"
+            logger.info(f"[{video_id}] Fetching transcript.")
             if not dry_run:
-                try:
-                    transcript = await fetch_transcript_with_retry(video_id)
-                except Exception:
-                    transcript = None
+                transcript = await run_transcript(video_id, openai_service, youtube_service, logger=logger)
             else:
-                transcript = "Dummy transcript for dry_run."
-
+                transcript = "Dummy transcript in dry_run."
             if transcript:
                 video['transcript'] = transcript
                 if not dry_run:
-                    video['llm_summary'] = await summarize_with_retry(transcript)
+                    prompt_text = transcript
+                    llm_summary = await gpt_summarizer_agent(transcript, service=openai_service, logger=logger)
+                    video['llm_summary'] = llm_summary
+
+                    # —— 立即存一份到 transcripts 表 —— 
+                    if persist_summaries:
+                        await async_db.store_transcript_summary(
+                            video_id,
+                            transcript,
+                            llm_summary
+                        )
+
+                    await async_db.store_ai_interaction(
+                        input_data={"prompt": prompt_text},
+                        output_data={"response": llm_summary},
+                        interaction_type="transcript_summary",
+                        tokens_used=openai_service.total_prompt_tokens,
+                        cost=openai_service.total_cost
+                    )
                 else:
-                    video['llm_summary'] = "This is a dummy LLM summary in dry_run."
+                    video['llm_summary'] = "Dummy LLM summary in dry_run."
                 video['summary_source'] = 'transcript'
-                logging.info(f"Transcript and LLM summary generated for video {video_id}.")
+                logger.info(f"[{video_id}] Transcript and LLM summary obtained.")
             else:
-                logging.info(f"No transcript available for video {video_id}.")
-
-            # Step 3: Audio analysis (only if full_audio_analysis is enabled)
-            if full_audio_analysis:
-                logging.info(f"Full audio analysis enabled: {full_audio_analysis}")
-                logging.info(f"Attempting audio summarization for video ID: {video_id}.")
-                if not dry_run:
-                    summary = await transcribe_audio_to_summary(video_id, keyword, video_metadata)
-                else:
-                    summary = "Dummy audio summary for dry_run."
-
-                if summary:
-                    video['audio_summary'] = summary
-                    if 'summary_source' in video:
-                        video['summary_source'] += ', audio'
-                    else:
-                        video['summary_source'] = 'audio'
-                    logging.info(f"Audio summary generated successfully for video {video_id}.")
-                    logging.info(f"Video audio summary collected: {summary}")
-                else:
-                    logging.error(f"No audio summary available for video {video_id}. Skipping audio summarization.")
-            else:
-                logging.info(f"Audio analysis is disabled, skipping audio summarization for video {video_id}.")
-
-            # Step 4: Fetch and store comments
+                logger.info(f"[{video_id}] No transcript available.")
+            # Step 3: 异步获取评论（并行执行）
             step = "fetch_comments"
+            logger.info(f"[{video_id}] Fetching comments asynchronously.")
             try:
                 if not dry_run:
-                    comments = fetch_all_comments(video_id, youtube_api_key)
-                    logging.info(f"Fetched {len(comments)} comments for video ID: {video_id}")
+                    loop = asyncio.get_running_loop()
+                    comments = await loop.run_in_executor(None, youtube_service.fetch_all_comments, video_id)
                 else:
                     comments = [
-                        {"author": "Dummy user", "text": "This is a dummy comment for dry_run."},
-                        {"author": "Tester", "text": "Another dummy comment."}
+                        {"comment_id": "dummy1", "author": "Dummy user", "text": "Dummy comment.", "like_count": 0,
+                         "publish_time": "2025-01-01", "viewer_rating": "none", "moderation_status": "published", "parent_id": None},
+                        {"comment_id": "dummy2", "author": "Tester", "text": "Another dummy comment.", "like_count": 0,
+                         "publish_time": "2025-01-01", "viewer_rating": "none", "moderation_status": "published", "parent_id": None}
                     ]
-                    logging.info(f"Fetched {len(comments)} dummy comments for video {video_id} in dry_run.")
+                video['comments'] = comments
+                if comments and not dry_run and persist_summaries:
+                    await async_db.store_comments(video_id, comments)
+                logger.info(f"[{video_id}] {len(comments)} comments fetched.")
             except Exception as e:
-                logging.error(f"Error fetching comments for video {video_id}: {e}")
-                comments = None
+                logger.error(f"[{video_id}] Error fetching comments: {e}")
+                video['comments'] = None
 
-            if comments and not dry_run and persist_agent_summaries:
-                store_comments(conn, video_id, comments)
-                logging.info(f"Comments stored for video {video_id}.")
-
-            # Step 5: Ensure weighted_score field exists
-            video['weighted_score'] = video.get('weighted_score', 0)
-
-            # Step 6: Standardize summary and analyze metadata
-            step = "standardize_summary_metadata"
-            logging.info(f"Standardizing summary and metadata for video {video_id}")
-            summary_text = None
-
-            # Prioritize standardizing the LLM summary
-            if 'llm_summary' in video and video['llm_summary']:
-                standardized_results = None
+            # Step 4: 音频分析（可选）
+            if full_audio_analysis:
+                step = "audio_analysis"
+                logger.info(f"[{video_id}] Audio analysis enabled.")
+                # 1) Whisper 整段转录
                 try:
-                    standardized_results = await standardizer_agent(video['llm_summary'])
+                    transcript_audio = await run_transcript(video_id, openai_service, youtube_service, logger=logger)
                 except Exception as e:
-                    logging.error(f"Error standardizing LLM summary for video {video_id}: {e}")
+                    logger.error(f"[{video_id}] Whisper transcription failed: {e}")
+                    transcript_audio = None
 
-                if standardized_results:
-                    video['standardized_summary'] = standardized_results
-                    logging.info(f"Standardization completed for LLM summary of video {video_id}.")
-                    summary_text = video['standardized_summary']
+                # 2) LLM 摘要
+                audio_summary = None
+                if transcript_audio:
+                    try:
+                        audio_summary = await gpt_summarizer_agent(
+                            transcript_audio,
+                            service=openai_service,
+                            logger=logger
+                        )
+                    except Exception as e:
+                        logger.error(f"[{video_id}] Audio summary generation failed: {e}")
+
+                # 3) 回退：逐块处理
+                if not audio_summary:
+                    agent = AudioProcessingAgent(
+                        openai_service=openai_service,
+                        youtube_service=youtube_service,
+                        logger=logger
+                    )
+                    try:
+                        audio_summary = await agent.process_video_audio(
+                            video_id=video_id,
+                            topic=keyword,
+                            metadata={"title": video_metadata.get("title", "")}
+                        )
+                    except Exception as e:
+                        logger.error(f"[{video_id}] Chunked audio analysis failed: {e}")
+
+                if audio_summary:
+                    video['audio_summary'] = audio_summary
+                    video['summary_source'] = video.get('summary_source', '') + ', audio'
+                    logger.info(f"[{video_id}] Audio summary obtained.")
                 else:
-                    logging.error(f"Standardization failed for LLM summary of video {video_id}. Using original summary.")
-                    video['standardized_summary'] = video['llm_summary']
-                    summary_text = video['llm_summary']
-                logging.info(f"[STEP 5] Standard agent summary (LLM): {summary_text}")
-
-            # Also standardize audio summary if available
-            if 'audio_summary' in video and video['audio_summary']:
-                standardized_audio = None
-                try:
-                    standardized_audio = await standardizer_agent(video['audio_summary'])
-                except Exception as e:
-                    logging.error(f"Error standardizing audio summary for video {video_id}: {e}")
-
-                if standardized_audio:
-                    video['standardized_summary'] = standardized_audio
-                    logging.info(f"Standardization completed for audio summary of video {video_id}.")
-                    summary_text = video['standardized_summary']
-                else:
-                    logging.error(f"Standardization failed for audio summary for video {video_id}. Using original audio summary.")
-                    video['standardized_summary'] = video['audio_summary']
-                    summary_text = video['audio_summary']
-                logging.info(f"[STEP 5] Standard agent summary (Audio): {summary_text}")
+                    logger.error(f"[{video_id}] Audio analysis produced no summary.")
             else:
-                logging.info(f"No separate audio_summary to standardize for video {video_id} (may be normal).")
+                logger.info(f"[{video_id}] Audio analysis disabled.")
 
-            # Step 7: Store final metadata into the database
-            if not dry_run and persist_agent_summaries and conn:
-                video['timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # Add timestamp
+            # Step 5: 标准化摘要
+            step = "standardize_summary"
+            logger.info(f"[{video_id}] Standardizing summary.")
+            if video.get('llm_summary'):
+                try:
+                    standardized_summary = await standardizer_agent.standardize(video['llm_summary'])
+                    video['standardized_summary'] = standardized_summary
+                    logger.info(f"[{video_id}] Standardized LLM summary: {standardized_summary}")
+                except Exception as e:
+                    logger.error(f"[{video_id}] LLM summary standardization error: {e}")
+                    video['standardized_summary'] = video.get('llm_summary', '')
+            if video.get('audio_summary'):
+                try:
+                    standardized_audio = await standardizer_agent.standardize(video['audio_summary'])
+                    video['standardized_audio_summary'] = standardized_audio
+                    logger.info(f"[{video_id}] Standardized audio summary: {standardized_audio}")
+                except Exception as e:
+                    logger.error(f"[{video_id}] Audio summary standardization error: {e}")
+                    video['standardized_audio_summary'] = video.get('audio_summary', '')
+            summary_text = (
+                video.get('standardized_audio_summary')
+                or video.get('standardized_summary')
+                or video.get('llm_summary', '')
+            )
+            video['final_summary'] = summary_text
 
-                # Debug info
-                if 'llm_summary' in video:
-                    logging.info(f"LLM Summary: {video['llm_summary']}")
-                if 'audio_summary' in video:
-                    logging.info(f"Audio Summary: {video['audio_summary']}")
-
-                # Serialize audio summary if exists
-                audio_summary_serialized = json.dumps(video.get('audio_summary', {})) if 'audio_summary' in video else None
-
-                update_video_metadata(
-                    conn,
+            # Step 6: 更新数据库记录
+            step = "update_metadata"
+            if not dry_run and persist_summaries and async_db:
+                video['timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                await async_db.update_video_metadata(
                     video_id,
                     video.get('llm_summary', ''),
                     video.get('transcript', ''),
-                    audio_summary_serialized
+                    json.dumps(video.get('audio_summary', {})) if video.get('audio_summary') else None
                 )
-                logging.info(f"Metadata updated in the database for video {video_id}.")
+                logger.info(f"[{video_id}] Metadata updated in DB.")
+
     except Exception as e:
-        logging.error(f"Error during processing video {video_id}, Exception: {e}")
-        logging.debug(traceback.format_exc())
+        logger.error(f"[{video_id}] Error at step {step}: {e}")
+        logger.debug(traceback.format_exc())
 
 # -------------------------------------------------------------------------------
-# Main pipeline: Process multiple videos
+# 主流程：处理多个视频，支持异步退出且仅完成已调度视频
 # -------------------------------------------------------------------------------
-# Added new parameter pure_youtube to control whether to use pure YouTube mode.
-async def process_videos(
-    keyword,
-    top_k,
-    filter_type,
-    youtube_api_key,
-    openai_api_key,
-    db_path,
-    persist_agent_summaries,
-    full_audio_analysis,
-    dry_run,
-    max_n,
-    pure_youtube=False  # New: Pure YouTube mode flag
-):
-    logging.info("Starting video processing pipeline.")
-
+async def process_videos(keyword, top_k, youtube_service, openai_api_key, db_path,
+                         persist_summaries, full_audio_analysis, dry_run, max_n, pure_youtube=False):
+    logger.info("Starting video processing pipeline.")
     if dry_run:
-        logging.info("Running in dry_run mode: No API calls or database writes will be performed.")
+        logger.info("Dry run mode: external API calls and DB writes are skipped.")
 
-    # Connect to the database if not in dry run mode
-    conn = init_db(db_path) if not dry_run else None
+    async_db = AsyncDatabase(Database(db_path, logger=logger)) if not dry_run else None
+    exit_event = asyncio.Event()
+    exit_listener = asyncio.create_task(listen_for_exit(exit_event))
+
+    processed_videos = []
+    tasks = []
 
     try:
-        step = "brainstorm_keywords"
-        logging.info(f"Brainstorming {max_n} keyword variations.")
+        from utils.openAIServices import OpenAIService
+        openai_service = OpenAIService(api_key=openai_api_key, logger=logger)
+        standardizer_agent = StandardizerAgent(openai_service=openai_service, logger=logger)
+        search_agent = SearchAgent(youtube_service, openai_service=openai_service, logger=logger)
 
-        # Pass the pure_youtube flag to multiagent_search
-        generated_keywords, search_results = await multiagent_search(
-            base_keyword=keyword,
-            max_n=max_n,
-            top_k=top_k,
-            youtube_api_key=youtube_api_key,
-            openai_api_key=openai_api_key,
-            conn=conn,
-            dry_run=dry_run,
-            pure_youtube=pure_youtube
-        )
+        aggregated = await search_agent.aggregate_search(keyword)
+        if asyncio.iscoroutine(aggregated):
+            aggregated = await aggregated
+        deduped = search_agent.deduplicate_results(aggregated)
+        top_n = top_k if pure_youtube else top_k * max_n
+        refined = search_agent.refine_results(deduped, top_n=top_n)
+        logger.info(f"Selected {len(refined)} videos of keyword {keyword} for processing.")
 
-        if not search_results or not search_results.get("videos"):
-            if dry_run:
-                logging.info("No search results from multiagent_search; constructing dummy search results for dry_run.")
-                search_results = {
-                    "videos": [
-                        {"video_id": f"dummy_video_{i}", "weighted_score": 0}
-                        for i in range(top_k)
-                    ]
-                }
-                generated_keywords = [f"{keyword} dummy variation {i}" for i in range(max_n)]
-            else:
-                raise Exception(f"No search results returned from YouTube API: {search_results}")
+        for video in tqdm(refined, desc="Processing Videos"):
+            if exit_event.is_set():
+                logger.info("Exit command detected. Stopping scheduling of new videos.")
+                break
+            task = asyncio.create_task(process_single_video(
+                video, keyword, async_db, persist_summaries,
+                full_audio_analysis, dry_run, youtube_service, openai_service, standardizer_agent
+            ))
+            tasks.append(task)
+            processed_videos.append(video)
 
-        logging.info(f"Generated keywords: {generated_keywords}")
-
-        step = "filter_search_results"
-        valid_videos = search_results.get("videos", [])
-        if not valid_videos:
-            logging.error("No valid search results found with videos.")
-            return
-
-        # In pure YouTube mode, we only process TOP_K videos (since max_n is forced to 1)
-        if pure_youtube:
-            top_n = min(top_k, len(valid_videos))
-        else:
-            top_n = min(top_k * max_n, len(valid_videos))
-        logging.info(f"Selecting top {top_n} videos from {len(valid_videos)} collected.")
-
-        selected_videos = valid_videos[:top_n]
-
-        tasks = [
-            process_single_video(
-                video,
-                openai_api_key,
-                keyword,
-                conn,
-                persist_agent_summaries,
-                full_audio_analysis,
-                dry_run,
-                youtube_api_key
-            )
-            for video in tqdm(selected_videos, desc="Processing Videos")
-        ]
-
-        await asyncio.gather(*tasks)
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     except Exception as e:
-        logging.error(f"Pipeline failed at step {step}: {e}")
-        logging.debug(traceback.format_exc())
+        logger.error(f"Pipeline failed: {e}")
+        logger.debug(traceback.format_exc())
     finally:
-        if conn:
-            conn.close()
-        logging.info("Video processing pipeline completed.")
+        if async_db:
+            await async_db.close()
+        await exit_listener
 
+        report = {
+            "processed_videos": len(processed_videos),
+            "video_ids": [video.get('video_id') for video in processed_videos],
+            "total_prompt_tokens": openai_service.total_prompt_tokens if openai_service else 0,
+            "total_completion_tokens": openai_service.total_completion_tokens if openai_service else 0,
+            "total_cost": openai_service.total_cost if openai_service else 0.0,
+            "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+        os.makedirs('logs', exist_ok=True)
+        report_file = os.path.join("logs", f"report_{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.json")
+        with open(report_file, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=4)
+        logger.info(f"Processing report generated: {report_file}")
+        logger.info("Video processing pipeline completed.")
 
 # -------------------------------------------------------------------------------
-# Main entry point
+# 主入口
 # -------------------------------------------------------------------------------
 if __name__ == "__main__":
-    # Print startup banner
     print_startup_banner()
-
     args = parse_cli_arguments()
 
-    # 1) Read default values from .env using dotenv_values instead of os.getenv
-    config = dotenv_values(".env")
-    keyword_env = config.get("KEYWORD")
-    youtube_api_key_env = config.get("YOUTUBE_API_KEY")
-    openai_api_key_env = config.get("OPENAI_API_KEY")
-    db_path_env = config.get("DB_PATH", "youtube_summaries.db")
-    persist_env = config.get("PERSIST_AGENT_SUMMARIES", "true").lower() == "true"
-    full_audio_env = config.get("FULL_AUDIO_ANALYSIS", "true").lower() == "true"
-    dry_run_env = config.get("DRY_RUN", "false").lower() == "true"
-    max_n_env = int(config.get("MAX_N", "5"))
-    top_k_env = int(config.get("TOP_K", "3"))
-    filter_type_env = config.get("FILTER_TYPE", "view_count")
-    concurrency_env = int(config.get("CONCURRENCY", "1"))
+    try:
+        config_obj = Config(vars(args))
+    except Exception as e:
+        logger.error(f"Configuration error: {e}")
+        sys.exit(1)
 
-    # 2) Override with CLI arguments if provided
-    keyword = args.keyword if args.keyword else keyword_env
-    youtube_api_key = args.youtube_api_key if args.youtube_api_key else youtube_api_key_env
-    openai_api_key = args.openai_api_key if args.openai_api_key else openai_api_key_env
-    db_path = args.db_path if args.db_path else db_path_env
+    keyword = config_obj.KEYWORD
+    openai_api_key = config_obj.OPENAI_API_KEY
+    db_path = config_obj.DB_PATH
+    persist_summaries = config_obj.PERSIST_AGENT_SUMMARIES
+    full_audio_analysis = config_obj.FULL_AUDIO_ANALYSIS
+    dry_run = config_obj.DRY_RUN
+    max_n = config_obj.MAX_N
+    top_k = config_obj.TOP_K
+    pure_youtube = config_obj.PURE_YOUTUBE
 
-    if args.no_persist_agent_summaries:
-        persist_agent_summaries = False
-    elif args.persist_agent_summaries:
-        persist_agent_summaries = True
-    else:
-        persist_agent_summaries = persist_env
-
-    if args.no_full_audio_analysis:
-        full_audio_analysis = False
-    elif args.full_audio_analysis:
-        full_audio_analysis = True
-    else:
-        full_audio_analysis = full_audio_env
-
-    if args.no_dry_run:
-        dry_run = False
-    elif args.dry_run:
-        dry_run = True
-    else:
-        dry_run = dry_run_env
-
-    top_k = args.top_k if args.top_k is not None else top_k_env
-    max_n = args.max_n if args.max_n is not None else max_n_env
-    if args.filter_type:
-        filter_type = args.filter_type
-    else:
-        filter_type = filter_type_env
-
-    concurrency = args.concurrency if args.concurrency is not None else concurrency_env
-    semaphore = asyncio.Semaphore(concurrency)
-
-    # ★ New: Pure YouTube mode flag from CLI
-    pure_youtube = args.pure_youtube
-    # In pure YouTube mode, force max_n to 1 and disable full audio analysis to avoid extra cost.
     if pure_youtube:
-        logging.info("Pure YouTube mode enabled: overriding max_n to 1 and disabling audio analysis to reduce cost.")
+        logger.info("Pure YouTube mode enabled: forcing max_n=1 and disabling audio analysis.")
         max_n = 1
         full_audio_analysis = False
 
-    logging.info("Starting the video processing script with the following parameters:")
-    logging.info(f"  keyword = {keyword}")
-    logging.info(f"  top_k = {top_k}")
-    logging.info(f"  filter_type = {filter_type}")
-    logging.info(f"  youtube_api_key = {'SET' if youtube_api_key else 'NOT SET'}")
-    logging.info(f"  openai_api_key = {'SET' if openai_api_key else 'NOT SET'}")
-    logging.info(f"  db_path = {db_path}")
-    logging.info(f"  persist_agent_summaries = {persist_agent_summaries}")
-    logging.info(f"  full_audio_analysis = {full_audio_analysis}")
-    logging.info(f"  dry_run = {dry_run}")
-    logging.info(f"  max_n = {max_n}")
-    logging.info(f"  concurrency = {concurrency}")
-    logging.info(f"  pure_youtube = {pure_youtube}")
+    logger.info("Starting video processing script with parameters:")
+    logger.info(f"  keyword = {keyword}")
+    logger.info(f"  top_k = {top_k}")
+    logger.info(f"  YouTube API keys count = {len(config_obj.YOUTUBE_API_KEYS)}")
+    logger.info(f"  openai_api_key = {'SET' if openai_api_key else 'NOT SET'}")
+    logger.info(f"  db_path = {db_path}")
+    logger.info(f"  persist_agent_summaries = {persist_summaries}")
+    logger.info(f"  full_audio_analysis = {full_audio_analysis}")
+    logger.info(f"  dry_run = {dry_run}")
+    logger.info(f"  max_n = {max_n}")
+    logger.info(f"  concurrency = {concurrency}")
+    logger.info(f"  pure_youtube = {pure_youtube}")
 
-    if not youtube_api_key or (not pure_youtube and not openai_api_key):
-        logging.error("API keys not found. Make sure .env is set correctly or pass via CLI.")
+    if not config_obj.YOUTUBE_API_KEYS or (not pure_youtube and not openai_api_key):
+        logger.error("Required API keys not found. Please check your .env file.")
         sys.exit(1)
     if not keyword:
-        logging.error("No keyword found. Provide KEYWORD in .env or --keyword in CLI.")
+        logger.error("No keyword provided in configuration.")
         sys.exit(1)
+
+    try:
+        youtube_service = YouTubeService(config_obj.YOUTUBE_API_KEYS, logger=logger)
+    except Exception as e:
+        logger.error(f"Error initializing YouTubeService: {e}")
+        sys.exit(1)
+    logger.info(f"YouTubeService initialized with {len(config_obj.YOUTUBE_API_KEYS)} key(s).")
 
     try:
         asyncio.run(
             process_videos(
                 keyword=keyword,
                 top_k=top_k,
-                filter_type=filter_type,
-                youtube_api_key=youtube_api_key,
+                youtube_service=youtube_service,
                 openai_api_key=openai_api_key,
                 db_path=db_path,
-                persist_agent_summaries=persist_agent_summaries,
+                persist_summaries=persist_summaries,
                 full_audio_analysis=full_audio_analysis,
                 dry_run=dry_run,
                 max_n=max_n,
-                pure_youtube=pure_youtube  # Pass pure YouTube mode flag
+                pure_youtube=pure_youtube
             )
         )
-        logging.info("Script execution finished successfully.")
+        logger.info("Script finished successfully.")
     except Exception as e:
-        logging.error(f"An error occurred while running the pipeline: {e}")
-        logging.debug(traceback.format_exc())
+        logger.error(f"Pipeline execution error: {e}")
+        logger.debug(traceback.format_exc())
         sys.exit(1)

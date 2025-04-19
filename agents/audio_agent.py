@@ -1,380 +1,500 @@
+#!/usr/bin/env python3
+"""
+Audio Processing Agent
+
+本模块通过以下步骤处理 YouTube 视频音频：
+1. 如果启用了字幕 API 且传入了 TranscriptAgent，则首先调用 TranscriptAgent.fetch_transcript 获取视频字幕；
+2. 如果字幕获取失败，则调用 YouTubeService.download_audio 下载视频音频（采用 pytube + ffmpeg 提取 mp3）；
+3. 使用 pydub 将下载的音频文件分割为固定时长的片段；
+4. 并发调用 AudioChunkProcessor 对每个音频块进行转录和摘要生成（调用 OpenAIService.transcribe_audio 与 async_completion）；
+5. 递归合并所有片段摘要生成最终摘要；
+6. 若配置了数据库，则记录处理日志到数据库中。
+
+整个流程中增加了详细日志记录和错误重试（self-healing）机制，确保在出现异常时自动回退到备用方案，从而降低系统风险。
+"""
+
 import os
 import logging
 import asyncio
-import random  # 添加缺失的导入
-from openai import AsyncOpenAI  # 请确保您使用的库支持异步操作
-
-from yt_dlp import YoutubeDL
-from pydub import AudioSegment
+import traceback
+from datetime import datetime
+from functools import wraps
 from io import BytesIO
-import json
-from dotenv import load_dotenv
-import sys
-import aiohttp
-import re
+from typing import Any, Dict, List, Optional, Tuple
 
-# 配置日志
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+from pydub import AudioSegment
+from utils.helper import retry
+from utils.youtube import YouTubeService  # 请确保此模块中包含下载音频等实现
+from utils.openAIServices import OpenAIService  # 使用统一封装好的 OpenAIService
 
-# 加载环境变量
-load_dotenv()
-openai_api_key = os.getenv("OPENAI_API_KEY")
+# 如果外部没有传入 logger，则使用模块级默认 logger
+DEFAULT_LOGGER = logging.getLogger("AudioProcessingAgent")
+DEFAULT_LOGGER.setLevel(logging.INFO)
+_handler = logging.StreamHandler()
+_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
+if not DEFAULT_LOGGER.handlers:
+    DEFAULT_LOGGER.addHandler(_handler)
 
-# 验证 OpenAI API 密钥
-if not openai_api_key:
-    logging.error("OpenAI API key not found. Please set it in your environment variables.")
-    sys.exit(1)
 
-# 初始化 OpenAI 客户端
-aclient = AsyncOpenAI(api_key=openai_api_key)
+def validate_video_id(func):
+    """视频ID校验装饰器，确保传入的 YouTube 视频 ID 合法"""
+    @wraps(func)
+    async def wrapper(self, video_id: str, *args, **kwargs):
+        if not (len(video_id) == 11 and video_id.isalnum()):
+            raise ValueError(f"Invalid YouTube video ID: {video_id}")
+        return await func(self, video_id, *args, **kwargs)
+    return wrapper
 
-# 重试装饰器
-def retry(max_retries=3, delay=2):
-    def decorator(func):
-        async def wrapper(*args, **kwargs):
-            for attempt in range(1, max_retries + 1):
-                try:
-                    return await func(*args, **kwargs)
-                except Exception as e:
-                    if attempt == max_retries:
-                        logging.error(f"Error in {func.__name__}: {e}. Exceeded maximum retries.")
-                        raise
-                    else:
-                        logging.warning(f"Error in {func.__name__}: {e}. Retrying {attempt}/{max_retries} after {delay} seconds...")
-                        await asyncio.sleep(delay)
-        return wrapper
-    return decorator
 
-# 下载 YouTube 视频音频
+async def maybe_async(func, *args, **kwargs):
+    """
+    如果 func 是 async 函数，则直接 await 调用；否则用 asyncio.to_thread 包装调用。
+    """
+    if asyncio.iscoroutinefunction(func):
+        return await func(*args, **kwargs)
+    else:
+        return await asyncio.to_thread(func, *args, **kwargs)
+
+
 @retry(max_retries=3, delay=5)
-async def download_audio(video_id):
+async def fetch_transcript(youtube_service: YouTubeService, video_id: str) -> Optional[str]:
+    """
+    尝试获取视频字幕。
+    使用 youtube_transcript_api.get_transcript 通过 asyncio.to_thread 调用，
+    如果获取到的字幕为空或出错，则抛出异常以触发重试。
+    """
     try:
-        os.makedirs('downloads', exist_ok=True)
-        audio_path = f'downloads/{video_id}.mp3'
-        if os.path.exists(audio_path):
-            logging.info(f"Audio file {audio_path} already exists. Skipping download.")
-            return audio_path
+        from youtube_transcript_api import YouTubeTranscriptApi
+        transcript_entries = await asyncio.to_thread(YouTubeTranscriptApi.get_transcript, video_id, ["en"])
+        transcript = " ".join([str(entry.get('text', '')) for entry in transcript_entries])
+        if not transcript or not transcript.strip():
+            raise Exception("Transcript is empty.")
+        DEFAULT_LOGGER.info(f"[fetch_transcript] Fetched transcript for video {video_id}: {transcript[:50]}...")
+        return transcript
+    except Exception as e:
+        DEFAULT_LOGGER.error(f"[fetch_transcript] Error fetching transcript for video {video_id}: {e}", exc_info=True)
+        raise Exception(f"Transcript not found for video {video_id}") from e
 
-        logging.info(f"Downloading audio for video ID: {video_id}")
 
-        ydl_opts = {
-            'format': 'bestaudio/best',
-            'outtmpl': f'downloads/{video_id}.%(ext)s',
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }],
-            'quiet': True,
-            'no_warnings': True,
-        }
+class AudioChunkProcessor:
+    """
+    辅助处理单个音频块：
+      - 使用 OpenAIService.transcribe_audio 转录音频；
+      - 根据转录结果调用 OpenAIService.async_completion 生成摘要。
+    """
+    def __init__(self, openai_service: OpenAIService, logger: logging.Logger):
+        self.openai_service = openai_service
+        self.logger = logger
 
-        def download():
-            with YoutubeDL(ydl_opts) as ydl:
-                video_url = f"https://www.youtube.com/watch?v={video_id}"
-                ydl.download([video_url])
-
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, download)
-
-        if os.path.exists(audio_path):
-            logging.info(f"Audio downloaded successfully for video ID {video_id}.")
-            return audio_path
-        else:
-            logging.error(f"Audio file {audio_path} not found after download.")
+    @retry(max_retries=3, delay=2)
+    async def process_chunk(self, chunk: AudioSegment, chunk_idx: int,
+                              previous_summary: str, topic: str) -> Optional[Tuple[int, str]]:
+        try:
+            self.logger.info(f"[Chunk {chunk_idx}] Starting transcription.")
+            transcript = await self._transcribe_chunk(chunk)
+            if not transcript:
+                self.logger.error(f"[Chunk {chunk_idx}] Transcription returned empty result.")
+                return None
+            self.logger.info(f"[Chunk {chunk_idx}] Transcription succeeded; starting summary generation.")
+            summary = await self._generate_summary(transcript, previous_summary, topic)
+            self.logger.info(f"[Chunk {chunk_idx}] Summary generated.")
+            return (chunk_idx, summary)
+        except Exception as e:
+            self.logger.error(f"[Chunk {chunk_idx}] Processing failed: {e}", exc_info=True)
             return None
 
-    except Exception as e:
-        logging.error(f"Failed to download audio for video ID {video_id}: {e}")
+    async def _transcribe_chunk(self, chunk: AudioSegment) -> Optional[str]:
+        with BytesIO() as buffer:
+            chunk.export(buffer, format="mp3")
+            buffer.seek(0)
+            return await self.openai_service.transcribe_audio(buffer)
+
+    async def _generate_summary(self, transcript: str, previous_summary: str,
+                                  topic: str) -> Optional[str]:
+        try:
+            prompt = self.openai_service.get_prompt("summarization", variables={
+                "text": transcript,
+                "previous_summary": previous_summary,
+                "topic": topic
+            })
+        except Exception as e:
+            self.logger.error(f"Error obtaining summarization prompt: {e}", exc_info=True)
+            prompt = (f"Summarize the following text for topic '{topic}':\n"
+                      f"Previous Summary: {previous_summary}\nText: {transcript}")
+        response = await self.openai_service.async_completion(prompt=prompt)
+        result = response.strip() if response else None
+        if not result:
+            self.logger.error("Generated summary is empty.")
+        return result
+
+
+class AudioProcessingAgent:
+    """
+    AudioProcessingAgent 负责处理 YouTube 视频音频并生成结构化摘要。
+    流程：
+      1. 如果启用了字幕 API 且传入了 TranscriptAgent，则调用其 fetch_transcript 获取字幕；
+      2. 如果字幕不可用，则调用 YouTubeService.download_audio 下载视频音频；
+      3. 分割音频为固定时长片段；
+      4. 并发调用 AudioChunkProcessor 对每个音频块进行转录和摘要生成；
+      5. 递归合并所有片段摘要生成最终摘要；
+      6. 若配置了数据库，则记录处理日志到数据库中。
+    """
+    DEFAULT_MAX_TOKENS = 3000
+    JSON_TEMPLATE = {
+        "main_topic": "N/A",
+        "key_insights": "N/A",
+        "recommended_tools": "N/A",
+        "best_practices": "N/A",
+        "challenges_and_advice": "N/A"
+    }
+
+    def __init__(self,
+                 openai_service: OpenAIService,
+                 youtube_service: Optional[Any] = None,
+                 download_dir: str = "downloads",
+                 max_duration_ms: int = 60000,
+                 max_concurrency: int = 3,
+                 debug_mode: bool = False,
+                 db: Optional[Any] = None,
+                 temp_dir: str = "temp_audio",
+                 use_transcript_api: bool = True,
+                 transcript_agent: Optional[Any] = None,
+                 logger: Optional[logging.Logger] = None):
+        """
+        :param transcript_agent: 可选的 TranscriptAgent 实例，用于优先获取字幕。
+        :param logger: 外部传入的 logger 对象，用于统一日志记录。
+        """
+        self.openai_service = openai_service
+        self.download_dir = download_dir
+        self.max_duration_ms = max_duration_ms
+        self.max_concurrency = max_concurrency
+        self.debug_mode = debug_mode
+        self.db = db
+        self.temp_dir = temp_dir
+        self.use_transcript_api = use_transcript_api
+        self.transcript_agent = transcript_agent
+        self.logger = logger if logger else DEFAULT_LOGGER
+
+        os.makedirs(self.download_dir, exist_ok=True)
+        os.makedirs(self.temp_dir, exist_ok=True)
+
+        # 注意：确保 YouTubeService 实例中包含下载音频等实现
+        self.youtube_service = youtube_service or YouTubeService(api_keys=["dummy_key"])
+        self.chunk_processor = AudioChunkProcessor(openai_service, self.logger)
+
+    async def get_transcript(self, video_id: str) -> Optional[str]:
+        """
+        尝试获取视频字幕。
+        如果传入了 TranscriptAgent，则优先调用其 fetch_transcript 方法；否则直接返回 None。
+        """
+        if self.use_transcript_api and self.transcript_agent:
+            try:
+                # 调用 TranscriptAgent.fetch_transcript（此方法内部已使用自身的 youtube_service）
+                transcript = await self.transcript_agent.fetch_transcript(video_id)
+                if transcript and transcript.strip():
+                    self.logger.info(f"[AudioProcessingAgent] Obtained transcript via TranscriptAgent for video {video_id}.")
+                    return transcript
+            except Exception as e:
+                self.logger.warning(f"[AudioProcessingAgent] TranscriptAgent fetch failed for video {video_id}: {e}", exc_info=True)
         return None
 
-# 分割音频
-def split_audio(audio_path, max_duration_ms=60000):
-    try:
-        logging.info(f"Splitting audio {audio_path} into chunks of {max_duration_ms} ms.")
-        audio = AudioSegment.from_file(audio_path)
-        chunks = [audio[i:i + max_duration_ms] for i in range(0, len(audio), max_duration_ms)]
-        logging.info(f"Audio split into {len(chunks)} chunks.")
-        return chunks
-    except Exception as e:
-        logging.error(f"Failed to split audio {audio_path}: {e}")
-        return []
+    async def download_audio(self, video_id: str) -> Optional[str]:
+        """
+        异步下载视频音频文件（调用 YouTubeService.download_audio），返回音频文件路径。
+        """
+        self.logger.info(f"[Video {video_id}] Step 1: Downloading audio.")
+        loop = asyncio.get_running_loop()
+        audio_path = await loop.run_in_executor(None, self.youtube_service.download_audio, video_id)
+        if audio_path:
+            self.logger.info(f"[Video {video_id}] Audio file downloaded: {audio_path}")
+            if self.db:
+                try:
+                    record = {
+                        "process": "download_audio",
+                        "video_id": video_id,
+                        "audio_path": audio_path,
+                        "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    }
+                    await self.db.store_data("audio_processing_logs", record)
+                    self.logger.info(f"[Video {video_id}] Download record stored in database.")
+                except Exception as e:
+                    self.logger.error(f"[Video {video_id}] Failed to store download record: {e}", exc_info=True)
+        else:
+            self.logger.error(f"[Video {video_id}] Audio download failed.")
+        return audio_path
 
-# 转录音频块
-@retry(max_retries=3, delay=5)
-async def transcribe_audio_chunk(audio_chunk):
-    try:
-        # 将 AudioSegment 转换为字节
-        audio_file = BytesIO()
-        audio_chunk.export(audio_file, format="mp3")
-        audio_file.seek(0)  # 重置文件指针
+    def split_audio(self, audio_path: str) -> List[AudioSegment]:
+        """
+        使用 pydub 将音频文件分割为固定时长的片段。
+        """
+        try:
+            self.logger.info(f"[Audio {audio_path}] Step 2: Splitting audio into {self.max_duration_ms} ms chunks.")
+            audio = AudioSegment.from_file(audio_path)
+            chunks = [audio[i:i + self.max_duration_ms] for i in range(0, len(audio), self.max_duration_ms)]
+            self.logger.info(f"[Audio {audio_path}] Audio split into {len(chunks)} chunks.")
+            return chunks
+        except Exception as e:
+            self.logger.error(f"[Audio {audio_path}] Failed to split audio: {e}", exc_info=True)
+            return []
 
-        # 使用 OpenAI Whisper API 进行转录
-        logging.info("Transcribing audio chunk using OpenAI Whisper API.")
-
-        url = "https://api.openai.com/v1/audio/transcriptions"
-
-        headers = {
-            "Authorization": f"Bearer {openai_api_key}",
-        }
-
-        # 添加随机延迟以模拟人类互动
-        await asyncio.sleep(random.uniform(0.5, 2))
-
-        form_data = aiohttp.FormData()
-        form_data.add_field('file',
-                            audio_file,
-                            filename='audio_chunk.mp3',
-                            content_type='audio/mpeg')
-        form_data.add_field('model', 'whisper-1')
-        form_data.add_field('response_format', 'text')
-
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, data=form_data) as resp:
-                if resp.status == 200:
-                    transcript_text = await resp.text()
-                    logging.info("Transcription completed for audio chunk.")
+    @retry(max_retries=3, delay=5)
+    async def transcribe_audio_chunk(self, audio_chunk: AudioSegment) -> Optional[str]:
+        """
+        使用 OpenAIService 转录单个音频块，返回转录文本。
+        """
+        try:
+            with BytesIO() as audio_file:
+                audio_chunk.export(audio_file, format="mp3")
+                audio_file.seek(0)
+                self.logger.info("Step 3: Transcribing audio chunk via OpenAIService's Whisper interface.")
+                transcript_text = await self.openai_service.transcribe_audio(audio_file)
+                if transcript_text:
+                    self.logger.info("Audio chunk transcription succeeded.")
                     return transcript_text
                 else:
-                    error_text = await resp.text()
-                    logging.error(f"Failed to transcribe audio chunk with OpenAI: {error_text}")
+                    self.logger.error("Transcription returned empty result.")
                     return None
-    except Exception as e:
-        logging.error(f"Failed to transcribe audio chunk with OpenAI: {e}")
-        return None
-
-# 使用 OpenAI GPT-4 进行文本总结
-@retry(max_retries=3, delay=5)
-async def summarize_text(transcript_text, previous_summary, topic, metadata):
-    try:
-        # 定义系统提示和用户消息
-        messages = [
-            {"role": "system", "content": (
-                f"You are an expert content creator whose goal is to produce actionable summaries for guide production.\n"
-                f"Each chunk of text must be summarized with the following in mind:\n"
-                f"- What are the key takeaways and steps that users should know?\n"
-                f"- What insights, tools, or best practices are mentioned?\n"
-                f"- What are the notable challenges and how are they addressed?\n"
-                f"Now analyze this YouTube video content with this metadata: {json.dumps(metadata)}.\n"
-                f"Focus on the topic: {topic}\n"
-                f"Use the previous summary to maintain context and ensure no important details are missed."
-            )},
-            {"role": "user", "content": f"Previous Summary:\n{previous_summary}\n\nNew Transcript:\n{transcript_text}"}
-        ]
-
-        logging.info("Generating summary using OpenAI ChatCompletion.")
-        response = await aclient.chat.completions.create(
-            model="gpt-4",  # 修正后的模型名称
-            messages=messages,
-            max_tokens=1024,
-            temperature=0.5
-        )
-
-        summary = response.choices[0].message.content.strip()
-        logging.info("Summary generated for transcript chunk.")
-        return summary
-
-    except Exception as e:
-        logging.error(f"Failed to summarize text with OpenAI: {e}")
-        return None
-
-# 递归总结多个摘要
-async def recursive_summarize(summaries, topic, metadata):
-    try:
-        while len(summaries) > 1:
-            new_summaries = []
-            for i in range(0, len(summaries), 2):
-                summaries_to_summarize = summaries[i:i+2]
-                combined_summary = "\n\n".join(summaries_to_summarize)
-                summary = await summarize_text(combined_summary, "", topic, metadata)
-                if summary:
-                    new_summaries.append(summary)
-                else:
-                    logging.error("Failed to generate recursive summary.")
-            summaries = new_summaries
-        if summaries:
-            return summaries[0]
-        else:
-            logging.error("No summaries to combine.")
+        except Exception as e:
+            self.logger.error(f"Failed to transcribe audio chunk: {e}", exc_info=True)
             return None
-    except Exception as e:
-        logging.error(f"Failed during recursive summarization: {e}")
-        return None
 
-# 标准化最终摘要
-@retry(max_retries=3, delay=2)
-async def standardize_summary(summary):
-    if not summary:
-        logging.error("Summary is missing. Skipping standardization.")
-        return None
-
-    logging.info("Starting standardizer agent.")
-
-    # 标准化提示，确保 JSON 格式
-    standardization_prompt = f"""
-    You are an expert at organizing and structuring content.
-    Your job is to take the following summary and standardize it into an actionable guide format.
-    Ensure that the response is in valid JSON format.
-    Focus on:
-    - Main topic of the video
-    - Key insights or steps users should follow
-    - Recommended tools or techniques (if applicable)
-    - Best practices and tips shared
-    - Notable challenges or advice
-
-    Provide the standardized summary in the following JSON format:
-    {{
-        "main_topic": "...",
-        "key_insights": "...",
-        "recommended_tools": "...",
-        "best_practices": "...",
-        "challenges_and_advice": "..."
-    }}
-
-    Summary to standardize: {summary}
-    """
-
-    try:
-        logging.info("Standardizing summary using OpenAI ChatCompletion.")
-        response = await aclient.chat.completions.create(
-            model="gpt-4",  # 修正后的模型名称
-            messages=[{"role": "user", "content": standardization_prompt.strip()}],
-            max_tokens=1024,
-            temperature=0.3
-        )
-
-        standardized_summary_raw = response.choices[0].message.content.strip()
-
-        # 尝试从响应中提取 JSON
+    async def summarize_text(self, transcript_text: str, previous_summary: str,
+                             topic: str, metadata: Dict[str, Any]) -> Optional[str]:
+        """
+        根据转录文本生成摘要，调用 OpenAIService 异步接口。
+        """
         try:
-            # 使用正则表达式查找 JSON 块
-            json_match = re.search(r'\{.*\}', standardized_summary_raw, re.DOTALL)
-            if json_match:
-                standardized_summary_json = json_match.group(0)
-                standardized_summary = json.loads(standardized_summary_json)
-                logging.info("Standardization completed successfully.")
-
-                # 确保所有预期的键都存在
-                required_fields = ["main_topic", "key_insights", "recommended_tools", "best_practices", "challenges_and_advice"]
-                for field in required_fields:
-                    if field not in standardized_summary:
-                        standardized_summary[field] = "N/A"
-
-                return standardized_summary
-            else:
-                logging.error("No JSON found in the response. Returning raw text.")
-                return standardized_summary_raw  # 如果未找到 JSON，返回原始文本
-
-        except json.JSONDecodeError as json_err:
-            logging.error(f"JSON decoding failed: {json_err}. Returning raw text.")
-            return standardized_summary_raw  # 如果解析失败，返回原始文本
-
-    except Exception as e:
-        logging.error(f"Error during standardization: {e}")
-        return None
-
-# 处理音频并生成标准化摘要
-async def transcribe_audio_to_summary(video_id, topic, metadata=None):
-    try:
-        # 步骤 0：检查元数据是否存在
-        if metadata is None:
-            logging.error(f"Metadata is missing for video ID: {video_id}. Skipping processing.")
-            return None
-
-        # 步骤 1：下载音频文件
-        audio_path = await download_audio(video_id)
-        if not audio_path or not os.path.exists(audio_path):
-            logging.error(f"Audio download failed for video ID: {video_id}")
-            return None
-
-        # 步骤 2：分割音频
-        audio_chunks = split_audio(audio_path, max_duration_ms=60000)  # 可以根据需要调整 max_duration_ms
-        if not audio_chunks:
-            logging.error(f"Failed to split audio for video ID: {video_id}")
-            return None
-
-        # 步骤 3：转录每个音频块并总结
-        chunk_summaries = []
-        previous_summary = ""
-        for idx, chunk in enumerate(audio_chunks):
-            logging.info(f"Processing audio chunk {idx + 1}/{len(audio_chunks)}")
-
-            # 转录音频块
-            transcript = await transcribe_audio_chunk(chunk)
-            if not transcript:
-                logging.error(f"Failed to transcribe audio chunk {idx + 1}")
-                continue
-
-            # 使用前一个摘要作为上下文进行总结
-            summary = await summarize_text(transcript, previous_summary, topic, metadata)
+            self.logger.info("Step 4: Generating summary for transcript chunk.")
+            prompt = self.openai_service.get_prompt("summarization", variables={
+                "text": transcript_text,
+                "previous_summary": previous_summary,
+                "topic": topic
+            })
+            response_text = await self.openai_service.async_completion(prompt=prompt)
+            summary = response_text.strip()
             if summary:
-                chunk_summaries.append(summary)
-                previous_summary = summary  # 更新前一个摘要以保持上下文
+                self.logger.info("Summary generated for transcript chunk.")
             else:
-                logging.error(f"Failed to summarize audio chunk {idx + 1}")
-
-            # 添加随机延迟以模拟人类互动
-            await asyncio.sleep(random.uniform(0.5, 2))
-
-        if not chunk_summaries:
-            logging.error(f"No summaries generated for video ID: {video_id}")
+                self.logger.error("Summary generation returned empty result.")
+            return summary
+        except Exception as e:
+            self.logger.error(f"Failed to summarize text: {e}", exc_info=True)
             return None
 
-        # 步骤 4：递归总结所有摘要以获得最终摘要
-        logging.info("Combining chunk summaries into final summary.")
-        final_summary = await recursive_summarize(chunk_summaries, topic, metadata)
-        if not final_summary:
-            logging.error(f"Failed to generate final summary for video ID: {video_id}.")
+    async def recursive_summarize(self, summaries: List[str],
+                                  topic: str, metadata: Dict[str, Any]) -> Optional[str]:
+        """
+        递归合并多个摘要片段，直到合并成一个最终摘要。
+        """
+        try:
+            self.logger.info("Step 5: Starting recursive summarization.")
+            while len(summaries) > 1:
+                new_summaries = []
+                for i in range(0, len(summaries), 2):
+                    pair = summaries[i:i+2]
+                    combined = "\n\n".join(pair)
+                    merged = await self.summarize_text(combined, previous_summary="", topic=topic, metadata=metadata)
+                    if merged:
+                        new_summaries.append(merged)
+                    else:
+                        self.logger.error(f"Recursive summarization failed for summary pair starting at index {i}.")
+                summaries = new_summaries
+                self.logger.info(f"Recursive summarization pass complete; {len(summaries)} summaries remain.")
+            if summaries:
+                self.logger.info("Recursive summarization completed successfully.")
+                return summaries[0]
+            else:
+                self.logger.error("No summaries available after recursive summarization.")
+                return None
+        except Exception as e:
+            self.logger.error(f"Error during recursive summarization: {e}", exc_info=True)
             return None
 
-        # 步骤 5：标准化最终摘要
-        standardized_summary = await standardize_summary(final_summary)
-        if not standardized_summary:
-            logging.error(f"Failed to standardize summary for video ID: {video_id}.")
+    async def process_video_audio(self, video_id: str, topic: str,
+                                  metadata: Dict[str, Any], model: str = "gpt-4") -> Optional[str]:
+        """
+        完整流程：
+          1. 如果启用了字幕 API，则尝试使用 get_transcript 获取字幕；
+          2. 如果字幕不可用，则下载视频音频；
+          3. 分割音频为若干片段；
+          4. 并发调用 AudioChunkProcessor 进行音频块转录与摘要生成；
+          5. 递归合并所有片段摘要生成最终摘要；
+          6. 若配置了数据库，则记录处理日志。
+        """
+        start_time = datetime.now()
+        self.logger.info(f"[Video {video_id}] Starting audio processing pipeline with topic '{topic}'.")
+        try:
+            # Step 0: 尝试获取字幕（优先调用 TranscriptAgent，如果可用）
+            transcript = await self.get_transcript(video_id)
+            if transcript and transcript.strip():
+                self.logger.info(f"[Video {video_id}] Using transcript obtained from TranscriptAgent.")
+            else:
+                # Step 1: 下载音频
+                transcript = None
+                audio_path = await self.download_audio(video_id)
+                if not audio_path:
+                    self.logger.error(f"[Video {video_id}] Step 1 failed: Audio download failed.")
+                    return None
+                self.logger.info(f"[Video {video_id}] Audio downloaded: {audio_path}")
+
+                # Step 2: 分割音频
+                audio_chunks = self.split_audio(audio_path)
+                if not audio_chunks:
+                    self.logger.error(f"[Video {video_id}] Step 2 failed: Audio splitting failed.")
+                    return None
+
+                # Step 3: 并发处理各音频块
+                self.logger.info(f"[Video {video_id}] Step 3: Processing {len(audio_chunks)} audio chunks concurrently.")
+                semaphore = asyncio.Semaphore(self.max_concurrency)
+                summaries = []
+                previous_summary = ""
+                async def process_chunk(idx, chunk):
+                    async with semaphore:
+                        t = await self.transcribe_audio_chunk(chunk)
+                        if not t:
+                            self.logger.error(f"[Video {video_id}][Chunk {idx}] Transcription failed.")
+                            return None
+                        s = await self.summarize_text(t, previous_summary, topic, metadata)
+                        if not s:
+                            self.logger.error(f"[Video {video_id}][Chunk {idx}] Summary generation failed.")
+                            return None
+                        return (idx, s)
+                tasks = [process_chunk(idx, chunk) for idx, chunk in enumerate(audio_chunks)]
+                results = await asyncio.gather(*tasks)
+                for res in sorted([r for r in results if r is not None], key=lambda x: x[0]):
+                    summaries.append(res[1])
+                    previous_summary = res[1]
+                if not summaries:
+                    self.logger.error(f"[Video {video_id}] Step 3 failed: No valid summaries generated.")
+                    return None
+
+                # 将各块摘要拼接作为 transcript（可根据需要调整拼接逻辑）
+                transcript = "\n".join(summaries)
+
+            # Step 4: 递归合并摘要
+            final_summary = await self.recursive_summarize([transcript], topic, metadata)
+            if not final_summary:
+                self.logger.error(f"[Video {video_id}] Step 4 failed: Recursive summarization failed.")
+                return None
+
+            # Step 5: 存储数据库日志（如果配置了数据库）
+            if self.db:
+                record = {
+                    "process": "final_audio_summary",
+                    "video_id": video_id,
+                    "summary": final_summary,
+                    "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    "duration": (datetime.now() - start_time).total_seconds(),
+                    "chunk_count": len(audio_chunks) if transcript is None else 0,
+                    "summary_length": len(final_summary)
+                }
+                try:
+                    await self.db.store_data("audio_processing_logs", record)
+                    self.logger.info(f"[Video {video_id}] Step 5: Final audio summary recorded in database.")
+                except Exception as e:
+                    self.logger.error(f"[Video {video_id}] Step 5 failed: Failed to record final summary: {e}", exc_info=True)
+            self.logger.info(f"[Video {video_id}] Processing completed in {(datetime.now() - start_time).total_seconds()} seconds.")
+            return final_summary
+        except Exception as e:
+            self.logger.error(f"[Video {video_id}] Processing failed: {e}", exc_info=True)
             return None
+        finally:
+            self._cleanup_temp_files(video_id)
 
-        # 可选：清理下载的音频文件
-        # Uncomment the following lines if you want to remove the audio file after processing
-        # if audio_path and os.path.exists(audio_path):
-        #     os.remove(audio_path)
-        #     logging.info(f"Removed audio file {audio_path} after processing.")
+    async def extract_audio(self, video_id: str) -> BytesIO:
+        """
+        尝试从缓存中获取音频内容；如不存在则下载，返回 BytesIO 对象。
+        """
+        return await self._get_audio_content(video_id)
 
-        return standardized_summary
+    async def _get_audio_content(self, video_id: str) -> BytesIO:
+        cache_path = os.path.join(self.download_dir, f"{video_id}.mp3")
+        if os.path.exists(cache_path):
+            with open(cache_path, "rb") as f:
+                return BytesIO(f.read())
+        audio_path = await self.download_audio(video_id)
+        if audio_path and os.path.exists(audio_path):
+            with open(audio_path, "rb") as f:
+                audio_bytes = BytesIO(f.read())
+            with open(cache_path, "wb") as f:
+                f.write(audio_bytes.getbuffer())
+            return audio_bytes
+        raise ValueError(f"[Video {video_id}] Failed to obtain audio content.")
 
-    except Exception as e:
-        logging.error(f"Failed to process video {video_id}: {e}")
-        return None
+    @validate_video_id
+    async def transcribe_video(self, video_id: str) -> str:
+        """
+        提取音频后，使用 OpenAIService 对整个视频进行转录。
+        """
+        try:
+            audio_bytes = await self.extract_audio(video_id)
+            transcript = await self.openai_service.transcribe_audio(audio_bytes)
+            return transcript or ""
+        except Exception as e:
+            self.logger.error(f"[Video {video_id}] Transcription failed: {e}", exc_info=True)
+            return ""
 
-# 主函数，用于处理单个视频
+    def _cleanup_temp_files(self, video_id: str):
+        """
+        清理临时及缓存文件，防止占用过多磁盘空间。
+        """
+        temp_files = [
+            os.path.join(self.temp_dir, f"{video_id}.mp3"),
+            os.path.join(self.download_dir, f"{video_id}.mp3")
+        ]
+        for f in temp_files:
+            try:
+                if os.path.exists(f):
+                    os.remove(f)
+                    self.logger.debug(f"[Video {video_id}] Cleaned up temp file: {f}")
+            except Exception as e:
+                self.logger.warning(f"[Video {video_id}] Failed to clean up {f}: {e}", exc_info=True)
+
+
+def get_audio_processing_agent(openai_service: OpenAIService, **kwargs) -> AudioProcessingAgent:
+    """
+    工厂函数，返回 AudioProcessingAgent 实例，确保所有依赖统一注入。
+    """
+    return AudioProcessingAgent(openai_service=openai_service, **kwargs)
+
+
+# ---------------------- 以下为简单测试代码 ----------------------
 if __name__ == "__main__":
-    # 从命令行参数获取视频 ID、主题和元数据
-    if len(sys.argv) < 4:
-        print("Usage: python audio_agent.py <video_id> <topic> <metadata_json>")
-        print("Example: python audio_agent.py s1JZ5zCl1A0 'Virginia fishing tips' '{\"title\": \"How to Fish\", \"description\": \"...\"}'")
-        sys.exit(1)
+    import asyncio
+    from utils.database import Database
+    from async_database import AsyncDatabase  # 假设 AsyncDatabase 定义在 async_database.py
+    from agents.transcript_agent import TranscriptAgent  # 请确保 TranscriptAgent 实现正确
 
-    video_id = sys.argv[1]
-    topic = sys.argv[2]
-    metadata_json = sys.argv[3]
+    # 示例配置（请确保环境变量和 API Key 正确）
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "sk-your_key")
+    YOUTUBE_API_KEYS = ["your_youtube_api_key1", "your_youtube_api_key2"]
+    DB_PATH = "videos.db"
 
-    # 解析元数据 JSON
-    try:
-        metadata = json.loads(metadata_json)
-    except json.JSONDecodeError:
-        logging.error("Invalid metadata JSON provided.")
-        sys.exit(1)  # 添加退出，以避免后续错误
+    # 使用同步 Database 包装成 AsyncDatabase
+    sync_db = Database(DB_PATH, DEFAULT_LOGGER)
+    async_db = AsyncDatabase(sync_db)
 
-    # 运行主函数
-    async def main():
-        logging.info("Starting the video processing script...")
-        result = await transcribe_audio_to_summary(video_id, topic, metadata)
-        if result:
-            print("Standardized Summary:")
-            print(json.dumps(result, indent=4, ensure_ascii=False))
-        else:
-            print("Failed to process the video.")
+    openai_service = OpenAIService(api_key=OPENAI_API_KEY)
+    youtube_service = YouTubeService(api_keys=YOUTUBE_API_KEYS)
 
-    try:
-        asyncio.run(main())
-    except Exception as e:
-        logging.error(f"Script terminated due to an unexpected error: {e}")
+    # 初始化 TranscriptAgent，并传入 AudioProcessingAgent 中
+    transcript_agent = TranscriptAgent(openai_service, youtube_service, logger=None)
+
+    agent = get_audio_processing_agent(
+        openai_service,
+        youtube_service=youtube_service,
+        db=async_db,
+        debug_mode=True,
+        transcript_agent=transcript_agent,
+        logger=DEFAULT_LOGGER  # 传入外部统一 logger
+    )
+    test_video_id = "dQw4w9WgXcQ"  # 请替换为合法视频ID
+    test_topic = "Fraud and Risk Solutions"
+    metadata = {}  # 根据需要传入视频相关的元数据
+
+    final_summary = asyncio.run(agent.process_video_audio(test_video_id, test_topic, metadata, model="gpt-4o-mini"))
+    if final_summary:
+        DEFAULT_LOGGER.info(f"Final summary for video {test_video_id}:\n{final_summary}")
+    else:
+        DEFAULT_LOGGER.error("Processing failed.")
+    asyncio.run(async_db.close())

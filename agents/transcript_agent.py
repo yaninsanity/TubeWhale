@@ -1,151 +1,145 @@
+#!/usr/bin/env python3
 import os
-import logging
-import whisper
-from youtube_dl import YoutubeDL
-from utils.database import store_transcript_summary
-from openai import OpenAI
 import asyncio
+import logging
+import traceback
+from io import BytesIO
+from typing import List, Optional
 
-# Initialize OpenAI client with the API key
-openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+from pydub import AudioSegment
 
-# Retry decorator for handling retries on download or transcription failure
-def retry(max_retries=3, delay=2):
+# 简单的异步重试装饰器
+def async_retry(max_retries=3, delay=2):
     def decorator(func):
         async def wrapper(*args, **kwargs):
-            for attempt in range(max_retries):
+            last_exception = None
+            for attempt in range(1, max_retries + 1):
                 try:
                     return await func(*args, **kwargs)
                 except Exception as e:
-                    logging.error(f"Error in {func.__name__}: {e}, retrying {attempt + 1}/{max_retries}...")
-                    await asyncio.sleep(delay)
-            raise Exception(f"Failed to complete {func.__name__} after {max_retries} retries.")
+                    last_exception = e
+                    logger = getattr(args[0], 'logger', logging.getLogger(func.__name__))
+                    logger.error(f"Attempt {attempt} for {func.__name__} failed: {e}")
+                    if attempt < max_retries:
+                        await asyncio.sleep(delay)
+            raise last_exception
         return wrapper
     return decorator
 
-# Function to download audio from YouTube video
-@retry(max_retries=3, delay=5)
-async def download_audio(video_id):
-    try:
-        # Ensure downloads directory exists
-        os.makedirs('downloads', exist_ok=True)
-        
-        logging.info(f"Downloading audio for video ID: {video_id}")
-        
-        ydl_opts = {
-            'format': 'bestaudio/best',
-            'outtmpl': f'downloads/{video_id}.%(ext)s',
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }],
-            'quiet': True
-        }
+class TranscriptAgent:
+    """
+    TranscriptAgent 负责对指定视频执行转录操作：
+      1. 调用 YouTubeService.download_audio 下载视频音频文件。
+      2. 使用 pydub 将音频切分成多个片段（例如每片 60 秒）。
+      3. 并发调用 OpenAIService.transcribe_audio 对各片段进行转录（内部自愈重试）。
+      4. 合并所有片段转录结果，返回最终转录文本。
+    """
+    MAX_CHUNK_DURATION_MS = 60000  # 每个片段 60 秒
+    CONCURRENCY_LIMIT = 5          # 并发转录任务上限
 
-        with YoutubeDL(ydl_opts) as ydl:
-            video_url = f"https://www.youtube.com/watch?v={video_id}"
-            ydl.download([video_url])
+    def __init__(self, openai_service, youtube_service, logger: Optional[logging.Logger] = None):
+        self.openai_service = openai_service
+        self.youtube_service = youtube_service
+        self.logger = logger or logging.getLogger(self.__class__.__name__)
+        # 延迟创建 semaphore，避免在导入/同步上下文中无 loop 报错
+        self._semaphore = None
 
-        audio_path = f'downloads/{video_id}.mp3'
-        return audio_path
-    
-    except Exception as e:
-        logging.error(f"Failed to download audio for video ID {video_id}: {e}")
-        return None
+    @property
+    def semaphore(self) -> asyncio.Semaphore:
+        if self._semaphore is None:
+            self._semaphore = asyncio.Semaphore(self.CONCURRENCY_LIMIT)
+        return self._semaphore
 
-# Function to transcribe audio to text using Whisper model
-async def transcribe_audio(audio_path):
-    model = whisper.load_model("base")
-    try:
-        logging.info(f"Transcribing audio file: {audio_path}")
-        result = model.transcribe(audio_path)
-        return result['text']
-    except Exception as e:
-        logging.error(f"Failed to transcribe audio file {audio_path}: {e}")
-        return None
+    def _slice_audio(self, audio_path: str) -> List[AudioSegment]:
+        """
+        使用 pydub 将音频文件切分为多个片段。
+        """
+        try:
+            audio = AudioSegment.from_file(audio_path)
+            duration_ms = len(audio)
+            self.logger.info(f"Audio duration: {duration_ms / 1000:.1f} seconds.")
+            chunks = [
+                audio[i : i + self.MAX_CHUNK_DURATION_MS]
+                for i in range(0, duration_ms, self.MAX_CHUNK_DURATION_MS)
+            ]
+            self.logger.info(f"Sliced audio into {len(chunks)} chunks.")
+            return chunks
+        except Exception as e:
+            self.logger.error(f"Failed to slice audio {audio_path}: {e}")
+            return []
 
-# Using YouTubeTranscriptApi to fetch video transcripts
-async def fetch_transcript(video_id):
-    try:
-        from youtube_transcript_api import YouTubeTranscriptApi
-        transcript = YouTubeTranscriptApi.get_transcript(video_id)
-        return " ".join([entry['text'] for entry in transcript])
-    except Exception as e:
-        logging.warning(f"Failed to fetch transcript for video {video_id}: {e}")
-        return None
+    @async_retry(max_retries=3, delay=2)
+    async def _transcribe_chunk(self, chunk: AudioSegment) -> str:
+        """
+        将单个音频片段导出为 BytesIO，并调用 OpenAIService.transcribe_audio 转录。
+        """
+        audio_io = BytesIO()
+        try:
+            chunk.export(audio_io, format="mp3")
+            audio_io.seek(0)
+            if not hasattr(audio_io, "name"):
+                audio_io.name = "audio.mp3"
+            elif not os.path.splitext(audio_io.name)[1]:
+                audio_io.name += ".mp3"
+        except Exception as e:
+            self.logger.error(f"Error converting audio chunk to mp3: {e}")
+            raise
 
-# Function to interpret the transcript using OpenAI's LLM (gpt-4o-mini)
-async def interpret_transcript(transcript, topic):
-    try:
-        # Define system role and task prompt
-        system_role_prompt = (
-            f"You are an expert in analyzing audio transcripts in the context of '{topic}'. "
-            "Your task is to generate detailed, structured summaries based on the transcript provided. "
-            "Be sure to highlight key insights, practical knowledge, and important information."
-        )
+        async with self.semaphore:
+            return await self.openai_service.transcribe_audio(audio_io)
 
-        # Use OpenAI chat completion API with gpt-4o-mini model
-        response = await openai_client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": system_role_prompt},
-                {"role": "user", "content": transcript}
-            ],
-            max_tokens=1024,
-            temperature=0.5
-        )
+    async def fetch_transcript(self, video_id: str) -> Optional[str]:
+        """
+        获取指定视频的完整转录文本。
+        """
+        self.logger.info(f"[{video_id}] Downloading audio.")
+        loop = asyncio.get_running_loop()
+        try:
+            audio_path = await loop.run_in_executor(
+                None, self.youtube_service.download_audio, video_id
+            )
+        except Exception as e:
+            self.logger.error(f"[{video_id}] Exception during audio download: {e}")
+            return None
 
-        # Check if the response is properly structured
-        if response and 'choices' in response and len(response.choices) > 0:
-            # Handle the case where message is present
-            if "message" in response.choices[0]:
-                summary = response.generations[0].message.get("content", "").strip()
-                logging.info(f"Transcript interpretation completed: {summary}")
-                return summary
+        if not audio_path or not os.path.exists(audio_path):
+            self.logger.error(f"[{video_id}] Audio download failed.")
+            return None
+
+        self.logger.info(f"[{video_id}] Audio downloaded: {audio_path}. Starting transcription.")
+        chunks = self._slice_audio(audio_path)
+        if not chunks:
+            self.logger.error(f"[{video_id}] No audio chunks available for transcription.")
+            return None
+
+        tasks = [asyncio.create_task(self._transcribe_chunk(chunk)) for chunk in chunks]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        final_lines = []
+        for idx, result in enumerate(results):
+            if isinstance(result, Exception):
+                self.logger.error(f"[{video_id}] Error transcribing chunk {idx+1}: {result}")
+                self.logger.debug(traceback.format_exc())
             else:
-                logging.error("Response does not contain a valid 'message' key.")
-                return None
-        else:
-            logging.error("Unexpected OpenAI API response structure.")
-            return None
-    
-    except Exception as e:
-        logging.error(f"Failed to interpret transcript: {e}")
-        return None
+                text = result.strip()
+                if text:
+                    final_lines.append(text)
 
-# Main function to process the entire flow: fetch transcript or fallback to audio, transcribe, and interpret
-async def process_video_transcript(video_id, topic, conn):
-    try:
-        # Step 1: Attempt to fetch the transcript first
-        transcript = await fetch_transcript(video_id)
-        
-        if not transcript:
-            logging.warning(f"Transcript not available for video ID {video_id}. Falling back to audio transcription.")
-            
-            # Step 2: Download the audio and transcribe it if no transcript was found
-            audio_path = await download_audio(video_id)
-            if not audio_path:
-                logging.error(f"Audio download failed for video ID: {video_id}")
-                return None
-
-            transcript = await transcribe_audio(audio_path)
-            if not transcript:
-                logging.error(f"Transcription failed for video ID: {video_id}")
-                return None
-
-        # Step 3: Interpret the transcript using OpenAI's gpt-4o-mini
-        interpreted_summary = await interpret_transcript(transcript, topic)
-        if not interpreted_summary:
-            logging.error(f"Transcript interpretation failed for video ID: {video_id}")
+        if not final_lines:
+            self.logger.error(f"[{video_id}] All transcription attempts failed.")
             return None
 
-        # Step 4: Store both transcript and summary in the database
-        store_transcript_summary(conn, video_id, transcript, interpreted_summary)
-        logging.info(f"Stored transcript and summary for video ID: {video_id}")
+        merged = "\n".join(final_lines)
+        self.logger.info(f"[{video_id}] Transcription completed successfully.")
+        return merged
 
-        return interpreted_summary
-
-    except Exception as e:
-        logging.error(f"Failed to process transcript for video ID {video_id}: {e}")
-        return None
+async def run_transcript(
+    video_id: str,
+    openai_service,
+    youtube_service,
+    logger: Optional[logging.Logger] = None
+) -> Optional[str]:
+    logger = logger or logging.getLogger("TranscriptRunner")
+    agent = TranscriptAgent(openai_service, youtube_service, logger=logger)
+    logger.info(f"[run_transcript] Fetching transcript for video {video_id}.")
+    return await agent.fetch_transcript(video_id)
