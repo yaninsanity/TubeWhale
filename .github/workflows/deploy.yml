@@ -11,22 +11,9 @@ on:
   repository_dispatch:
 
 jobs:
-  lint:
-    name: Lint & Format
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-
   test:
     name: Run Tests and Coverage
     runs-on: ubuntu-latest
-    needs: lint
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
