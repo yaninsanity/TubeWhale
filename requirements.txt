@@ -12,7 +12,6 @@ youtube_dl
 yt-dlp
 pydub
 aiolimiter
-audioop-lts
 pytest
 # sqlite3-rich 
 pytest-asyncio
