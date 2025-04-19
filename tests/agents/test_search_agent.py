@@ -1,169 +1,212 @@
 import pytest
 import asyncio
+import logging
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock
+from typing import Dict, Any, List, Optional
 
-# 假设 SearchAgent 定义在 search_agent.py 文件中
+import pytest_asyncio
+
 from agents.search_agent import SearchAgent
 
-# Dummy 数据库实现，用于记录调用（仅作为示例，不做任何实际存储）
-class DummyDB:
-    async def store_ai_interaction(self, input_data, output_data, interaction_type, tokens_used, cost, duration_ms):
-        return
+# --- Dummy implementations for dependencies ----------------------
 
-    async def store_keyword_analysis(self, record):
-        return
-
-# Dummy OpenAIService 模拟实现
-class DummyOpenAIService:
-    def __init__(self):
-        # 模拟存储 prompt 模板
-        self.prompts = {
-            "keyword_generation": "dummy keyword prompt",
-            "structured_output": "dummy structured prompt"
-        }
-
-    def get_prompt(self, prompt_template, variables=None):
-        # 根据不同模板返回简单拼接后的字符串
-        if prompt_template == "keyword_generation":
-            return f"Generate keywords for: {variables['base_keyword']}"
-        elif prompt_template == "structured_output":
-            return f"Summarize: {variables['text']}"
-        else:
-            return f"Prompt for: {variables}"
-
-    async def async_completion(self, prompt, prompt_template):
-        # 模拟关键词生成和摘要生成的返回
-        if "Generate keywords" in prompt:
-            # 返回换行分隔的关键词列表
-            return "test1\ntest2\n"
-        elif "Summarize" in prompt:
-            return "Summary of videos."
-        else:
-            return "Default response."
-
-# Dummy YouTubeService 模拟实现
-class DummyYouTubeService:
-    def search_videos(self, q, max_results, filters):
-        # 根据查询关键词返回模拟的搜索结果
-        return {
-            "items": [
-                {
-                    "id": {"videoId": f"{q}_vid1"},
-                    "snippet": {
-                        "title": f"{q} Video 1",
-                        "description": "Description 1",
-                        "publishedAt": "2023-01-01T00:00:00Z"
-                    }
-                },
-                {
-                    "id": {"videoId": f"{q}_vid2"},
-                    "snippet": {
-                        "title": f"{q} Video 2",
-                        "description": "Description 2",
-                        "publishedAt": "2023-01-02T00:00:00Z"
-                    }
-                },
-            ]
-        }
-
-# pytest fixture 用于构造 SearchAgent 实例
 @pytest.fixture
-def search_agent():
-    youtube_service = DummyYouTubeService()
-    openai_service = DummyOpenAIService()
-    db = DummyDB()
-    agent = SearchAgent(youtube_service, openai_service, db=db)
-    return agent
+def dummy_openai():
+    class DummyOpenAI:
+        def __init__(self):
+            # need both prompts
+            self.prompts = {
+                "keyword_generation": {"system": "", "user": ""},
+                "summarization": {"system": "", "user": ""},
+                "structured_output": {"system": "", "user": ""},
+            }
+            self.interactions = []
+        async def async_completion(self, *, prompt: str, prompt_template: str):
+            # when generating keywords, return two lines
+            if prompt_template == "keyword_generation":
+                return "kwA\nkwB\n"
+            # otherwise return a fixed summary
+            return "DUMMY_SUMMARY"
+        def get_prompt(self, prompt_name: str, variables: Optional[Dict[str, Any]] = None) -> str:
+            # just return a recognizable string
+            return f"<PROMPT {prompt_name} {variables}>"
+    return DummyOpenAI()
 
-# 测试关键词生成
+@pytest.fixture
+def dummy_youtube():
+    class DummyYT:
+        def search_videos(self, q: str, max_results: int, filters: Dict[str, Any]):
+            # always return two items
+            return {
+                "items": [
+                    {
+                        "id": {"videoId": "X1"},
+                        "snippet": {
+                            "title": f"Title {q}-1",
+                            "description": "D1",
+                            "publishedAt": "2022-01-02T00:00:00Z",
+                        }
+                    },
+                    {
+                        "id": {"videoId": "X2"},
+                        "snippet": {
+                            "title": f"Title {q}-2",
+                            "description": "D2",
+                            "publishedAt": "2022-01-01T00:00:00Z",
+                        }
+                    },
+                ]
+            }
+    return DummyYT()
+
+@pytest.fixture
+def dummy_db():
+    class DummyDB:
+        def __init__(self):
+            self.ai_interactions = []
+            self.keyword_analysis = []
+        async def store_ai_interaction(self, **kwargs):
+            self.ai_interactions.append(kwargs)
+        async def store_keyword_analysis(self, records: List[Dict[str, Any]]):
+            self.keyword_analysis.extend(records)
+    return DummyDB()
+
+@pytest.fixture
+def agent(dummy_youtube, dummy_openai, dummy_db):
+    # minimal settings to exercise all branches
+    settings = {
+        "enable_brainstorm": True,
+        "brainstorm_prompt_template": "keyword_generation",
+        "max_keywords": 2,
+        "max_results": 2,
+        "enable_refine": True,
+        "enable_optimization": True,
+        "order_by": "weight",
+        "order_direction": "desc",
+        "enable_summary": True,
+    }
+    # quiet logging
+    logger = logging.getLogger("test_search_agent")
+    logger.setLevel(logging.CRITICAL)
+    return SearchAgent(
+        youtube_service=dummy_youtube,
+        openai_service=dummy_openai,
+        db=dummy_db,
+        settings=settings,
+        logger=logger,
+    )
+
+# --- Tests ---------------------------------------------------------
+
 @pytest.mark.asyncio
-async def test_generate_keywords(search_agent):
-    keywords = await search_agent.generate_keywords("example")
-    # 根据 DummyOpenAIService，返回的关键词列表为 ["test1", "test2"]
-    assert keywords == ["test1", "test2"]
+async def test_generate_keywords_and_db_logging(agent):
+    kws = await agent.generate_keywords("baseKW")
+    assert kws == ["kwA", "kwB"]
+    # check AI interaction logged
+    assert len(agent.db.ai_interactions) == 1
+    entry = agent.db.ai_interactions[0]
+    assert entry["interaction_type"] == "keyword_generation"
+    assert entry["input_data"]["base_keyword"] == "baseKW"
 
-# 测试聚合搜索
 @pytest.mark.asyncio
-async def test_aggregate_search(search_agent):
-    aggregated = await search_agent.aggregate_search("sample")
-    # DummyOpenAIService 返回固定的 "test1" 与 "test2" 两个关键词
-    assert "test1" in aggregated
-    assert "test2" in aggregated
-    # 每个关键词的搜索结果均由 DummyYouTubeService 返回 2 个视频
-    assert len(aggregated["test1"]) == 2
-    assert len(aggregated["test2"]) == 2
+async def test_generate_keywords_disabled(agent):
+    agent.settings["enable_brainstorm"] = False
+    kws = await agent.generate_keywords("solo")
+    assert kws == ["solo"]
+    # no new interactions
+    assert agent.db.ai_interactions == []
 
-# 测试去重逻辑：对于相同 video_id，累计 weight
-def test_deduplicate_results(search_agent):
-    # 构造包含重复 video_id 的聚合结果
+@pytest.mark.asyncio
+async def test_aggregate_search_calls_search_by_keyword(agent):
+    agg = await agent.aggregate_search("foo")
+    # should have two keys
+    assert set(agg.keys()) == {"kwA", "kwB"}
+    # each keyword list items should map properly
+    for kw, lst in agg.items():
+        assert all(item["search_keyword"] == kw for item in lst)
+        assert {item["video_id"] for item in lst} == {"X1", "X2"}
+
+def test_search_by_keyword_transforms_items(agent):
+    # direct call
+    results = agent.search_by_keyword("Z", filters={"any": "x"})
+    assert len(results) == 2
+    first = results[0]
+    assert first["search_keyword"] == "Z"
+    assert first["video_id"] in {"X1", "X2"}
+    assert "Title Z" in first["title"]
+
+def test_deduplicate_results_accumulates_weight(agent):
     aggregated = {
-        "kw1": [
-            {"search_keyword": "kw1", "video_id": "vid1", "title": "Title 1", "description": "Desc", "publish_time": "2023-01-01T00:00:00Z"},
-            {"search_keyword": "kw1", "video_id": "vid2", "title": "Title 2", "description": "Desc", "publish_time": "2023-01-02T00:00:00Z"},
-        ],
-        "kw2": [
-            {"search_keyword": "kw2", "video_id": "vid1", "title": "Title 1", "description": "Desc", "publish_time": "2023-01-01T00:00:00Z"},
-        ]
+        "a": [{"video_id": "V1"}, {"video_id": "V2"}],
+        "b": [{"video_id": "V1"}],
     }
-    deduped = search_agent.deduplicate_results(aggregated)
-    # 应该得到两个唯一的视频 vid1 和 vid2
-    video_ids = {item["video_id"] for item in deduped}
-    assert video_ids == {"vid1", "vid2"}
-    # 检查 vid1 的 weight 应为 kw1 中的 2 个结果加上 kw2 中的 1 个结果，总共 3
-    for item in deduped:
-        if item["video_id"] == "vid1":
-            assert item["weight"] == 3
+    dedup = agent.deduplicate_results(aggregated)
+    # two unique
+    ids = {item["video_id"] for item in dedup}
+    assert ids == {"V1", "V2"}
+    # V1 saw 2 in 'a' + 1 in 'b' = 3, V2 saw 2 in 'a'
+    m = {item["video_id"]: item for item in dedup}
+    assert m["V1"]["weight"] == 3
+    assert m["V2"]["weight"] == 2
 
-# 测试结果排序（优化）逻辑
-def test_optimize_variations(search_agent):
-    results = [
-        {"video_id": "vid1", "weight": 5, "publish_time": "2023-01-01T00:00:00Z"},
-        {"video_id": "vid2", "weight": 10, "publish_time": "2023-01-02T00:00:00Z"},
-        {"video_id": "vid3", "weight": 7, "publish_time": "2023-01-03T00:00:00Z"},
+def test_optimize_variations(agent):
+    data = [
+        {"video_id": "u", "weight": 1},
+        {"video_id": "v", "weight": 5},
+        {"video_id": "w", "weight": 3},
     ]
-    optimized = search_agent.optimize_variations(results)
-    weights = [item["weight"] for item in optimized]
-    # 应该按 weight 降序排序
-    assert weights == sorted(weights, reverse=True)
+    sorted_ = agent.optimize_variations(data)
+    assert [d["video_id"] for d in sorted_] == ["v", "w", "u"]
 
-# 测试精炼结果，默认按照发布时间降序返回 top_n 个视频
-def test_refine_results(search_agent):
-    results = [
-        {"video_id": "vid1", "weight": 5, "publish_time": "2023-01-01T00:00:00Z"},
-        {"video_id": "vid2", "weight": 10, "publish_time": "2023-01-03T00:00:00Z"},
-        {"video_id": "vid3", "weight": 7, "publish_time": "2023-01-02T00:00:00Z"},
+def test_refine_results_respects_publish_time(agent):
+    # weight doesn't matter here because refine resorts by publish_time
+    items = [
+        {"video_id": "u", "weight": 10, "publish_time": "2022-01-01T00:00:00Z"},
+        {"video_id": "v", "weight": 1,  "publish_time": "2022-01-03T00:00:00Z"},
+        {"video_id": "w", "weight": 5,  "publish_time": "2022-01-02T00:00:00Z"},
     ]
-    refined = search_agent.refine_results(results, top_n=2)
-    # 按发布时间降序排序，最新的应当是 vid2，其次是 vid3
-    assert len(refined) == 2
-    assert refined[0]["video_id"] == "vid2"
-    assert refined[1]["video_id"] == "vid3"
+    top2 = agent.refine_results(items, top_n=2)
+    # expect two most recent by date: v (Jan 3), w (Jan 2)
+    assert [i["video_id"] for i in top2] == ["v", "w"]
 
-# 测试摘要生成（利用 DummyOpenAIService 返回固定摘要）
 @pytest.mark.asyncio
-async def test_summarize_results(search_agent):
+async def test_summarize_results_and_no_db(agent):
+    # two keywords
     results = [
-        {"search_keyword": "kw1", "video_id": "vid1", "title": "Title 1", "description": "Desc", "publish_time": "2023-01-01T00:00:00Z"},
-        {"search_keyword": "kw2", "video_id": "vid2", "title": "Title 2", "description": "Desc", "publish_time": "2023-01-02T00:00:00Z"},
+        {"search_keyword": "kwA", "title": "T1"},
+        {"search_keyword": "kwB", "title": "T2"},
     ]
-    summary = await search_agent.summarize_results(results)
-    assert "Summary of videos." in summary
+    summary = await agent.summarize_results(results)
+    assert summary == "DUMMY_SUMMARY"
+    # shouldn't record keyword_analysis here
+    assert agent.db.keyword_analysis == []
 
-# 测试完整的搜索工作流
 @pytest.mark.asyncio
-async def test_execute_search(search_agent):
-    result = await search_agent.execute_search("sample")
-    # 检查返回结果是否包含所有预期的键
-    expected_keys = {
-        "keywords_searched",
-        "aggregated_by_keyword",
-        "deduplicated_results",
-        "refined_results",
-        "total_unique_videos",
-        "summary",
-        "execution_time_seconds",
-    }
-    assert expected_keys.issubset(result.keys())
-    # 检查 refined_results 是否为列表且数量不超过预期
-    assert isinstance(result["refined_results"], list)
+async def test_summarize_results_empty(agent):
+    # empty list → gets the no‑videos message
+    # disable summary flag
+    agent.settings["enable_summary"] = False
+    summary = await agent.summarize_results([])
+    assert summary == ""
+
+    agent.settings["enable_summary"] = True
+    summary2 = await agent.summarize_results([])
+    assert summary2 == "No videos found to summarize."
+
+@pytest.mark.asyncio
+async def test_execute_search_full_flow(agent):
+    out = await agent.execute_search("baseX")
+    # top‑level keys
+    for k in ("keywords_searched","aggregated_by_keyword","deduplicated_results",
+              "refined_results","total_unique_videos","summary","execution_time_seconds"):
+        assert k in out
+    assert set(out["keywords_searched"]) == {"kwA","kwB"}
+    assert out["summary"] == "DUMMY_SUMMARY"
+    # should have stored keyword_analysis
+    assert len(agent.db.keyword_analysis) == 1
+    rec = agent.db.keyword_analysis[0]
+    assert rec["keyword"] == "baseX"
+    # timestamp is a string
+    assert isinstance(rec["timestamp"], str)
+    # last_search_result reflects the same dict
+    assert agent.last_search_result == out

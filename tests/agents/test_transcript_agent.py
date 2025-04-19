@@ -1,81 +1,192 @@
+import os
 import asyncio
 import pytest
+from io import BytesIO
+from pydub import AudioSegment
 
-# 模拟数据库实现：记录调用 store_transcript_summary 后保存的数据
-class DummyDatabase:
-    def __init__(self):
-        self.storage = {}
-    def store_transcript_summary(self, video_id, transcript, summary):
-        self.storage[video_id] = {"transcript": transcript, "summary": summary}
+import agents.transcript_agent as ta
+from agents.transcript_agent import TranscriptAgent, async_retry, run_transcript
 
-# 模拟 OpenAIService 实现：async_completion 返回固定摘要
-class DummyOpenAIService:
-    async def async_completion(self, prompt, prompt_template, temperature, max_tokens):
-        # 返回一个固定格式的摘要，方便测试验证
-        return f"Dummy summary for: {prompt[:10]}"
+# --- Helpers ------------------------------------------------------------
 
-# 模拟 YouTubeService 实现
 class DummyYouTubeService:
-    # 当视频 ID 为 "video_with_transcript" 时，直接返回字幕
-    def fetch_transcript(self, video_id):
-        if video_id == "video_with_transcript":
-            return "Dummy transcript"
-        return None
-    # 模拟下载音频，直接返回一个伪造的文件路径
+    def __init__(self, audio_path=None, raise_on_download=False):
+        self.audio_path = audio_path
+        self.raise_on_download = raise_on_download
+
     def download_audio(self, video_id):
-        return f"/dummy/path/{video_id}.mp3"
-    # 模拟音频转录，返回一个固定的转录文本
-    def transcribe_audio(self, audio_path):
-        return "Dummy transcript from audio"
+        if self.raise_on_download:
+            raise RuntimeError("download error")
+        return self.audio_path
 
-# 导入改进后的 VideoProcessor
-from agents.transcript_agent import VideoProcessor
+class DummyOpenAIService:
+    def __init__(self, responses=None, raise_on_transcribe=False):
+        # responses: list of strings to return for each chunk
+        self.responses = responses or []
+        self.raise_on_transcribe = raise_on_transcribe
+        self.calls = []
 
-@pytest.mark.asyncio
-async def test_process_video_transcript_with_existing_transcript():
-    db = DummyDatabase()
-    openai_service = DummyOpenAIService()
-    youtube_service = DummyYouTubeService()
-    processor = VideoProcessor(db, openai_service, youtube_service)
+    async def transcribe_audio(self, audio_io):
+        if self.raise_on_transcribe:
+            raise RuntimeError("whisper error")
+        # record that we got a BytesIO
+        self.calls.append(audio_io.getbuffer()[:4])
+        # pop next response or return empty
+        return self.responses.pop(0) if self.responses else ""
 
-    video_id = "video_with_transcript"
-    topic = "Test Topic"
-    summary = await processor.process_video_transcript(video_id, topic)
-    
-    # 验证返回摘要不为空，并且存储数据正确（使用 fetch_transcript 得到的字幕）
-    assert summary is not None
-    assert db.storage[video_id]["transcript"] == "Dummy transcript"
-    assert summary.startswith("Dummy summary for:")
+
+# --- async_retry decorator ---------------------------------------------
 
 @pytest.mark.asyncio
-async def test_process_video_transcript_with_audio_fallback():
-    db = DummyDatabase()
-    openai_service = DummyOpenAIService()
-    youtube_service = DummyYouTubeService()
-    processor = VideoProcessor(db, openai_service, youtube_service)
+async def test_async_retry_success():
+    class C:
+        def __init__(self):
+            self.count = 0
 
-    video_id = "video_without_transcript"
-    topic = "Fallback Topic"
-    summary = await processor.process_video_transcript(video_id, topic)
-    
-    # 此情况下 fetch_transcript 返回 None，应该走下载和音频转录流程
-    assert summary is not None
-    # 检查存储的数据中 transcript 应为音频转录返回的内容
-    assert db.storage[video_id]["transcript"] == "Dummy transcript from audio"
-    assert summary.startswith("Dummy summary for:")
+        @async_retry(max_retries=3, delay=0)
+        async def flaky(self):
+            self.count += 1
+            if self.count < 2:
+                raise ValueError("fail")
+            return "ok"
+
+    c = C()
+    res = await c.flaky()
+    assert res == "ok"
+    assert c.count == 2
 
 @pytest.mark.asyncio
-async def test_interpret_transcript_error_handling(monkeypatch):
-    db = DummyDatabase()
-    openai_service = DummyOpenAIService()
-    youtube_service = DummyYouTubeService()
-    processor = VideoProcessor(db, openai_service, youtube_service)
+async def test_async_retry_exceeded():
+    class D:
+        @async_retry(max_retries=2, delay=0)
+        async def always_fail(self):
+            raise RuntimeError("bad")
 
-    # 模拟 OpenAIService 异步接口抛出异常
-    async def failing_completion(*args, **kwargs):
-        raise Exception("Test error")
-    monkeypatch.setattr(openai_service, "async_completion", failing_completion)
+    d = D()
+    with pytest.raises(RuntimeError):
+        await d.always_fail()
 
-    summary = await processor.interpret_transcript("Some transcript", "Test Topic")
-    # 当发生异常时，应返回 None
-    assert summary is None
+
+# --- _slice_audio ------------------------------------------------------
+
+def test_slice_audio_real(tmp_path):
+    # create a 1500ms silent mp3
+    path = tmp_path / "test.mp3"
+    AudioSegment.silent(duration=1500).export(str(path), format="mp3")
+
+    agent = TranscriptAgent(openai_service=None, youtube_service=None, logger=None)
+    # default MAX_CHUNK_DURATION_MS = 60000 → single chunk
+    chunks = agent._slice_audio(str(path))
+    assert isinstance(chunks, list)
+    total_ms = sum(len(c) for c in chunks)
+    assert total_ms == 1500
+    assert len(chunks) == 1
+
+    # monkey‐patch to test smaller chunk size
+    agent.MAX_CHUNK_DURATION_MS = 1000
+    chunks2 = agent._slice_audio(str(path))
+    assert len(chunks2) == 2
+    assert sum(len(c) for c in chunks2) == 1500
+
+def test_slice_audio_failure(monkeypatch):
+    # force AudioSegment.from_file to throw
+    monkeypatch.setattr(ta.AudioSegment, "from_file", lambda p: (_ for _ in ()).throw(RuntimeError("bad")))
+    agent = TranscriptAgent(openai_service=None, youtube_service=None, logger=None)
+    chunks = agent._slice_audio("no.mp3")
+    assert chunks == []
+
+
+# --- _transcribe_chunk -------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_transcribe_chunk(monkeypatch):
+    seg = AudioSegment.silent(duration=100)
+
+    class DummyOA(DummyOpenAIService):
+        async def transcribe_audio(self, f):
+            # ensure name ends with .mp3
+            assert hasattr(f, "name") and f.name.endswith(".mp3")
+            return "trans"
+
+    oa = DummyOA()
+    agent = TranscriptAgent(openai_service=oa, youtube_service=None, logger=None)
+    result = await agent._transcribe_chunk(seg)
+    assert result == "trans"
+
+
+# --- fetch_transcript --------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_fetch_transcript_success(monkeypatch, tmp_path):
+    # prepare dummy audio file
+    audio_file = tmp_path / "audio.mp3"
+    audio_file.write_bytes(b"dummy")
+    yt = DummyYouTubeService(audio_path=str(audio_file))
+    oa = DummyOpenAIService(responses=["one", "two"])
+    agent = TranscriptAgent(openai_service=oa, youtube_service=yt, logger=None)
+
+    # patch slicing and transcription
+    monkeypatch.setattr(agent, "_slice_audio", lambda path: ["c1", "c2"])
+    async def fake_trans(chunk):
+        return f"T-{chunk}"
+    monkeypatch.setattr(agent, "_transcribe_chunk", fake_trans)
+    # stub existence
+    monkeypatch.setattr(os.path, "exists", lambda p: True)
+
+    merged = await agent.fetch_transcript("vid123")
+    assert merged == "T-c1\nT-c2"
+
+@pytest.mark.asyncio
+async def test_fetch_transcript_download_error():
+    yt = DummyYouTubeService(raise_on_download=True)
+    oa = DummyOpenAIService()
+    agent = TranscriptAgent(openai_service=oa, youtube_service=yt, logger=None)
+    res = await agent.fetch_transcript("vid")
+    assert res is None
+
+@pytest.mark.asyncio
+async def test_fetch_transcript_no_file(monkeypatch, tmp_path):
+    audio_file = tmp_path / "audio.mp3"
+    audio_file.write_bytes(b"dummy")
+    yt = DummyYouTubeService(audio_path=str(audio_file))
+    oa = DummyOpenAIService()
+    agent = TranscriptAgent(openai_service=oa, youtube_service=yt, logger=None)
+    monkeypatch.setattr(os.path, "exists", lambda p: False)
+    res = await agent.fetch_transcript("vid")
+    assert res is None
+
+@pytest.mark.asyncio
+async def test_fetch_transcript_empty_chunks(monkeypatch, tmp_path):
+    audio_file = tmp_path / "audio.mp3"
+    audio_file.write_bytes(b"dummy")
+    yt = DummyYouTubeService(audio_path=str(audio_file))
+    oa = DummyOpenAIService()
+    agent = TranscriptAgent(openai_service=oa, youtube_service=yt, logger=None)
+    monkeypatch.setattr(agent, "_slice_audio", lambda path: [])
+    monkeypatch.setattr(os.path, "exists", lambda p: True)
+    res = await agent.fetch_transcript("vid")
+    assert res is None
+
+@pytest.mark.asyncio
+async def test_fetch_transcript_all_chunks_fail(monkeypatch, tmp_path):
+    audio_file = tmp_path / "audio.mp3"
+    audio_file.write_bytes(b"dummy")
+    yt = DummyYouTubeService(audio_path=str(audio_file))
+    oa = DummyOpenAIService(responses=[])
+    agent = TranscriptAgent(openai_service=oa, youtube_service=yt, logger=None)
+    monkeypatch.setattr(agent, "_slice_audio", lambda path: ["x1", "x2"])
+    monkeypatch.setattr(os.path, "exists", lambda p: True)
+    res = await agent.fetch_transcript("vid")
+    assert res is None
+
+
+# --- run_transcript wrapper --------------------------------------------
+
+@pytest.mark.asyncio
+async def test_run_transcript_calls_fetch(monkeypatch):
+    async def fake_fetch(self, vid):
+        return "wrapped!"
+    monkeypatch.setattr(TranscriptAgent, "fetch_transcript", fake_fetch)
+
+    result = await run_transcript("any", openai_service=None, youtube_service=None, logger=None)
+    assert result == "wrapped!"
