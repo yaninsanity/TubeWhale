@@ -30,14 +30,14 @@ Key Differentiator: TubeWhale employs multiple AI agents to brainstorm topic key
 ### Flow Chart
 ![flow-chart](flow-chart.png)
 
-The focus of TubeWhale is to provide users with the ability to:
-1. **Brainstorming Keywords**: Multiple AI agents brainstorm topic ideas based on an initial keyword.
-2. **YouTube Video AI Search**: The system retrieves the top `k` YouTube videos for each keyword variation.
-3. **Leverage multimodal capabilities** by analyzing both video metadata and audio content.
-4. **Metadata Storage**: The results are saved in a database for further analysis.
-5. **Transparent Research and Record Keeping**: The agent interaction process is recorded transparently for research and analysis.
-
-Example keyword: **"Virginia fishing"** – this example will be used throughout the documentation to showcase the functionality.
+### Features
+- 🔑 Keyword Brainstorming: AI agents expand your base keyword into multiple variations.
+- 🎥 YouTube Search & Metadata: Fetches top‑k videos per keyword, deduplicates, scores by view/like/comment.
+- 📝 Transcription & Summaries: Uses YouTube captions → Whisper fallback → GPT‑4 summarization.
+- 🎙️ Audio Analysis: Optional full‑audio Whisper transcription + GPT summarization + chunked‑fallback.
+- 💾 Persistence: Stores metadata, transcripts, summaries, comments, logs in SQLite.
+- 📊 Report: Generates a JSON report with token usage and cost.
+- ⚙️ Highly Configurable: All parameters via .env or CLI flags.
 
 ## 1. Key Concepts and Parameters
 When running the system, the user can customize various parameters that control how the pipeline operates:
@@ -45,75 +45,48 @@ When running the system, the user can customize various parameters that control 
 ```bash
 python3 main.py 
 ```
-
 You will receive a database with max `MAX_N` * `TOP_K` videos. This videos list will be deduplicated.
 
 ## Key Concepts and Configuration & Parameter Explanations:
 
 ### TubeWhale is highly configurable through environment variables. Below are the key parameters and their explanations to help you tailor the system to your requirements.
 
-Environment Variable Configuration
-Create a .env file in the project root directory and populate it with the necessary configurations:
+# 2.Configuration ⚙️
+Create a `.env` in project root:
 ```bash
-# .env file
-YOUTUBE_API_KEY=<your-api-key>
-OPENAI_API_KEY=<your-api-key>
+# YouTube API keys (comma‑separated)
+# API keys
+YOUTUBE_API_KEYS="AIzaSyXXX,AIzaSyYYY,AIzaSyZZZ"
+OPENAI_API_KEY="sk-..."
+
+# Pipeline flags
 FULL_AUDIO_ANALYSIS=true
-KEYWORD='Arizona Fishing'
 PERSIST_AGENT_SUMMARIES=true
 DRY_RUN=false
-MAX_N=10
-TOP_K=5
+
+# Search & analysis
+KEYWORD="Arizona homeless during covid19"
+MAX_N=2
+TOP_K=2
 FILTER_TYPE="view_count"
-DB_PATH="youtube_summaries.db"
-CONCURRENCY=1
+
+# Storage & concurrency
+DB_PATH="AZcovidhomeless.db"
+CONCURRENCY=2
 ```
 
-## System Env Breakdown:
+Variable | Description
+KEYWORD (required) | Base search term for keyword brainstorming.
+MAX_N (required) | Number of keyword variations to generate.
+TOP_K (required) | Number of videos fetched per variation.
+FILTER_TYPE (default=view_count) | How to sort/filter videos (view_count, like_count, etc.).
+FULL_AUDIO_ANALYSIS (true/false) | Enable Whisper + GPT audio processing.
+PERSIST_AGENT_SUMMARIES (true/false) | Store transcript summaries and audio summaries.
+DRY_RUN (true/false) | No external API calls or DB writes — for testing.
+DB_PATH (default=youtube_summaries.db) | SQLite database file path.
+CONCURRENCY (default=3) | Number of parallel video processing tasks.
 
-Parameter Explanations
-### KEYWORD (Required)
-Description: The base search keyword that TubeWhale uses as a starting point to generate keyword variations.
-Example: KEYWORD="Arizona Fishing"
-
-### MAX_N (Required)
-Description: The total number of keyword variations to generate.
-Example: MAX_N=10 means TubeWhale will generate 10 keyword variations.
-
-### TOP_K (Required)
-Description: The number of YouTube videos to retrieve and analyze for each generated keyword.
-Example: TOP_K=5 means the system will analyze the top 5 videos per keyword.
-
-### FILTER_TYPE (Optional, Default="view_count")
-Description: Determines the filtering method applied to YouTube search results before further analysis. (Currently, only "view_count" is fully supported.)
-Example: FILTER_TYPE="view_count"
-
-### FULL_AUDIO_ANALYSIS (Optional, Default=true)
-Description: Specifies whether the system will attempt to transcribe the video's audio using Whisper if no transcript is available.
-Example: FULL_AUDIO_ANALYSIS=true
-
-### DRY_RUN (Optional, Default=false)
-Description: When set to true, the pipeline simulates the process without making real API calls or storing data.
-Example: DRY_RUN=true
-
-### PERSIST_AGENT_SUMMARIES (Optional, Default=true)
-Description: Indicates whether the system should store both transcript-based summaries and agent-generated summaries (such as audio-based summaries).
-Example: PERSIST_AGENT_SUMMARIES=true
-
-### DB_PATH (Optional, Default="youtube_summaries.db")
-Description: The path to the SQLite database file where data is stored.
-Example: DB_PATH="youtube_summaries.db"
-
-### CONCURRENCY (Optional)
-Description: The number of concurrent tasks to run, controlling the API call rate.
-Example: CONCURRENCY=1
-
-### pure_youtube (Optional via CLI)
-Description: When enabled (using the --pure_youtube flag), the system will use only the base keyword for YouTube searches, skipping the AI-powered keyword expansion.
-Example: Running python3 main.py --pure_youtube will search only using the base keyword.
-
-
-## 2. Environment Setup
+# 3. Environment Setup
 Requirements
 Python Version >=3.13.x
 ```bash
@@ -129,42 +102,58 @@ python3 main.py
 ```
 
 Additionally, install FFmpeg:
-
 On macOS: `brew install ffmpeg`
 On Linux: `sudo apt install ffmpeg`
- 
-Make sure to set up the `.env` file with your YouTube and OpenAI API keys and System Param:
-```bash
-YOUTUBE_API_KEY=<your-youtube-api-key>
-OPENAI_API_KEY=<your-openai-api-key>
-TOP_K=<how-many-videos-under-under-the-keyword-list>
-MAX_N=<how-many-topic-variations-you-want-system-helps-to-brainstorm>
-```
 
-# Usage Example 🎉
+
+# 4 How Tubewhale🐳 Works
+
+1. **Keyword Brainstorming**  
+   GPT‑4 agents generate `MAX_N` variations of your base `KEYWORD`.
+
+2. **YouTube Search**  
+   - Fetch the top `TOP_K` videos for each keyword variation.  
+   - Deduplicate results.  
+   - Score videos by view count, likes, comments (per `FILTER_TYPE`).
+
+3. **Metadata Storage**  
+   Store each video’s metadata in the `videos` table.
+
+4. **Transcription & Summaries**  
+   1. **Try YouTube captions** via `TranscriptAgent`.  
+   2. **Fallback to Whisper** for full‑audio transcription.  
+   3. **GPT Summarization**  
+      - Save raw transcripts and generated summaries in the `transcripts` table.  
+      - Log prompt/response, tokens and cost in `ai_interactions`.
+
+5. **Audio Analysis** (optional; if `FULL_AUDIO_ANALYSIS=true`)  
+   - **Mode A:** Full‑audio → Whisper → GPT summary.  
+   - **Mode B (fallback):**  
+     1. Slice audio into 60 s chunks.  
+     2. Run Whisper + GPT on each chunk.  
+     3. Recursively merge chunk summaries into one final summary.
+
+6. **Comments**  
+   Fetch all comments via YouTube API and save them in the `comments` table.
+
+7. **Standardization**  
+   Normalize each summary to the JSON schema using `StandardizerAgent`.
+
+8. **Final Report**  
+   After all videos are processed, generate `logs/report_<timestamp>.json` containing:  
+   - `processed_videos` count  
+   - List of `video_ids`  
+   - `total_prompt_tokens` and `total_completion_tokens`  
+   - `total_cost`  
+   - Run `timestamp`
+
+
+# 5 Usage Example 🎉
 To run the system with your desired parameters, simply execute:
 ```bash
 python3 main.py 
 ```
 
-By default, TubeWhale will:
-- Use the KEYWORD from your .env file (e.g., "Arizona Fishing") to generate MAX_N keyword variations.
-- Retrieve the top TOP_K videos for each generated keyword (with deduplication).
-- Extract video metadata, transcribe audio if needed, generate summaries, and store results in the specified database.
-
-
-
-## 4. Additional Features ✨
-- Brainstorming Agent: AI agents work together to generate multiple keyword variations based on the initial keyword. 🤖💡
-- YouTube Metadata Analysis: The system retrieves video metadata such as views, likes, and comments. 📊
-- Audio Transcription: If no transcript is available, the system transcribes the video’s audio using Whisper. 🎙️
-- Customizable Pipeline: Configure every parameter via the .env file and CLI, making the system adaptable to various research or use-case needs. 🎛️
-
-The database schema includes several tables:
-- videos: Stores metadata and analysis results for each video.
-- comments: Stores comments related to the videos.
-- brainstormed_topics: Stores all brainstormed keywords and their respective critiques.
-- keyword_analysis: Stores keyword analysis results after evaluating video metrics.
 
 ## 6. Testing
 We have integrated `pytest` for unit testing. To ensure the test, what you can do is in project root run following
