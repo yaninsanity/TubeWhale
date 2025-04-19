@@ -2,18 +2,18 @@ models:
   gpt-4:
     model_name: "gpt-4"
     type: "text"
-    context_length: 8192        # 8K 模型上下文长度
+    context_length: 8192
     max_tokens: 8192
     temperature: 0.7
     price:
-      prompt: 30.00           # $30 per million input tokens
-      completion: 60.00       # $60 per million output tokens
+      prompt: 0.00003          # $30 / 1 000 000 tokens
+      completion: 0.00006      # $60 / 1 000 000 tokens
 
   whisper-1:
     model_name: "whisper-1"
     type: "audio"
     price:
-      prompt: 0.006           # $0.006 per minute (audio transcription)
+      prompt: 0.006            # 保持原 $0.006 每分钟
       completion: 0.0
 
   gpt-4-turbo:
@@ -23,18 +23,18 @@ models:
     max_tokens: 8192
     temperature: 0.7
     price:
-      prompt: 1.50            # $1.50 per million input tokens
-      completion: 3.00        # $3.00 per million output tokens
+      prompt: 0.0000015        # $1.50 / 1 000 000 tokens
+      completion: 0.000003     # $3.00 / 1 000 000 tokens
 
   gpt-4-32k:
     model_name: "gpt-4-32k"
     type: "text"
-    context_length: 32768     # 32K 模型上下文长度
+    context_length: 32768
     max_tokens: 32768
     temperature: 0.7
     price:
-      prompt: 60.00           # $60 per million input tokens
-      completion: 120.00      # $120 per million output tokens
+      prompt: 0.00006          # $60 / 1 000 000 tokens
+      completion: 0.00012      # $120 / 1 000 000 tokens
 
   gpt-4o:
     model_name: "gpt-4o"
@@ -43,8 +43,8 @@ models:
     max_tokens: 8192
     temperature: 0.7
     price:
-      prompt: 2.50            # 旧版定价，单位：每百万 token
-      completion: 10.00
+      prompt: 0.0000025        # $2.50 / 1 000 000 tokens
+      completion: 0.00001      # $10.00 / 1 000 000 tokens
 
   gpt-4o-mini:
     model_name: "gpt-4o-mini"
@@ -53,8 +53,8 @@ models:
     max_tokens: 4096
     temperature: 0.7
     price:
-      prompt: 0.15            # 旧版定价，单位：每百万 token
-      completion: 0.60
+      prompt: 0.00000015       # $0.15 / 1 000 000 tokens
+      completion: 0.0000006    # $0.60 / 1 000 000 tokens
 
   image-model:
     model_name: "image-model-001"
