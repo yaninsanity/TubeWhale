@@ -12,7 +12,7 @@ on:
 
 jobs:
   test:
-    name: Run Tests and Coverage
+    name: Run Tests with Coverage
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -31,20 +31,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      - name: Install test dependencies
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-asyncio coverage
+          pip install pytest pytest-asyncio pytest-cov
 
-      - name: Run tests with coverage
+      - name: Run pytest with coverage
         run: |
-          coverage run -m pytest
-          coverage report -m
-          coverage xml
-
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v2
-        with:
-          name: coverage-report
-          path: coverage.xml
+          pytest --cov=./ --cov-report=term-missing
