@@ -2,7 +2,6 @@
 import os
 import asyncio
 import logging
-import time
 import traceback
 from io import BytesIO
 from typing import List, Optional
@@ -19,7 +18,6 @@ def async_retry(max_retries=3, delay=2):
                     return await func(*args, **kwargs)
                 except Exception as e:
                     last_exception = e
-                    # 使用调用者的日志记录器，如果传入了 logger 参数（可通过 args[0].logger 取得）
                     logger = getattr(args[0], 'logger', logging.getLogger(func.__name__))
                     logger.error(f"Attempt {attempt} for {func.__name__} failed: {e}")
                     if attempt < max_retries:
@@ -43,7 +41,14 @@ class TranscriptAgent:
         self.openai_service = openai_service
         self.youtube_service = youtube_service
         self.logger = logger or logging.getLogger(self.__class__.__name__)
-        self.semaphore = asyncio.Semaphore(self.CONCURRENCY_LIMIT)
+        # 延迟创建 semaphore，避免在导入/同步上下文中无 loop 报错
+        self._semaphore = None
+
+    @property
+    def semaphore(self) -> asyncio.Semaphore:
+        if self._semaphore is None:
+            self._semaphore = asyncio.Semaphore(self.CONCURRENCY_LIMIT)
+        return self._semaphore
 
     def _slice_audio(self, audio_path: str) -> List[AudioSegment]:
         """
@@ -54,7 +59,7 @@ class TranscriptAgent:
             duration_ms = len(audio)
             self.logger.info(f"Audio duration: {duration_ms / 1000:.1f} seconds.")
             chunks = [
-                audio[i:i + self.MAX_CHUNK_DURATION_MS]
+                audio[i : i + self.MAX_CHUNK_DURATION_MS]
                 for i in range(0, duration_ms, self.MAX_CHUNK_DURATION_MS)
             ]
             self.logger.info(f"Sliced audio into {len(chunks)} chunks.")
@@ -72,7 +77,7 @@ class TranscriptAgent:
         try:
             chunk.export(audio_io, format="mp3")
             audio_io.seek(0)
-            if not hasattr(audio_io, 'name'):
+            if not hasattr(audio_io, "name"):
                 audio_io.name = "audio.mp3"
             elif not os.path.splitext(audio_io.name)[1]:
                 audio_io.name += ".mp3"
@@ -81,8 +86,7 @@ class TranscriptAgent:
             raise
 
         async with self.semaphore:
-            transcript = await self.openai_service.transcribe_audio(audio_io)
-            return transcript
+            return await self.openai_service.transcribe_audio(audio_io)
 
     async def fetch_transcript(self, video_id: str) -> Optional[str]:
         """
@@ -111,46 +115,31 @@ class TranscriptAgent:
         tasks = [asyncio.create_task(self._transcribe_chunk(chunk)) for chunk in chunks]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        final_transcript = []
+        final_lines = []
         for idx, result in enumerate(results):
             if isinstance(result, Exception):
-                self.logger.error(f"[{video_id}] Error transcribing chunk {idx + 1}: {result}")
+                self.logger.error(f"[{video_id}] Error transcribing chunk {idx+1}: {result}")
                 self.logger.debug(traceback.format_exc())
             else:
                 text = result.strip()
                 if text:
-                    final_transcript.append(text)
+                    final_lines.append(text)
 
-        if not final_transcript:
+        if not final_lines:
             self.logger.error(f"[{video_id}] All transcription attempts failed.")
             return None
 
-        merged = "\n".join(final_transcript)
+        merged = "\n".join(final_lines)
         self.logger.info(f"[{video_id}] Transcription completed successfully.")
         return merged
 
-async def run_transcript(video_id: str, openai_service, youtube_service, logger: Optional[logging.Logger] = None) -> Optional[str]:
+async def run_transcript(
+    video_id: str,
+    openai_service,
+    youtube_service,
+    logger: Optional[logging.Logger] = None
+) -> Optional[str]:
     logger = logger or logging.getLogger("TranscriptRunner")
     agent = TranscriptAgent(openai_service, youtube_service, logger=logger)
     logger.info(f"[run_transcript] Fetching transcript for video {video_id}.")
     return await agent.fetch_transcript(video_id)
-
-if __name__ == "__main__":
-    import asyncio
-    from utils.openAIServices import OpenAIService
-    from utils.youtube import YouTubeService
-
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "sk-your_key")
-    YOUTUBE_API_KEYS = ["your_youtube_api_key1", "your_youtube_api_key2"]
-
-    default_logger = logging.getLogger("MainLogger")
-    default_logger.setLevel(logging.INFO)
-    openai_service = OpenAIService(api_key=OPENAI_API_KEY)
-    youtube_service = YouTubeService(api_keys=YOUTUBE_API_KEYS)
-
-    test_video_id = "dQw4w9WgXcQ"
-    transcript = asyncio.run(run_transcript(test_video_id, openai_service, youtube_service, logger=default_logger))
-    if transcript:
-        default_logger.info(f"Transcript:\n{transcript}")
-    else:
-        default_logger.error("Transcript retrieval failed.")
