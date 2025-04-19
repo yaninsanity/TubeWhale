@@ -75,16 +75,17 @@ DB_PATH="AZcovidhomeless.db"
 CONCURRENCY=2
 ```
 
-Variable | Description
-KEYWORD (required) | Base search term for keyword brainstorming.
-MAX_N (required) | Number of keyword variations to generate.
-TOP_K (required) | Number of videos fetched per variation.
-FILTER_TYPE (default=view_count) | How to sort/filter videos (view_count, like_count, etc.).
-FULL_AUDIO_ANALYSIS (true/false) | Enable Whisper + GPT audio processing.
-PERSIST_AGENT_SUMMARIES (true/false) | Store transcript summaries and audio summaries.
-DRY_RUN (true/false) | No external API calls or DB writes — for testing.
-DB_PATH (default=youtube_summaries.db) | SQLite database file path.
-CONCURRENCY (default=3) | Number of parallel video processing tasks.
+| Variable                          | Description                                                  |
+| --------------------------------- | ------------------------------------------------------------ |
+| KEYWORD (required)                | Base search term for keyword brainstorming.                 |
+| MAX_N (required)                  | Number of keyword variations to generate.                   |
+| TOP_K (required)                  | Number of videos fetched per variation.                     |
+| FILTER_TYPE (default=view_count)  | How to sort/filter videos (view_count, like_count, etc.).   |
+| FULL_AUDIO_ANALYSIS (true/false)  | Enable Whisper + GPT audio processing.                      |
+| PERSIST_AGENT_SUMMARIES (true/false) | Store transcript summaries and audio summaries.          |
+| DRY_RUN (true/false)              | No external API calls or DB writes — for testing.           |
+| DB_PATH (default=youtube_summaries.db) | SQLite database file path.                              |
+| CONCURRENCY (default=3)           | Number of parallel video processing tasks.                  |
 
 # 3. Environment Setup
 Requirements
