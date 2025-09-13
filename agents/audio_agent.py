@@ -159,10 +159,12 @@ class AudioProcessingAgent:
                  temp_dir: str = "temp_audio",
                  use_transcript_api: bool = True,
                  transcript_agent: Optional[Any] = None,
-                 logger: Optional[logging.Logger] = None):
+                 logger: Optional[logging.Logger] = None,
+                 dry_run: bool = False):
         """
         :param transcript_agent: 可选的 TranscriptAgent 实例，用于优先获取字幕。
         :param logger: 外部传入的 logger 对象，用于统一日志记录。
+        :param dry_run: 是否启用干运行模式，避免真实的API调用和文件下载。
         """
         self.openai_service = openai_service
         self.download_dir = download_dir
@@ -174,6 +176,7 @@ class AudioProcessingAgent:
         self.use_transcript_api = use_transcript_api
         self.transcript_agent = transcript_agent
         self.logger = logger if logger else DEFAULT_LOGGER
+        self.dry_run = dry_run
 
         os.makedirs(self.download_dir, exist_ok=True)
         os.makedirs(self.temp_dir, exist_ok=True)
@@ -202,12 +205,18 @@ class AudioProcessingAgent:
         """
         异步下载视频音频文件（调用 YouTubeService.download_audio），返回音频文件路径。
         """
+        if self.dry_run:
+            # 🎭 Dry run mode: return mock audio file
+            self.logger.info(f"[Video {video_id}] 🎭 Simulating audio download for dry run")
+            mock_audio_file = os.path.join(self.download_dir, f"{video_id}_mock.mp3")
+            return mock_audio_file
+            
         self.logger.info(f"[Video {video_id}] Step 1: Downloading audio.")
         loop = asyncio.get_running_loop()
-        audio_path = await loop.run_in_executor(None, self.youtube_service.download_audio, video_id)
+        audio_path = await loop.run_in_executor(None, self.youtube_service.download_audio, video_id, self.dry_run)
         if audio_path:
             self.logger.info(f"[Video {video_id}] Audio file downloaded: {audio_path}")
-            if self.db:
+            if self.db and not self.dry_run:
                 try:
                     record = {
                         "process": "download_audio",
@@ -321,6 +330,12 @@ class AudioProcessingAgent:
           5. 递归合并所有片段摘要生成最终摘要；
           6. 若配置了数据库，则记录处理日志。
         """
+        if self.dry_run:
+            # 🎭 Dry run mode: return mock audio analysis summary
+            self.logger.info(f"[Video {video_id}] 🎭 Using mock audio analysis for dry run")
+            mock_summary = f"This is a mock audio analysis summary for video {video_id} about {topic}. The analysis would include transcription and summarization of the audio content."
+            return mock_summary
+            
         start_time = datetime.now()
         self.logger.info(f"[Video {video_id}] Starting audio processing pipeline with topic '{topic}'.")
         try:

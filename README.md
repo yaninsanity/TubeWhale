@@ -43,7 +43,7 @@ Key Differentiator: TubeWhale employs multiple AI agents to brainstorm topic key
 When running the system, the user can customize various parameters that control how the pipeline operates:
 
 ```bash
-python3 main.py 
+python3 cli.py 
 ```
 You will receive a database with max `MAX_N` * `TOP_K` videos. This videos list will be deduplicated.
 
@@ -63,43 +63,45 @@ OPENAI_API_KEY="sk-..."
 FULL_AUDIO_ANALYSIS=true
 PERSIST_AGENT_SUMMARIES=true
 DRY_RUN=false
+PURE_YOUTUBE=false
 
 # Search & analysis
 KEYWORD="Arizona homeless during covid19"
-MAX_N=2
-TOP_K=2
+MAX_N=5
+TOP_K=3
 FILTER_TYPE="view_count"
 
 # Storage & concurrency
-DB_PATH="AZcovidhomeless.db"
-CONCURRENCY=2
+DB_PATH="youtube_summaries.db"
+CONCURRENCY=1
 ```
 
 | Variable                          | Description                                                  |
 | --------------------------------- | ------------------------------------------------------------ |
 | KEYWORD (required)                | Base search term for keyword brainstorming.                 |
-| MAX_N (required)                  | Number of keyword variations to generate.                   |
-| TOP_K (required)                  | Number of videos fetched per variation.                     |
+| MAX_N (default=5)                 | Number of keyword variations to generate.                   |
+| TOP_K (default=3)                 | Number of videos fetched per variation.                     |
 | FILTER_TYPE (default=view_count)  | How to sort/filter videos (view_count, like_count, etc.).   |
-| FULL_AUDIO_ANALYSIS (true/false)  | Enable Whisper + GPT audio processing.                      |
-| PERSIST_AGENT_SUMMARIES (true/false) | Store transcript summaries and audio summaries.          |
-| DRY_RUN (true/false)              | No external API calls or DB writes — for testing.           |
+| FULL_AUDIO_ANALYSIS (default=true)| Enable Whisper + GPT audio processing.                      |
+| PERSIST_AGENT_SUMMARIES (default=true) | Store transcript summaries and audio summaries.       |
+| DRY_RUN (default=false)           | No external API calls or DB writes — for testing.           |
+| PURE_YOUTUBE (default=false)      | Pure YouTube mode: disable AI expansion and audio analysis. |
 | DB_PATH (default=youtube_summaries.db) | SQLite database file path.                              |
-| CONCURRENCY (default=3)           | Number of parallel video processing tasks.                  |
+| CONCURRENCY (default=1)           | Number of parallel video processing tasks.                  |
 
 # 3. Environment Setup
 Requirements
-Python Version >=3.13.x
+Python Version >=3.11.x
 ```bash
 git clone https://github.com/yaninsanity/TubeWhale.git
 cd TubeWhale
-python3.11 -m venv venv
+python3 -m venv venv
 source venv/bin/activate
 # install torch cpu 
 pip3 install --pre torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/nightly/cpu
 pip install pip --upgrade
 pip install -r requirements.txt
-python3 main.py
+python3 cli.py
 ```
 
 Additionally, install FFmpeg:
@@ -149,11 +151,55 @@ On Linux: `sudo apt install ffmpeg`
    - Run `timestamp`
 
 
-# 5 Usage Example 🎉
-To run the system with your desired parameters, simply execute:
+# 5 Usage Examples 🎉
+
+## 5.1 Basic Usage
+To run the system with default configuration:
 ```bash
-python3 main.py 
+python3 cli.py 
 ```
+
+## 5.2 CLI Options
+TubeWhale provides extensive CLI options for flexibility:
+
+```bash
+# Basic keyword search
+python3 cli.py --keyword "machine learning" --top-k 5
+
+# Dry run for testing (no API calls)
+python3 cli.py --dry-run --keyword "test" --top-k 1
+
+# Pure YouTube mode (faster, no AI expansion)
+python3 cli.py --pure-youtube --top-k 10
+
+# Enable audio analysis
+python3 cli.py --audio --keyword "tutorials" --top-k 3
+
+# High concurrency processing
+python3 cli.py --concurrency 8 --keyword "python"
+
+# Verbose logging for debugging
+python3 cli.py --verbose --keyword "debug test"
+
+# Configuration testing
+python3 cli.py --config-test
+```
+
+## 5.3 CLI Parameters Reference
+
+| CLI Parameter | Short | Description | Example |
+|---------------|-------|-------------|---------|
+| `--keyword` | `-k` | Search keyword (overrides env var) | `--keyword "AI tutorial"` |
+| `--top-k` | `-n` | Number of videos to process | `--top-k 10` |
+| `--concurrency` | `-c` | Concurrent tasks (1-10) | `--concurrency 5` |
+| `--pure-youtube` | | Fast mode: YouTube only, no AI | `--pure-youtube` |
+| `--audio` | | Enable audio analysis | `--audio` |
+| `--no-persist` | | Disable database storage | `--no-persist` |
+| `--dry-run` | | Test mode: no API calls | `--dry-run` |
+| `--config-test` | | Validate configuration | `--config-test` |
+| `--verbose` | `-v` | Debug logging | `--verbose` |
+| `--quiet` | `-q` | Minimal output | `--quiet` |
+| `--log-file` | | Custom log file path | `--log-file debug.log` |
 
 
 ## 6. Testing

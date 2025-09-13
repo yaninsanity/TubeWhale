@@ -37,10 +37,11 @@ class TranscriptAgent:
     MAX_CHUNK_DURATION_MS = 60000  # 每个片段 60 秒
     CONCURRENCY_LIMIT = 5          # 并发转录任务上限
 
-    def __init__(self, openai_service, youtube_service, logger: Optional[logging.Logger] = None):
+    def __init__(self, openai_service, youtube_service, logger: Optional[logging.Logger] = None, dry_run: bool = False):
         self.openai_service = openai_service
         self.youtube_service = youtube_service
         self.logger = logger or logging.getLogger(self.__class__.__name__)
+        self.dry_run = dry_run
         # 延迟创建 semaphore，避免在导入/同步上下文中无 loop 报错
         self._semaphore = None
 
@@ -92,11 +93,17 @@ class TranscriptAgent:
         """
         获取指定视频的完整转录文本。
         """
+        if self.dry_run:
+            # 🎭 Dry run mode: return mock transcript
+            self.logger.info(f"[{video_id}] 🎭 Using mock transcript for dry run")
+            mock_transcript = f"This is a mock transcript for video {video_id}. In a real scenario, this would contain the actual transcribed content from the video's audio."
+            return mock_transcript
+            
         self.logger.info(f"[{video_id}] Downloading audio.")
         loop = asyncio.get_running_loop()
         try:
             audio_path = await loop.run_in_executor(
-                None, self.youtube_service.download_audio, video_id
+                None, self.youtube_service.download_audio, video_id, self.dry_run
             )
         except Exception as e:
             self.logger.error(f"[{video_id}] Exception during audio download: {e}")
@@ -137,9 +144,10 @@ async def run_transcript(
     video_id: str,
     openai_service,
     youtube_service,
-    logger: Optional[logging.Logger] = None
+    logger: Optional[logging.Logger] = None,
+    dry_run: bool = False
 ) -> Optional[str]:
     logger = logger or logging.getLogger("TranscriptRunner")
-    agent = TranscriptAgent(openai_service, youtube_service, logger=logger)
+    agent = TranscriptAgent(openai_service, youtube_service, logger=logger, dry_run=dry_run)
     logger.info(f"[run_transcript] Fetching transcript for video {video_id}.")
     return await agent.fetch_transcript(video_id)

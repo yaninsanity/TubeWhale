@@ -24,7 +24,7 @@ def disable_retry(monkeypatch):
 # --- Dummy 服务实现 --------------------------------------------------
 
 class DummyYouTubeService:
-    def download_audio(self, video_id):
+    def download_audio(self, video_id, dry_run=False):
         # 返回一个 fake 路径
         return f"/fake/path/{video_id}.mp3"
 
