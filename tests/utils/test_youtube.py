@@ -103,3 +103,150 @@ def test_max_retries_exceeded(monkeypatch):
 
     with pytest.raises(Exception, match='Max retries exceeded'):
         service.search('query')
+
+# ------------------ 测试缩略图URL提取 ------------------
+def test_fetch_video_metadata_with_thumbnail():
+    """测试从 YouTube API 提取视频元数据包含 thumbnail_url"""
+    
+    # 模拟 YouTube API 返回的视频数据
+    mock_video_data = {
+        'items': [{
+            'id': 'test_video_123',
+            'snippet': {
+                'title': 'Test Video',
+                'description': 'Test description',
+                'publishedAt': '2024-01-01T12:00:00Z',
+                'channelTitle': 'Test Channel',
+                'thumbnails': {
+                    'maxresdefault': {
+                        'url': 'https://i.ytimg.com/vi/test_video_123/maxresdefault.jpg',
+                        'width': 1280,
+                        'height': 720
+                    },
+                    'high': {
+                        'url': 'https://i.ytimg.com/vi/test_video_123/hqdefault.jpg',
+                        'width': 480,
+                        'height': 360
+                    },
+                    'medium': {
+                        'url': 'https://i.ytimg.com/vi/test_video_123/mqdefault.jpg',
+                        'width': 320,
+                        'height': 180
+                    }
+                }
+            },
+            'contentDetails': {
+                'duration': 'PT5M30S'
+            },
+            'statistics': {
+                'viewCount': '1000',
+                'likeCount': '100',
+                'commentCount': '50'
+            }
+        }]
+    }
+    
+    def mock_videos_list(kwargs):
+        return DummyRequest(response=mock_video_data)
+    
+    behavior = {'videos_list': mock_videos_list}
+    dummy_service = DummyService(behavior)
+    
+    import types
+    service = types.SimpleNamespace()
+    service.service = dummy_service
+    service.api_keys = ['dummy_key']
+    service.current_key_index = 0
+    
+    # 导入 fetch_video_metadata 函数
+    from utils.youtube import fetch_video_metadata
+    
+    result = fetch_video_metadata('test_video_123', service)
+    
+    # 验证返回结果包含 thumbnail_url
+    assert 'thumbnail_url' in result, "Result should contain thumbnail_url"
+    assert result['thumbnail_url'] == 'https://i.ytimg.com/vi/test_video_123/maxresdefault.jpg', \
+        f"Expected maxresdefault URL, got {result['thumbnail_url']}"
+
+def test_thumbnail_url_quality_priority():
+    """测试缩略图URL的质量优先级选择"""
+    
+    # 测试只有低质量缩略图的情况
+    mock_video_data_low = {
+        'items': [{
+            'id': 'test_video_456',
+            'snippet': {
+                'title': 'Test Video Low Quality',
+                'thumbnails': {
+                    'medium': {
+                        'url': 'https://i.ytimg.com/vi/test_video_456/mqdefault.jpg',
+                        'width': 320,
+                        'height': 180
+                    },
+                    'default': {
+                        'url': 'https://i.ytimg.com/vi/test_video_456/default.jpg',
+                        'width': 120,
+                        'height': 90
+                    }
+                }
+            },
+            'contentDetails': {'duration': 'PT3M'},
+            'statistics': {'viewCount': '500'}
+        }]
+    }
+    
+    def mock_videos_list_low(kwargs):
+        return DummyRequest(response=mock_video_data_low)
+    
+    behavior = {'videos_list': mock_videos_list_low}
+    dummy_service = DummyService(behavior)
+    
+    import types
+    service = types.SimpleNamespace()
+    service.service = dummy_service
+    service.api_keys = ['dummy_key']
+    service.current_key_index = 0
+    
+    from utils.youtube import fetch_video_metadata
+    
+    result = fetch_video_metadata('test_video_456', service)
+    
+    # 应该选择 medium 质量（优先级高于 default）
+    assert result['thumbnail_url'] == 'https://i.ytimg.com/vi/test_video_456/mqdefault.jpg', \
+        f"Expected medium quality URL, got {result['thumbnail_url']}"
+
+def test_thumbnail_url_fallback():
+    """测试缩略图URL的回退机制"""
+    
+    # 测试没有缩略图的情况
+    mock_video_data_no_thumb = {
+        'items': [{
+            'id': 'test_video_789',
+            'snippet': {
+                'title': 'Test Video No Thumbnail',
+                # 没有 thumbnails 字段
+            },
+            'contentDetails': {'duration': 'PT2M'},
+            'statistics': {'viewCount': '200'}
+        }]
+    }
+    
+    def mock_videos_list_no_thumb(kwargs):
+        return DummyRequest(response=mock_video_data_no_thumb)
+    
+    behavior = {'videos_list': mock_videos_list_no_thumb}
+    dummy_service = DummyService(behavior)
+    
+    import types
+    service = types.SimpleNamespace()
+    service.service = dummy_service
+    service.api_keys = ['dummy_key']
+    service.current_key_index = 0
+    
+    from utils.youtube import fetch_video_metadata
+    
+    result = fetch_video_metadata('test_video_789', service)
+    
+    # 没有缩略图时应该返回 None 或不包含 thumbnail_url
+    assert result.get('thumbnail_url') is None, \
+        f"Expected None for thumbnail_url when no thumbnails available, got {result.get('thumbnail_url')}"
