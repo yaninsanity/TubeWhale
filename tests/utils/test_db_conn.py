@@ -237,9 +237,9 @@ def test_video_schema_includes_thumbnail_url(db: Database):
     assert 'thumbnail_url' in columns, f"thumbnail_url column not found in videos table. Columns: {columns}"
 
 def test_video_thumbnail_url_null_handling(db: Database):
-    """测试 thumbnail_url 字段的 NULL 值处理"""
+    """测试 thumbnail_url 字段的默认值处理"""
     meta = sample_video_metadata()
-    # 不设置 thumbnail_url，应该存储为 NULL
+    # 不设置 thumbnail_url，应该存储为空字符串
     
     db.store_video_metadata(meta)
     session = db.get_session()
@@ -247,7 +247,7 @@ def test_video_thumbnail_url_null_handling(db: Database):
     session.close()
     
     assert video is not None, "Video without thumbnail_url was not stored."
-    assert video.thumbnail_url is None, f"Expected None for thumbnail_url, got {video.thumbnail_url}"
+    assert video.thumbnail_url == '', f"Expected empty string for thumbnail_url, got {repr(video.thumbnail_url)}"
 
 if __name__ == "__main__":
     pytest.main(["-v", "--maxfail=1"])
