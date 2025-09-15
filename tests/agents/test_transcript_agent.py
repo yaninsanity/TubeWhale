@@ -147,7 +147,7 @@ class DummyYT:
         self.path = path
         self.raise_on_download = raise_on_download
 
-    def download_audio(self, vid):
+    def download_audio(self, vid, dry_run=False):
         if self.raise_on_download:
             raise RuntimeError("dl fail")
         return self.path

@@ -74,6 +74,7 @@ class SummarizerAgent:
         overlap_ratio: float = 0.1,
         max_rounds: int = 1,
         logger: Optional[logging.Logger] = None,
+        dry_run: bool = False,
     ):
         self.service = service
         self.concurrency = concurrency
@@ -81,6 +82,7 @@ class SummarizerAgent:
         self.overlap_ratio = overlap_ratio
         self.max_rounds = max_rounds
         self.logger = logger or logging.getLogger(__name__)
+        self.dry_run = dry_run
 
     async def summarize(
         self,
@@ -92,6 +94,20 @@ class SummarizerAgent:
     ) -> str:
         if not text.strip():
             raise ValueError("No text provided for summarization.")
+
+        if self.dry_run:
+            # 🎭 Dry run mode: return mock structured summary
+            self.logger.info("▶ Begin summarization workflow")
+            self.logger.info("🎭 Dry run mode: using mock summarization")
+            mock_result = {
+                "main_topic": "Non-existent content",
+                "key_insights": "In a real scenario, content from the video would be condensed into key points and insights",
+                "recommended_tools": "Transcript generator for video content", 
+                "best_practices": "Presenting condensed information in an easy-to-understand, engaging format",
+                "challenges_and_advice": "Generating summaries from non-existent or empty content is not possible"
+            }
+            self.logger.info("▶ Summarization completed")
+            return json.dumps(mock_result, indent=2)
 
         model = model or self.service.default_model  # type: ignore
         self.logger.info("▶ Begin summarization workflow")
@@ -175,6 +191,7 @@ def gpt_summarizer_agent(
     overlap_ratio: float = 0.1,
     max_rounds: int = 1,
     logger: Optional[logging.Logger] = None,
+    dry_run: bool = False,
 ) -> asyncio.Future:
     agent = SummarizerAgent(
         service,
@@ -183,6 +200,7 @@ def gpt_summarizer_agent(
         overlap_ratio=overlap_ratio,
         max_rounds=max_rounds,
         logger=logger,
+        dry_run=dry_run,
     )
     return asyncio.ensure_future(
         agent.summarize(

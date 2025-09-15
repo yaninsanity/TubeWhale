@@ -47,18 +47,21 @@ class StandardizerAgent:
     }
 
     def __init__(self, openai_service: OpenAIService, enable_standardization: bool = True, 
-                 debug_mode: bool = False, db: Optional[Any] = None, logger: Optional[logging.Logger] = None):
+                 debug_mode: bool = False, db: Optional[Any] = None, logger: Optional[logging.Logger] = None,
+                 dry_run: bool = False):
         """
         :param openai_service: 已初始化的 OpenAIService 实例。
         :param enable_standardization: 是否启用标准化处理。
         :param debug_mode: 是否开启详细调试日志。
         :param db: 可选数据库对象，用于记录标准化结果（需要提供 store_data 或 store_data_async 接口）。
+        :param dry_run: 是否启用干运行模式，避免真实的API调用。
         """
         self.openai_service = openai_service
         self.enable_standardization = enable_standardization
         self.debug_mode = debug_mode
         self.db = db
         self.logger = logger or logging.getLogger(__name__)
+        self.dry_run = dry_run
 
     def _build_prompt(self, summary: str) -> str:
         """
@@ -121,6 +124,19 @@ class StandardizerAgent:
         :param video_id: 可选视频ID，用于记录标准化结果
         :return: 标准化结果（若能解析为 JSON则返回字典，否则返回原始文本）
         """
+        if self.dry_run:
+            # 🎭 Dry run mode: return mock standardized summary
+            logger.info("🎭 Dry run mode: using mock standardization")
+            mock_result = {
+                "main_topic": summary.split('.')[0] if summary else "Test Topic",
+                "key_insights": "Mock insights extracted from summary",
+                "recommended_tools": "Mock tools recommendation", 
+                "best_practices": "Mock best practices advice",
+                "challenges_and_advice": "Mock challenges and solutions"
+            }
+            logger.info("Standardization completed successfully.")
+            return mock_result
+            
         if not self.enable_standardization:
             logger.info("Standardization disabled. Returning original summary.")
             return summary

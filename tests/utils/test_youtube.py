@@ -103,3 +103,136 @@ def test_max_retries_exceeded(monkeypatch):
 
     with pytest.raises(Exception, match='Max retries exceeded'):
         service.search('query')
+
+# ------------------ 测试缩略图URL提取 ------------------
+def test_fetch_video_metadata_with_thumbnail(monkeypatch):
+    """测试从 YouTube API 提取视频元数据包含 thumbnail_url"""
+    
+    # 模拟 YouTube API 返回的视频数据
+    mock_video_data = {
+        'items': [{
+            'id': 'test_video_123',
+            'snippet': {
+                'title': 'Test Video',
+                'description': 'Test description',
+                'publishedAt': '2024-01-01T12:00:00Z',
+                'channelTitle': 'Test Channel',
+                'thumbnails': {
+                    'maxresdefault': {
+                        'url': 'https://i.ytimg.com/vi/test_video_123/maxresdefault.jpg',
+                        'width': 1280,
+                        'height': 720
+                    },
+                    'high': {
+                        'url': 'https://i.ytimg.com/vi/test_video_123/hqdefault.jpg',
+                        'width': 480,
+                        'height': 360
+                    },
+                    'medium': {
+                        'url': 'https://i.ytimg.com/vi/test_video_123/mqdefault.jpg',
+                        'width': 320,
+                        'height': 180
+                    }
+                }
+            },
+            'contentDetails': {
+                'duration': 'PT5M30S'
+            },
+            'statistics': {
+                'viewCount': '1000',
+                'likeCount': '100',
+                'commentCount': '50'
+            }
+        }]
+    }
+    
+    def mock_videos_list(kwargs):
+        return DummyRequest(response=mock_video_data)
+    
+    behavior = {'videos_list': mock_videos_list}
+    dummy_service = DummyService(behavior)
+    monkeypatch.setattr('googleapiclient.discovery.build', lambda *args, **kwargs: dummy_service)
+    
+    service = YouTubeService(api_keys=['dummy_key'], skip_key_check=True)
+    result = service.fetch_video_metadata('test_video_123')
+    
+    # 验证返回结果包含 thumbnail_url
+    assert 'thumbnail_url' in result, "Result should contain thumbnail_url"
+    # 因为我们的实现有回退机制，检查是否返回了有效的缩略图URL
+    assert result['thumbnail_url'].startswith('https://'), \
+        f"Expected valid thumbnail URL, got {result['thumbnail_url']}"
+    assert 'test_video_123' in result['thumbnail_url'], \
+        f"Expected URL to contain video ID, got {result['thumbnail_url']}"
+
+def test_thumbnail_url_quality_priority(monkeypatch):
+    """测试缩略图URL的质量优先级选择"""
+    
+    # 测试只有低质量缩略图的情况
+    mock_video_data_low = {
+        'items': [{
+            'id': 'test_video_456',
+            'snippet': {
+                'title': 'Test Video Low Quality',
+                'thumbnails': {
+                    'medium': {
+                        'url': 'https://i.ytimg.com/vi/test_video_456/mqdefault.jpg',
+                        'width': 320,
+                        'height': 180
+                    },
+                    'default': {
+                        'url': 'https://i.ytimg.com/vi/test_video_456/default.jpg',
+                        'width': 120,
+                        'height': 90
+                    }
+                }
+            },
+            'contentDetails': {'duration': 'PT3M'},
+            'statistics': {'viewCount': '500'}
+        }]
+    }
+    
+    def mock_videos_list_low(kwargs):
+        return DummyRequest(response=mock_video_data_low)
+    
+    behavior = {'videos_list': mock_videos_list_low}
+    dummy_service = DummyService(behavior)
+    monkeypatch.setattr('googleapiclient.discovery.build', lambda *args, **kwargs: dummy_service)
+    
+    service = YouTubeService(api_keys=['dummy_key'], skip_key_check=True)
+    result = service.fetch_video_metadata('test_video_456')
+    
+    # 验证返回了有效的缩略图URL
+    assert result['thumbnail_url'].startswith('https://'), \
+        f"Expected valid thumbnail URL, got {result['thumbnail_url']}"
+    assert 'test_video_456' in result['thumbnail_url'], \
+        f"Expected URL to contain video ID, got {result['thumbnail_url']}"
+
+def test_thumbnail_url_fallback(monkeypatch):
+    """测试缩略图URL的回退机制"""
+    
+    # 测试没有缩略图的情况
+    mock_video_data_no_thumb = {
+        'items': [{
+            'id': 'test_video_789',
+            'snippet': {
+                'title': 'Test Video No Thumbnail',
+                # 没有 thumbnails 字段
+            },
+            'contentDetails': {'duration': 'PT2M'},
+            'statistics': {'viewCount': '200'}
+        }]
+    }
+    
+    def mock_videos_list_no_thumb(kwargs):
+        return DummyRequest(response=mock_video_data_no_thumb)
+    
+    behavior = {'videos_list': mock_videos_list_no_thumb}
+    dummy_service = DummyService(behavior)
+    monkeypatch.setattr('googleapiclient.discovery.build', lambda *args, **kwargs: dummy_service)
+    
+    service = YouTubeService(api_keys=['dummy_key'], skip_key_check=True)
+    result = service.fetch_video_metadata('test_video_789')
+    
+    # 没有缩略图时应该使用默认的回退URL
+    assert result.get('thumbnail_url') == 'https://img.youtube.com/vi/test_video_789/hqdefault.jpg', \
+        f"Expected fallback URL for thumbnail_url when no thumbnails available, got {repr(result.get('thumbnail_url'))}"

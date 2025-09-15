@@ -45,6 +45,7 @@ class Video(Base):
     is_transcript = Column(Integer, default=0)
     audio_summary = Column(Text)
     ai_cost = Column(Float, default=0.0)
+    thumbnail_url = Column(String, default='')  # 缩略图URL字段
 
     comments = relationship("Comment", back_populates="video", cascade="all, delete")
     transcripts = relationship("Transcript", back_populates="video", cascade="all, delete")
@@ -213,6 +214,7 @@ class Database:
             video.is_transcript = video_metadata.get('is_transcript', 0)
             video.audio_summary = video_metadata.get('audio_summary')
             video.ai_cost = video_metadata.get('ai_cost', 0.0)
+            video.thumbnail_url = video_metadata.get('thumbnail_url', '')
             session.merge(video)
             self._commit_session(session, f"Storing metadata for video ID: {video_metadata['id']}")
         except Exception:

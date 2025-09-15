@@ -317,6 +317,24 @@ class YouTubeService:
             "like_count": int(stats.get("likeCount", 0)),
             "comment_count": int(stats.get("commentCount", 0)),
         }
+        
+        # 获取缩略图URL并添加到元数据
+        snippet = video_info.get("snippet", {})
+        thumbnails = snippet.get("thumbnails", {})
+        if thumbnails:
+            # 按质量优先级选择最佳缩略图URL
+            for quality in ["maxresdefault", "standard", "high", "medium", "default"]:
+                if quality in thumbnails:
+                    metadata["thumbnail_url"] = thumbnails[quality]["url"]
+                    break
+            
+            # 如果没有找到标准缩略图，构建默认URL
+            if "thumbnail_url" not in metadata:
+                metadata["thumbnail_url"] = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
+        else:
+            # 构建默认缩略图URL
+            metadata["thumbnail_url"] = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
+        
         self.logger.info(f"Fetched metadata: {metadata}")
         return metadata
 
@@ -431,7 +449,20 @@ class YouTubeService:
         }
 
     # --------------- 音频下载方法（采用 yt_dlp + ffmpeg 提取 mp3） ---------------
-    def download_audio(self, video_id):
+    def download_audio(self, video_id, dry_run=False):
+        if dry_run:
+            # 🎭 Dry run mode: return mock audio file path
+            logger.info(f"🎭 Dry run mode: simulating audio download for {video_id}")
+            downloads_dir = "downloads"
+            os.makedirs(downloads_dir, exist_ok=True)
+            mock_audio_file = os.path.abspath(os.path.join(downloads_dir, f"{video_id}_mock.mp3"))
+            # Create a tiny mock audio file if it doesn't exist
+            if not os.path.exists(mock_audio_file):
+                with open(mock_audio_file, 'w') as f:
+                    f.write("# Mock audio file for dry run testing")
+            logger.info(f"🎭 Mock audio file created: {mock_audio_file}")
+            return mock_audio_file
+            
         downloads_dir = "downloads"
         os.makedirs(downloads_dir, exist_ok=True)
         output_file = os.path.abspath(os.path.join(downloads_dir, f"{video_id}.mp3"))

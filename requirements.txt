@@ -18,5 +18,9 @@ pytest-asyncio
 sqlalchemy
 pytube
 browser_cookie3
+pyyaml>=6.0
+asyncio
+dataclasses
+typing-extensions
 ffmpeg
 yt_dlp
