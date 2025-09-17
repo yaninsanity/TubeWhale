@@ -1,5 +1,8 @@
 google-api-python-client==2.58.0
-youtube-transcript-api==0.5.0
+
+# NOTE: youtube-transcript-api is now pinned in django_requirements.txt (>=0.6.0) to avoid resolver conflicts
+# youtube-transcript-api==0.5.0  # legacy pin (conflicts with >=0.6.0); kept as comment for reference
+
 langchain
 openai
 tqdm==4.64.1
@@ -8,7 +11,10 @@ python-dotenv==1.0.1
 langchain_community
 langchain_openai
 whisper
-youtube_dl
+gunicorn==21.2.0
+
+# Video downloaders: prefer yt-dlp; youtube_dl retained as legacy reference
+# youtube_dl               # legacy; module is yt_dlp at runtime
 yt-dlp
 pydub
 aiolimiter
@@ -19,8 +25,12 @@ sqlalchemy
 pytube
 browser_cookie3
 pyyaml>=6.0
-asyncio
-dataclasses
+
+# Stdlib / system-provided entries kept as comments to reduce pollution
+# asyncio                 # stdlib
+# dataclasses             # stdlib (3.7+)
 typing-extensions
-ffmpeg
-yt_dlp
+# ffmpeg                  # system binary (installed via apt in Docker)
+
+# Optional (CLI): add when building fresh envs
+# aiohttp>=3.9           # required for cli.py HTTP pooling

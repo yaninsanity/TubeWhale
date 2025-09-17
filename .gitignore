@@ -76,15 +76,11 @@ simple_*.py
 update_*.py
 clean_*.py
 
-# Development configs and containers
-Dockerfile
-docker-compose.yml
-docker-entrypoint.sh
+# Development configs and containers (keep tracked for deployment)
+# Dockerfile and compose should be committed
+# docker-compose.override.yml may remain local if needed
 docker/
-*.yaml
-*.yml
 pyproject.toml
-nginx.conf
 
 # Development directories
 core/

@@ -7,16 +7,17 @@ djangorestframework==3.14.0
 django-cors-headers==4.3.1
 django-filter==23.4
 django-extensions==3.2.3
+whitenoise==6.7.0
 
 # Database & ORM
 psycopg2-binary==2.9.7
 django-environ==0.11.2
 
 # Admin Enhancement
-django-admin-interface==0.21.4
+django-admin-interface>=0.29.0
 django-nested-admin==4.0.2
 django-import-export==3.3.3
-django-admin-charts==0.1.8
+# django-admin-charts>=1.0.0  # 暂时注释掉，有依赖冲突
 
 # API & Documentation
 drf-spectacular==0.26.5
@@ -28,7 +29,8 @@ djangorestframework-simplejwt==5.3.0
 django-allauth==0.57.0
 django-guardian==2.4.0
 django-oauth-toolkit==1.7.1
-django-security==0.20.0
+# Security
+# django-security>=0.12.0  # 暂时注释掉，有依赖冲突
 
 # Task Queue & Background Jobs
 celery[redis]==5.3.4
@@ -47,7 +49,7 @@ django-widget-tweaks==1.5.0
 
 # File Handling & Storage
 django-storages==1.14.2
-boto3==1.34.0
+boto3>=1.34.0,<1.35.0
 Pillow==10.1.0
 
 # Monitoring & Logging
@@ -66,12 +68,18 @@ coverage==7.3.2
 django-model-utils==4.3.1
 django-phonenumber-field==7.1.0
 django-countries==7.5.1
-python-dateutil==2.8.2
+python-dateutil>=2.8.2  # 放宽版本约束
 
 # Integration with existing TubeWhale components
 # (These will bridge with your existing agents/ and service/ modules)
 requests==2.31.0
-python-dotenv==1.0.0
+python-dotenv==1.0.1
+
+# TubeWhale CLI dependencies (from original requirements.txt)
+pydub>=0.25.1
+pytube>=15.0.0
+youtube-transcript-api>=0.6.0
+asyncio-throttle>=1.0.0
 
 # Development Tools (optional)
 black==23.11.0

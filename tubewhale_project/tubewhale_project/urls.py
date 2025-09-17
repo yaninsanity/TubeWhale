@@ -25,12 +25,11 @@ admin.site.site_header = "🐋 TubeWhale Platform Admin"
 admin.site.site_title = "TubeWhale Admin"
 admin.site.index_title = "TubeWhale Platform Administration"
 
+
 urlpatterns = [
+    
     # Admin interface
     path('admin/', admin.site.urls),
-    
-    # API endpoints
-    path('api/v1/', include('apps.api_app.urls')),
     
     # Individual app URLs
     path('videos/', include('apps.video_app.urls')),
@@ -38,6 +37,9 @@ urlpatterns = [
     path('analysis/', include('apps.analysis_app.urls')),
     path('experts/', include('apps.expert_app.urls')),
     path('dashboard/', include('apps.dashboard_app.urls')),
+    
+    # TubeWhale Engine API - 无需认证的健康检查
+    path('', include('apps.tubewhale_engine.urls')),
     
     # API documentation
     path('api/docs/', include('apps.api_app.docs_urls')),

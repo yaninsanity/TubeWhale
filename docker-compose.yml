@@ -1,0 +1,177 @@
+
+
+# TubeWhale Django Backend - Docker Compose 配置
+# 生产级别的多容器编排，包含数据库、缓存、后端服务
+
+services:
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:15-alpine
+    container_name: tubewhale_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: tubewhale
+      POSTGRES_USER: tubewhale
+      POSTGRES_PASSWORD: tubewhale123
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tubewhale -d tubewhale"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tubewhale_network
+
+  # Redis 缓存和任务队列
+  redis:
+    image: redis:7-alpine
+    container_name: tubewhale_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass redis123
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redis123", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - tubewhale_network
+
+  # TubeWhale Django 后端
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: tubewhale_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      # Django 配置
+      DJANGO_SETTINGS_MODULE: tubewhale_project.settings
+      DEBUG: "false"
+      SECRET_KEY: "your-super-secret-key-change-in-production"
+      ALLOWED_HOSTS: "localhost,127.0.0.1,0.0.0.0,backend"
+      
+      # 数据库配置
+      DB_ENGINE: django.db.backends.postgresql
+      DB_NAME: tubewhale
+      DB_USER: tubewhale
+      DB_PASSWORD: tubewhale123
+      DB_HOST: postgres
+      DB_PORT: 5432
+      WAIT_FOR_DB: "true"
+      
+      # Redis 配置
+      REDIS_URL: redis://:redis123@redis:6379/0
+      CELERY_BROKER_URL: redis://:redis123@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:redis123@redis:6379/0
+      
+      # 应用配置
+      LANGUAGE_CODE: zh-hans
+      TIME_ZONE: Asia/Shanghai
+      USE_I18N: "true"
+      USE_TZ: "true"
+      
+    volumes:
+      - ./media:/app/media
+      - ./logs:/app/logs
+      - static_volume:/app/staticfiles
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/tubewhale/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - tubewhale_network
+
+  # Celery Worker (异步任务处理)
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: tubewhale_celery_worker
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - redis
+    environment:
+      DJANGO_SETTINGS_MODULE: tubewhale_project.settings
+      CELERY_BROKER_URL: redis://:redis123@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:redis123@redis:6379/0
+    volumes:
+      - ./media:/app/media
+      - ./logs:/app/logs
+    command: celery -A tubewhale_project worker --loglevel=info --concurrency=4
+    networks:
+      - tubewhale_network
+
+  # Celery Beat (定时任务调度)
+  celery_beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: tubewhale_celery_beat
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - redis
+    environment:
+      DJANGO_SETTINGS_MODULE: tubewhale_project.settings
+      CELERY_BROKER_URL: redis://:redis123@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:redis123@redis:6379/0
+    volumes:
+      - ./media:/app/media
+      - ./logs:/app/logs
+    command: celery -A tubewhale_project beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    networks:
+      - tubewhale_network
+
+  # Nginx 反向代理 (生产环境)
+  nginx:
+    image: nginx:alpine
+    container_name: tubewhale_nginx
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - static_volume:/var/www/static:ro
+      - ./media:/var/www/media:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    networks:
+      - tubewhale_network
+
+# 数据卷
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  static_volume:
+    driver: local
+
+# 网络
+networks:
+  tubewhale_network:
+    driver: bridge

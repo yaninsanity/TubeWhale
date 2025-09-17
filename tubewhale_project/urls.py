@@ -24,6 +24,9 @@ urlpatterns = [
     # API URLs
     path('api/', include('apps.api_app.urls')),
     
+    # TubeWhale Engine URLs
+    path('', include('apps.tubewhale_engine.urls')),
+    
     # API Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
