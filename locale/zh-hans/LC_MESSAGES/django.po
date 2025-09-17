@@ -1,0 +1,41 @@
+# TubeWhale Project Translation (简体中文)
+# Copyright (C) 2025 TubeWhale Project
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: TubeWhale 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-09-16 19:00+0000\n"
+"PO-Revision-Date: 2025-09-16 19:00+0000\n"
+"Last-Translator: TubeWhale Team\n"
+"Language-Team: 简体中文\n"
+"Language: zh-hans\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "Administration"
+msgstr "管理"
+
+msgid "Site administration"
+msgstr "站点管理"
+
+msgid "TubeWhale Administration"
+msgstr "TubeWhale 管理系统"
+
+msgid "User"
+msgstr "用户"
+
+msgid "Video"
+msgstr "视频"
+
+msgid "Analysis Task"
+msgstr "分析任务"
+
+msgid "Language"
+msgstr "语言"
+
+msgid "Current language"
+msgstr "当前语言"
+

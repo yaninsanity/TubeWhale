@@ -1,0 +1,733 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-09-16 19:23+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+#: apps/analysis_app/admin.py:22 apps/analysis_app/admin.py:50
+#: apps/analysis_app/admin.py:108 apps/analysis_app/admin.py:150
+#: apps/user_app/admin.py:71 apps/video_app/admin.py:24
+#: apps/video_app/admin.py:69 apps/video_app/admin.py:106
+#: apps/video_app/admin.py:147
+msgid "Basic Information"
+msgstr "基础信息"
+
+#: apps/analysis_app/admin.py:25
+msgid "Configuration"
+msgstr "配置"
+
+#: apps/analysis_app/admin.py:29
+msgid "Weight Settings"
+msgstr "权重设置"
+
+#: apps/analysis_app/admin.py:32 apps/analysis_app/admin.py:63
+#: apps/analysis_app/admin.py:118 apps/analysis_app/admin.py:163
+#: apps/user_app/admin.py:121 apps/video_app/admin.py:115
+msgid "Timestamps"
+msgstr "时间戳"
+
+#: apps/analysis_app/admin.py:53
+msgid "Report Content"
+msgstr "报告内容"
+
+#: apps/analysis_app/admin.py:56 apps/user_app/admin.py:158
+msgid "Metadata"
+msgstr "元数据"
+
+#: apps/analysis_app/admin.py:60
+msgid "Quality Assessment"
+msgstr "质量评估"
+
+#: apps/analysis_app/admin.py:73 apps/video_app/admin.py:89
+#: apps/video_app/admin.py:125 apps/video_app/admin.py:160
+msgid "Video Title"
+msgstr ""
+
+#: apps/analysis_app/admin.py:111
+msgid "Value Information"
+msgstr "数值信息"
+
+#: apps/analysis_app/admin.py:114
+msgid "Calculation Information"
+msgstr "计算信息"
+
+#: apps/analysis_app/admin.py:128 apps/analysis_app/admin.py:173
+msgid "Report Title"
+msgstr "报告标题"
+
+#: apps/analysis_app/admin.py:134
+msgid "Normalized Value"
+msgstr "标准化数值"
+
+#: apps/analysis_app/admin.py:153
+msgid "Supporting Data"
+msgstr "支持数据"
+
+#: apps/analysis_app/admin.py:157
+msgid "Classification"
+msgstr "分类"
+
+#: apps/analysis_app/admin.py:160
+msgid "Action Items"
+msgstr "操作项"
+
+#: apps/analysis_app/apps.py:8
+msgid "Analysis Management"
+msgstr "分析管理"
+
+#: apps/analysis_app/models.py:40
+msgid "Expert Domain"
+msgstr "专家领域"
+
+#: apps/analysis_app/models.py:41
+msgid "Expert Domain Management"
+msgstr "专家领域管理"
+
+#: apps/analysis_app/models.py:100
+msgid "Analysis Report"
+msgstr "分析报告"
+
+#: apps/analysis_app/models.py:101
+msgid "Analysis Report Management"
+msgstr "分析报告管理"
+
+#: apps/analysis_app/models.py:169
+msgid "Analysis Metric"
+msgstr "分析指标"
+
+#: apps/analysis_app/models.py:170
+msgid "Analysis Metric Management"
+msgstr "分析指标管理"
+
+#: apps/analysis_app/models.py:243
+msgid "Analysis Insight"
+msgstr "分析洞察"
+
+#: apps/analysis_app/models.py:244
+msgid "Analysis Insight Management"
+msgstr "分析洞察管理"
+
+#: apps/api_app/apps.py:8
+msgid "REST API Management"
+msgstr "REST API管理"
+
+#: apps/user_app/admin.py:28 apps/user_app/admin.py:42
+msgid "Extended Information"
+msgstr ""
+
+#: apps/user_app/admin.py:31
+msgid "API Statistics"
+msgstr "API统计"
+
+#: apps/user_app/admin.py:35
+msgid "Invitation"
+msgstr "邀请"
+
+#: apps/user_app/admin.py:54
+msgid "None"
+msgstr "无"
+
+#: apps/user_app/admin.py:55
+msgid "Invitation Code Used"
+msgstr "使用的邀请码"
+
+#: apps/user_app/admin.py:74
+msgid "Key Information"
+msgstr "密钥信息"
+
+#: apps/user_app/admin.py:78
+msgid "Permission Settings"
+msgstr ""
+
+#: apps/user_app/admin.py:81 apps/video_app/admin.py:109
+msgid "Statistics"
+msgstr ""
+
+#: apps/user_app/admin.py:92
+msgid "Key Prefix"
+msgstr ""
+
+#: apps/user_app/admin.py:99 apps/user_app/admin.py:131
+#: apps/user_app/models.py:142 apps/user_app/models.py:177
+msgid "API Key"
+msgstr ""
+
+#: apps/user_app/admin.py:115
+msgid "Request Information"
+msgstr ""
+
+#: apps/user_app/admin.py:118
+msgid "Response Information"
+msgstr ""
+
+#: apps/user_app/admin.py:148
+msgid "Code Information"
+msgstr ""
+
+#: apps/user_app/admin.py:151
+msgid "Usage Settings"
+msgstr ""
+
+#: apps/user_app/admin.py:154
+msgid "Usage Tracking"
+msgstr ""
+
+#: apps/user_app/admin.py:180
+msgid "Bulk code generation feature coming soon"
+msgstr ""
+
+#: apps/user_app/admin.py:181
+msgid "Generate bulk invitation codes"
+msgstr ""
+
+#: apps/user_app/admin.py:188
+msgid "Mark as expired"
+msgstr ""
+
+#: apps/user_app/apps.py:8 apps/user_app/models.py:84
+msgid "User Management"
+msgstr "用户管理"
+
+#: apps/user_app/forms.py:24
+msgid "Enter invitation code"
+msgstr ""
+
+#: apps/user_app/forms.py:27 apps/user_app/models.py:217
+#: apps/user_app/models.py:253
+msgid "Invitation Code"
+msgstr ""
+
+#: apps/user_app/forms.py:28
+msgid "You need a valid invitation code to register"
+msgstr ""
+
+#: apps/user_app/forms.py:35
+msgid "Enter your email"
+msgstr ""
+
+#: apps/user_app/forms.py:37
+msgid "Email Address"
+msgstr ""
+
+#: apps/user_app/forms.py:45
+msgid "First name"
+msgstr ""
+
+#: apps/user_app/forms.py:47
+msgid "First Name"
+msgstr ""
+
+#: apps/user_app/forms.py:55
+msgid "Last name"
+msgstr ""
+
+#: apps/user_app/forms.py:57
+msgid "Last Name"
+msgstr ""
+
+#: apps/user_app/forms.py:65
+msgid "Phone number (optional)"
+msgstr ""
+
+#: apps/user_app/forms.py:67 apps/user_app/models.py:23
+msgid "Phone Number"
+msgstr ""
+
+#: apps/user_app/forms.py:89
+msgid "Invitation code is required"
+msgstr ""
+
+#: apps/user_app/forms.py:94
+msgid "Invalid invitation code"
+msgstr ""
+
+#: apps/user_app/forms.py:99
+msgid "This invitation code has been used up"
+msgstr ""
+
+#: apps/user_app/forms.py:101
+msgid "This invitation code has expired"
+msgstr ""
+
+#: apps/user_app/forms.py:103
+msgid "This invitation code is not valid"
+msgstr ""
+
+#: apps/user_app/forms.py:114
+msgid "Email is required"
+msgstr ""
+
+#: apps/user_app/forms.py:118
+msgid "A user with this email already exists"
+msgstr ""
+
+#: apps/user_app/forms.py:123
+msgid "Your email domain is not allowed for this invitation code"
+msgstr ""
+
+#: apps/user_app/forms.py:155
+msgid "Expires in (days)"
+msgstr ""
+
+#: apps/user_app/forms.py:156
+msgid "Number of days until this code expires"
+msgstr ""
+
+#: apps/user_app/models.py:23
+msgid "User phone number"
+msgstr ""
+
+#: apps/user_app/models.py:25
+msgid "Avatar"
+msgstr ""
+
+#: apps/user_app/models.py:25
+msgid "User avatar image"
+msgstr ""
+
+#: apps/user_app/models.py:31
+msgid "Timezone"
+msgstr ""
+
+#: apps/user_app/models.py:32
+msgid "User timezone setting"
+msgstr ""
+
+#: apps/user_app/models.py:49 templates/admin/base_site.html:94
+msgid "Language"
+msgstr ""
+
+#: apps/user_app/models.py:50
+msgid "User interface language"
+msgstr ""
+
+#: apps/user_app/models.py:54
+msgid "Verified"
+msgstr ""
+
+#: apps/user_app/models.py:55
+msgid "Email verification status"
+msgstr ""
+
+#: apps/user_app/models.py:56
+msgid "API Calls Today"
+msgstr ""
+
+#: apps/user_app/models.py:57
+msgid "Today's API call count"
+msgstr ""
+
+#: apps/user_app/models.py:58
+msgid "Total API Calls"
+msgstr ""
+
+#: apps/user_app/models.py:59
+msgid "Total API call count"
+msgstr ""
+
+#: apps/user_app/models.py:60
+msgid "Last Activity"
+msgstr ""
+
+#: apps/user_app/models.py:61
+msgid "Last activity timestamp"
+msgstr ""
+
+#: apps/user_app/models.py:66
+msgid "Groups"
+msgstr ""
+
+#: apps/user_app/models.py:68
+msgid "The groups this user belongs to."
+msgstr ""
+
+#: apps/user_app/models.py:74
+msgid "User Permissions"
+msgstr ""
+
+#: apps/user_app/models.py:76
+msgid "Specific permissions for this user."
+msgstr ""
+
+#: apps/user_app/models.py:83 apps/user_app/models.py:113
+#: apps/video_app/models.py:30
+msgid "User"
+msgstr ""
+
+#: apps/user_app/models.py:116
+msgid "Name"
+msgstr ""
+
+#: apps/user_app/models.py:117
+msgid "API Key name"
+msgstr ""
+
+#: apps/user_app/models.py:118
+msgid "Key"
+msgstr ""
+
+#: apps/user_app/models.py:119
+msgid "API key string"
+msgstr ""
+
+#: apps/user_app/models.py:120
+msgid "Prefix"
+msgstr ""
+
+#: apps/user_app/models.py:121
+msgid "Key prefix"
+msgstr ""
+
+#: apps/user_app/models.py:124 apps/user_app/models.py:322
+msgid "Active"
+msgstr ""
+
+#: apps/user_app/models.py:125
+msgid "Whether the key is active"
+msgstr ""
+
+#: apps/user_app/models.py:126
+msgid "Rate Limit"
+msgstr ""
+
+#: apps/user_app/models.py:127
+msgid "Daily call limit"
+msgstr ""
+
+#: apps/user_app/models.py:128
+msgid "Allowed IPs"
+msgstr ""
+
+#: apps/user_app/models.py:129
+msgid "Allowed IP addresses, comma separated"
+msgstr ""
+
+#: apps/user_app/models.py:132 apps/user_app/models.py:243
+msgid "Created At"
+msgstr ""
+
+#: apps/user_app/models.py:133 apps/user_app/models.py:231
+msgid "Expires At"
+msgstr ""
+
+#: apps/user_app/models.py:134
+msgid "Last Used"
+msgstr ""
+
+#: apps/user_app/models.py:137
+msgid "Usage Count"
+msgstr ""
+
+#: apps/user_app/models.py:138
+msgid "Number of times used"
+msgstr ""
+
+#: apps/user_app/models.py:143
+msgid "API Key Management"
+msgstr "API密钥管理"
+
+#: apps/user_app/models.py:180
+msgid "Endpoint"
+msgstr ""
+
+#: apps/user_app/models.py:181
+msgid "API endpoint"
+msgstr ""
+
+#: apps/user_app/models.py:182
+msgid "Method"
+msgstr ""
+
+#: apps/user_app/models.py:183
+msgid "HTTP method"
+msgstr ""
+
+#: apps/user_app/models.py:184
+msgid "IP Address"
+msgstr ""
+
+#: apps/user_app/models.py:185
+msgid "Client IP address"
+msgstr ""
+
+#: apps/user_app/models.py:186
+msgid "User Agent"
+msgstr ""
+
+#: apps/user_app/models.py:187
+msgid "User agent string"
+msgstr ""
+
+#: apps/user_app/models.py:190
+msgid "Status Code"
+msgstr ""
+
+#: apps/user_app/models.py:191
+msgid "HTTP status code"
+msgstr ""
+
+#: apps/user_app/models.py:192
+msgid "Response Time"
+msgstr ""
+
+#: apps/user_app/models.py:193
+msgid "Response time in seconds"
+msgstr ""
+
+#: apps/user_app/models.py:196
+msgid "Timestamp"
+msgstr ""
+
+#: apps/user_app/models.py:200
+msgid "API Usage Log"
+msgstr ""
+
+#: apps/user_app/models.py:201
+msgid "API Usage Logs"
+msgstr ""
+
+#: apps/user_app/models.py:218
+msgid "Unique invitation code"
+msgstr ""
+
+#: apps/user_app/models.py:221 apps/user_app/models.py:322
+msgid "Used"
+msgstr ""
+
+#: apps/user_app/models.py:222
+msgid "Whether this code has been used"
+msgstr ""
+
+#: apps/user_app/models.py:225
+msgid "Used By"
+msgstr ""
+
+#: apps/user_app/models.py:226
+msgid "User who used this code"
+msgstr ""
+
+#: apps/user_app/models.py:227
+msgid "Used At"
+msgstr ""
+
+#: apps/user_app/models.py:228
+msgid "When this code was used"
+msgstr ""
+
+#: apps/user_app/models.py:232
+msgid "When this code expires"
+msgstr ""
+
+#: apps/user_app/models.py:233
+msgid "Max Uses"
+msgstr ""
+
+#: apps/user_app/models.py:234
+msgid "Maximum number of times this code can be used"
+msgstr ""
+
+#: apps/user_app/models.py:235
+msgid "Current Uses"
+msgstr ""
+
+#: apps/user_app/models.py:236
+msgid "Number of times this code has been used"
+msgstr ""
+
+#: apps/user_app/models.py:241
+msgid "Created By"
+msgstr ""
+
+#: apps/user_app/models.py:242
+msgid "Admin who created this code"
+msgstr ""
+
+#: apps/user_app/models.py:244
+msgid "Notes"
+msgstr ""
+
+#: apps/user_app/models.py:245
+msgid "Additional notes about this invitation code"
+msgstr ""
+
+#: apps/user_app/models.py:248
+msgid "Allowed Domains"
+msgstr ""
+
+#: apps/user_app/models.py:249
+msgid "Comma-separated list of allowed email domains"
+msgstr ""
+
+#: apps/user_app/models.py:254
+msgid "Invitation Codes"
+msgstr ""
+
+#: apps/user_app/models.py:310
+msgid "Invitation code is not valid"
+msgstr ""
+
+#: apps/user_app/views.py:26
+msgid "Registration successful! Welcome to TubeWhale."
+msgstr ""
+
+#: apps/user_app/views.py:29
+msgid "Please correct the errors below."
+msgstr ""
+
+#: apps/user_app/views.py:75
+msgid "Code is required"
+msgstr ""
+
+#: apps/user_app/views.py:82
+msgid "Valid invitation code"
+msgstr ""
+
+#: apps/user_app/views.py:89
+msgid "This code has been used up"
+msgstr ""
+
+#: apps/user_app/views.py:91
+msgid "This code has expired"
+msgstr ""
+
+#: apps/user_app/views.py:93
+msgid "This code is not valid"
+msgstr ""
+
+#: apps/user_app/views.py:98
+msgid "Invalid code"
+msgstr ""
+
+#: apps/video_app/admin.py:27
+msgid "Video Metadata"
+msgstr ""
+
+#: apps/video_app/admin.py:31
+msgid "Channel Information"
+msgstr ""
+
+#: apps/video_app/admin.py:35
+msgid "File Information"
+msgstr ""
+
+#: apps/video_app/admin.py:39
+msgid "Status"
+msgstr ""
+
+#: apps/video_app/admin.py:53
+msgid "Duration"
+msgstr ""
+
+#: apps/video_app/admin.py:72
+msgid "Task Status"
+msgstr ""
+
+#: apps/video_app/admin.py:75
+msgid "Result Data"
+msgstr ""
+
+#: apps/video_app/admin.py:79
+msgid "Time Records"
+msgstr ""
+
+#: apps/video_app/admin.py:112
+msgid "Analysis Results"
+msgstr ""
+
+#: apps/video_app/admin.py:131
+msgid "Comment Content"
+msgstr ""
+
+#: apps/video_app/admin.py:150
+msgid "Source Information"
+msgstr ""
+
+#: apps/video_app/apps.py:8 apps/video_app/models.py:62
+msgid "Video Management"
+msgstr "视频管理"
+
+#: apps/video_app/models.py:21
+msgid "Pending"
+msgstr ""
+
+#: apps/video_app/models.py:22
+msgid "Downloading"
+msgstr ""
+
+#: apps/video_app/models.py:23
+msgid "Downloaded"
+msgstr ""
+
+#: apps/video_app/models.py:24
+msgid "Analyzing"
+msgstr ""
+
+#: apps/video_app/models.py:25
+msgid "Completed"
+msgstr ""
+
+#: apps/video_app/models.py:26
+msgid "Failed"
+msgstr ""
+
+#: apps/video_app/models.py:61
+msgid "Video"
+msgstr ""
+
+#: apps/video_app/models.py:152
+msgid "Analysis Task"
+msgstr "分析任务"
+
+#: apps/video_app/models.py:153
+msgid "Analysis Task Management"
+msgstr "分析任务管理"
+
+#: apps/video_app/models.py:212
+msgid "Video Comment"
+msgstr "视频评论"
+
+#: apps/video_app/models.py:213
+msgid "Video Comment Management"
+msgstr "视频评论管理"
+
+#: apps/video_app/models.py:250
+msgid "Video Tag"
+msgstr "视频标签"
+
+#: apps/video_app/models.py:251
+msgid "Video Tag Management"
+msgstr "视频标签管理"
+
+#: complete_language_test.py:59 templates/admin/base_site.html:116
+#: templates/admin/base_site.html:121
+msgid "TubeWhale Administration"
+msgstr "TubeWhale 管理系统"
+
+#: complete_language_test.py:60
+msgid "Site administration"
+msgstr "站点管理"
+
+#: tubewhale_project/urls.py:39
+msgid "TubeWhale Admin"
+msgstr ""
+
+#: tubewhale_project/urls.py:40
+msgid "TubeWhale"
+msgstr ""
+
+#: tubewhale_project/urls.py:41
+msgid "Welcome to TubeWhale Management System"
+msgstr "欢迎使用TubeWhale管理系统"

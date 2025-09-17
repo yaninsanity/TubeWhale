@@ -1,11 +1,112 @@
+# Django
 *.db
-*venv*
 *.pyc
 .env
-.DS_Store
-.idea
-/downloads
-/logs
+__pycache__/
 .coverage*
-__pycache__
-.pytest_cache
+.pytest_cache/
+
+# Django Static Files (auto-generated, don't commit)
+/staticfiles/
+/static_collected/
+
+# IDE & System
+.DS_Store
+.idea/
+*.swp
+*.swo
+
+# Virtual Environment
+*venv*/
+venv/
+env/
+
+# Project specific
+/downloads/
+/logs/
+/media/uploads/
+
+# Development temp files
+temp_*
+
+# Translation files (auto-generated, don't commit)
+*.mo
+/locale/*/LC_MESSAGES/*.mo
+/locale_backup*/
+/messages.mo
+/locale_*/
+*.tmp
+
+# Development pollution - add these patterns
+# Temporary development files
+*_enhanced.py
+*_clean.py
+*_new.py
+*_temp.py
+*_test.py
+*_debug.py
+whale_*.py
+*_academic.py
+test_*.py
+debug_*.py
+temp*.py
+*_temporary.py
+
+# Development docs and reports
+*_REPORT.md
+*_ARCHITECTURE.md
+*_PLAN.md
+README_*.md
+CLEANUP_*.md
+RECOVERY_*.md
+TRANSLATION_*.md
+*_SPEC.md
+
+# Development scripts
+*.sh
+auto_*.py
+complete_*.py
+final_*.py
+fix_*.py
+force_*.py
+manage_*.py
+performance_*.py
+quick_*.py
+simple_*.py
+update_*.py
+clean_*.py
+
+# Development configs and containers
+Dockerfile
+docker-compose.yml
+docker-entrypoint.sh
+docker/
+*.yaml
+*.yml
+pyproject.toml
+nginx.conf
+
+# Development directories
+core/
+docs/
+gradio_interface/
+management/
+requirements/
+scripts/
+service/examples/
+service/templates/
+services/
+static/
+tests/
+tubewhale_platform/
+.github/
+
+# Logs and temporary files
+*.log
+server.log
+cookies.txt
+init_db.sql
+
+# Flask development remnants
+flask_requirements.txt
+admin_panel.py

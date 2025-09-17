@@ -1,0 +1,106 @@
+{% extends 'admin/master.html' %}
+
+{% block body %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <h1>🐋 TubeWhale Platform 仪表板</h1>
+            <p class="lead">Django风格的管理界面 - 真正的GUI体验</p>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-3">
+            <div class="panel panel-primary">
+                <div class="panel-heading">
+                    <h3 class="panel-title">👥 用户统计</h3>
+                </div>
+                <div class="panel-body">
+                    <h2>{{ user_count }}</h2>
+                    <p>总用户数</p>
+                    <a href="{{ url_for('useradmin.index_view') }}" class="btn btn-primary">管理用户</a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="panel panel-success">
+                <div class="panel-heading">
+                    <h3 class="panel-title">🎥 视频统计</h3>
+                </div>
+                <div class="panel-body">
+                    <h2>{{ video_count }}</h2>
+                    <p>总视频数</p>
+                    <a href="{{ url_for('videoadmin.index_view') }}" class="btn btn-success">管理视频</a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="panel panel-info">
+                <div class="panel-heading">
+                    <h3 class="panel-title">⚙️ 任务统计</h3>
+                </div>
+                <div class="panel-body">
+                    <h2>{{ task_count }}</h2>
+                    <p>总任务数</p>
+                    <a href="{{ url_for('taskadmin.index_view') }}" class="btn btn-info">管理任务</a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="panel panel-warning">
+                <div class="panel-heading">
+                    <h3 class="panel-title">🔄 活跃任务</h3>
+                </div>
+                <div class="panel-body">
+                    <h2>{{ active_tasks }}</h2>
+                    <p>正在执行</p>
+                    <a href="{{ url_for('taskadmin.index_view') }}?flt1_0=pending&flt1_1=running" class="btn btn-warning">查看详情</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-12">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title">🚀 快速操作</h3>
+                </div>
+                <div class="panel-body">
+                    <div class="btn-group" role="group">
+                        <a href="{{ url_for('useradmin.create_view') }}" class="btn btn-primary">
+                            <i class="fa fa-plus"></i> 添加用户
+                        </a>
+                        <a href="{{ url_for('videoadmin.create_view') }}" class="btn btn-success">
+                            <i class="fa fa-plus"></i> 添加视频
+                        </a>
+                        <a href="{{ url_for('taskadmin.create_view') }}" class="btn btn-info">
+                            <i class="fa fa-plus"></i> 创建任务
+                        </a>
+                        <a href="{{ url_for('cli.index') }}" class="btn btn-warning">
+                            <i class="fa fa-terminal"></i> CLI功能
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-12">
+            <div class="alert alert-info">
+                <h4>💡 使用提示</h4>
+                <ul>
+                    <li>这是一个Django风格的真正GUI管理界面</li>
+                    <li>支持搜索、过滤、排序等功能</li>
+                    <li>可以直接添加、编辑、删除数据</li>
+                    <li>完全独立运行，不影响原有CLI系统</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

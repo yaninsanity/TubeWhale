@@ -1,0 +1,125 @@
+{% extends "admin/base.html" %}
+{% load i18n %}
+
+{% block extrahead %}
+{{ block.super }}
+{% load static %}
+<script src="{% static 'admin/js/language_switcher.js' %}"></script>
+{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+/* Language Switcher in Top Bar */
+.language-switcher {
+    position: fixed;
+    top: 0;
+    right: 20px;
+    z-index: 1000;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 8px 12px;
+    border-radius: 0 0 8px 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    border: 1px solid #ddd;
+    border-top: none;
+}
+
+.language-switcher-title {
+    font-size: 11px;
+    color: #666;
+    margin: 0 0 5px 0;
+    font-weight: bold;
+}
+
+.language-links {
+    display: flex;
+    gap: 4px;
+}
+
+.lang-btn {
+    padding: 4px 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    text-decoration: none;
+    font-size: 11px;
+    font-weight: 500;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.lang-btn.active {
+    background: #007cba;
+    color: white;
+    border-color: #007cba;
+}
+
+.lang-btn.inactive {
+    background: #f8f9fa;
+    color: #333;
+}
+
+.lang-btn.inactive:hover {
+    background: #e9ecef;
+    text-decoration: none;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+    .language-switcher {
+        position: relative;
+        top: auto;
+        right: auto;
+        margin: 10px;
+        border-radius: 8px;
+        border: 1px solid #ddd;
+    }
+}
+
+/* Admin title translation */
+#site-name a {
+    color: #f4f4f4;
+}
+
+/* Sidebar adjustments */
+.main > .container-fluid {
+    padding-top: 20px;
+}
+</style>
+{% endblock %}
+
+{% block nav-global %}
+{{ block.super }}
+<!-- Top Language Switcher -->
+<div class="language-switcher">
+    <div class="language-switcher-title">{% trans "Language" %}</div>
+    <div class="language-links">
+        {% get_current_language as CURRENT_LANGUAGE %}
+        <a href="{% url 'admin:index' %}?admin_lang=en{% if request.GET.items %}{% for key, value in request.GET.items %}{% if key != 'admin_lang' %}&{{ key }}={{ value }}{% endif %}{% endfor %}{% endif %}" 
+           class="lang-btn {% if CURRENT_LANGUAGE == 'en' %}active{% else %}inactive{% endif %}"
+           title="Switch to English">
+            EN
+        </a>
+        <a href="{% url 'admin:index' %}?admin_lang=zh-hans{% if request.GET.items %}{% for key, value in request.GET.items %}{% if key != 'admin_lang' %}&{{ key }}={{ value }}{% endif %}{% endfor %}{% endif %}" 
+           class="lang-btn {% if CURRENT_LANGUAGE == 'zh-hans' %}active{% else %}inactive{% endif %}"
+           title="切换到中文">
+            中文
+        </a>
+        <a href="{% url 'admin:index' %}?admin_lang=ja{% if request.GET.items %}{% for key, value in request.GET.items %}{% if key != 'admin_lang' %}&{{ key }}={{ value }}{% endif %}{% endfor %}{% endif %}" 
+           class="lang-btn {% if CURRENT_LANGUAGE == 'ja' %}active{% else %}inactive{% endif %}"
+           title="日本語に切り替え">
+            JP
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block title %}{% trans "TubeWhale Administration" %}{% endblock %}
+
+{% block branding %}
+<h1 id="site-name">
+    <a href="{% url 'admin:index' %}">
+        {% trans "TubeWhale Administration" %}
+    </a>
+</h1>
+{% endblock %}
+ 

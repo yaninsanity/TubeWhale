@@ -1,0 +1,65 @@
+{% extends 'admin/master.html' %}
+
+{% block body %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <h1>🔧 CLI功能集成</h1>
+            <p class="lead">原有CLI功能的Web界面封装</p>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-6">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title">🎥 视频分析</h3>
+                </div>
+                <div class="panel-body">
+                    <form method="post" action="{{ url_for('cli.run_command') }}">
+                        <div class="form-group">
+                            <label for="youtube_url">YouTube URL:</label>
+                            <input type="url" class="form-control" id="youtube_url" name="youtube_url" 
+                                   placeholder="https://www.youtube.com/watch?v=...">
+                        </div>
+                        <div class="form-group">
+                            <label for="analysis_type">分析类型:</label>
+                            <select class="form-control" id="analysis_type" name="analysis_type">
+                                <option value="transcript">转录分析</option>
+                                <option value="summary">内容摘要</option>
+                                <option value="expert">专家分析</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary">开始分析</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title">📊 批量操作</h3>
+                </div>
+                <div class="panel-body">
+                    <div class="btn-group-vertical" role="group" style="width: 100%;">
+                        <button type="button" class="btn btn-info">导出数据</button>
+                        <button type="button" class="btn btn-warning">批量分析</button>
+                        <button type="button" class="btn btn-success">数据库备份</button>
+                        <button type="button" class="btn btn-danger">清理缓存</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-12">
+            <div class="alert alert-warning">
+                <h4>⚠️ 注意事项</h4>
+                <p>CLI功能集成正在开发中，将会保持与原有命令行工具的完全兼容性。</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
