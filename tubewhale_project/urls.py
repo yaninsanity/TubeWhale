@@ -23,6 +23,8 @@ urlpatterns = [
     
     # API URLs
     path('api/', include('apps.api_app.urls')),
+    # Intelligent Templates API
+    path('api/templates/', include('apps.templates_app.urls')),
     
     # TubeWhale Engine URLs
     path('', include('apps.tubewhale_engine.urls')),

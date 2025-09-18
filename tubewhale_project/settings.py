@@ -88,6 +88,7 @@ LOCAL_APPS = [
     'apps.analysis_app',
     'apps.api_app',
     'apps.tubewhale_engine',  
+    'apps.templates_app',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
