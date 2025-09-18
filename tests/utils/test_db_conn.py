@@ -215,5 +215,39 @@ def test_store_data(db: Database):
     assert video is not None, "Generic data not stored in videos table."
     assert video.title == data["title"], "Title stored incorrectly in generic data."
 
+def test_video_thumbnail_url_storage(db: Database):
+    """测试视频 thumbnail_url 字段的存储功能"""
+    meta = sample_video_metadata()
+    # 添加 thumbnail_url 到测试数据
+    meta["thumbnail_url"] = "https://i.ytimg.com/vi/test_video_001/maxresdefault.jpg"
+    
+    db.store_video_metadata(meta)
+    session = db.get_session()
+    video = session.query(Video).filter(Video.video_id == meta["id"]).first()
+    session.close()
+    
+    assert video is not None, "Video with thumbnail_url was not stored."
+    assert video.thumbnail_url == meta["thumbnail_url"], f"Expected {meta['thumbnail_url']}, got {video.thumbnail_url}"
+
+def test_video_schema_includes_thumbnail_url(db: Database):
+    """测试 Video 表模式包含 thumbnail_url 字段"""
+    from sqlalchemy import inspect
+    inspector = inspect(db.engine)
+    columns = [col['name'] for col in inspector.get_columns('videos')]
+    assert 'thumbnail_url' in columns, f"thumbnail_url column not found in videos table. Columns: {columns}"
+
+def test_video_thumbnail_url_null_handling(db: Database):
+    """测试 thumbnail_url 字段的默认值处理"""
+    meta = sample_video_metadata()
+    # 不设置 thumbnail_url，应该存储为空字符串
+    
+    db.store_video_metadata(meta)
+    session = db.get_session()
+    video = session.query(Video).filter(Video.video_id == meta["id"]).first()
+    session.close()
+    
+    assert video is not None, "Video without thumbnail_url was not stored."
+    assert video.thumbnail_url == '', f"Expected empty string for thumbnail_url, got {repr(video.thumbnail_url)}"
+
 if __name__ == "__main__":
     pytest.main(["-v", "--maxfail=1"])
