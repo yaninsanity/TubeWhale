@@ -1,0 +1,43 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}Environment Config{% endblock %}
+
+{% block content %}
+  <h1>.env Configuration</h1>
+  <p>File: <code>{{ env_path }}</code></p>
+
+  {% if messages %}
+    <ul class="messagelist">
+      {% for message in messages %}
+        <li class="{{ message.tags }}">{{ message }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  <form method="post">
+    {% csrf_token %}
+    <fieldset class="module aligned">
+      <div class="form-row"><label>KEYWORD</label><input type="text" name="KEYWORD" value="{{ env.KEYWORD }}"/></div>
+      <div class="form-row"><label>YOUTUBE_API_KEYS</label>
+        <textarea name="YOUTUBE_API_KEYS" rows="6" placeholder="One per line or comma/semicolon separated">{{ env.YOUTUBE_API_KEYS }}</textarea>
+      </div>
+      <div class="form-row"><label>OPENAI_API_KEY</label><input type="password" name="OPENAI_API_KEY" value="{{ env.OPENAI_API_KEY }}"/></div>
+      <div class="form-row"><label>DB_PATH</label><input type="text" name="DB_PATH" value="{{ env.DB_PATH }}"/></div>
+      <div class="form-row"><label>PERSIST_AGENT_SUMMARIES</label><input type="text" name="PERSIST_AGENT_SUMMARIES" value="{{ env.PERSIST_AGENT_SUMMARIES }}"/></div>
+      <div class="form-row"><label>FULL_AUDIO_ANALYSIS</label><input type="text" name="FULL_AUDIO_ANALYSIS" value="{{ env.FULL_AUDIO_ANALYSIS }}"/></div>
+      <div class="form-row"><label>DRY_RUN</label><input type="text" name="DRY_RUN" value="{{ env.DRY_RUN }}"/></div>
+      <div class="form-row"><label>MAX_N</label><input type="number" name="MAX_N" value="{{ env.MAX_N }}"/></div>
+      <div class="form-row"><label>TOP_K</label><input type="number" name="TOP_K" value="{{ env.TOP_K }}"/></div>
+      <div class="form-row"><label>FILTER_TYPE</label><input type="text" name="FILTER_TYPE" value="{{ env.FILTER_TYPE }}"/></div>
+      <div class="form-row"><label>CONCURRENCY</label><input type="number" name="CONCURRENCY" value="{{ env.CONCURRENCY }}"/></div>
+      <div class="form-row"><label>PURE_YOUTUBE</label><input type="text" name="PURE_YOUTUBE" value="{{ env.PURE_YOUTUBE }}"/></div>
+      <hr/>
+      <div class="form-row"><label>CLI_CONFIG_URL</label><input type="text" name="CLI_CONFIG_URL" value="{{ env.CLI_CONFIG_URL }}"/></div>
+      <div class="form-row"><label>CLI_CONFIG_AUTH</label><input type="password" name="CLI_CONFIG_AUTH" value="{{ env.CLI_CONFIG_AUTH }}"/></div>
+    </fieldset>
+    <div class="submit-row">
+      <input type="submit" value="Save .env" class="default"/>
+    </div>
+  </form>
+{% endblock %}

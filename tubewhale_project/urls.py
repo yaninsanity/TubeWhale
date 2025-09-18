@@ -13,10 +13,12 @@ from drf_spectacular.views import (
     SpectacularRedocView,
     SpectacularSwaggerView,
 )
+from apps.templates_app.admin_views import env_config_view
 
 urlpatterns = [
     # Django Admin
     path('admin/', admin.site.urls),
+    path('admin/env-config/', env_config_view, name='admin-env-config'),
     
     # User App URLs (registration, language switching)
     path('user/', include('apps.user_app.urls')),
