@@ -47,7 +47,7 @@ class OpenAIService:
         self.client = client
         self.logger = logger or logging.getLogger(__name__)
 
-        # —— 一律尝试加载本模块同目录下的 openai_config.yaml —— 
+    # —— 一律尝试加载本模块同目录下的 openai_config.yaml —— 
         if config_path is None:
             default_cfg = self._get_default_config_path()
             if os.path.exists(default_cfg):
@@ -86,7 +86,7 @@ class OpenAIService:
         else:
             self.logger.info("Initialized with empty configuration (no models, no prompts).")
 
-        # —— 兜底 fallback —— 
+    # —— 兜底 fallback —— 
         if not self.models:
             self.models["default"] = {
                 "model_name": "gpt-4",
@@ -111,6 +111,26 @@ class OpenAIService:
             )
             self.client = openai.OpenAI(api_key=key)
             self.logger.info("Instantiated internal OpenAI client.")
+
+        # —— 可选：从企业模板引擎同步可用 prompts，供 prompt_template 使用 ——
+        try:
+            # 避免硬依赖 Django；仅当可导入时才加载
+            from service.enterprise_template_engine import TemplateEngine  # type: ignore
+            engine = TemplateEngine(validation_strict=False)
+            # 将引擎的模板注入到 prompts 命名空间中（只注入 user 文本；system 留空，或根据需要扩展）
+            for md in engine.list_templates(include_metadata=True):
+                tid = md.get("id") or md.get("name")
+                if not tid:
+                    continue
+                t = engine.get_template(tid)
+                if not t:
+                    continue
+                prompt_text = t.get("prompt", "")
+                # 仅在未定义同名 prompt 时注入，避免覆盖用户 YAML
+                self.prompts.setdefault(tid, {"system": "", "user": str(prompt_text)})
+        except Exception as _e:
+            # 安静失败，保证 CLI 在无 Django 环境时也能运行
+            pass
 
     def _get_default_config_path(self) -> str:
         # openAIServices.py 同目录下

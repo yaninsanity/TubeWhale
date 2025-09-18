@@ -4,12 +4,29 @@ import argparse
 from dotenv import dotenv_values
 
 class Config:
-    def __init__(self, cli_args: dict = None):
+    def __init__(self, cli_args: dict | None = None):
         # 先读取 .env 配置
         env_config = dotenv_values(".env")
+
         # 默认配置（全部转为大写键）
         self.KEYWORD = env_config.get("KEYWORD", "")
-        self.YOUTUBE_API_KEYS = env_config.get("YOUTUBE_API_KEYS", "").split(',') if ',' in env_config.get("YOUTUBE_API_KEYS", "") else [env_config.get("YOUTUBE_API_KEYS", "")]
+
+        # 支持多种分隔符：逗号/分号/换行/空格，并去重去空
+        raw_keys = env_config.get("YOUTUBE_API_KEYS", "")
+        if raw_keys:
+            tmp = raw_keys.replace("\n", ",").replace("\t", ",").replace(";", ",")
+            parts = [p.strip() for p in tmp.split(",") if p.strip()]
+            # 去重保持顺序
+            seen = set()
+            ordered = []
+            for p in parts:
+                if p not in seen:
+                    seen.add(p)
+                    ordered.append(p)
+            self.YOUTUBE_API_KEYS = ordered
+        else:
+            self.YOUTUBE_API_KEYS = []
+
         self.OPENAI_API_KEY = env_config.get("OPENAI_API_KEY", "")
         self.DB_PATH = env_config.get("DB_PATH", "youtube_summaries.db")
         self.PERSIST_AGENT_SUMMARIES = env_config.get("PERSIST_AGENT_SUMMARIES", "true").lower() == "true"
@@ -20,7 +37,38 @@ class Config:
         self.FILTER_TYPE = env_config.get("FILTER_TYPE", "view_count")
         self.CONCURRENCY = int(env_config.get("CONCURRENCY", "1"))
         self.PURE_YOUTUBE = env_config.get("PURE_YOUTUBE", "false").lower() == "true"
-        
+
+        # 远程配置合并（可选）：当提供 CLI_CONFIG_URL 时，尝试获取配置并覆盖局部解析的部分字段
+        # 只影响非敏感、可公开的键，例如 YOUTUBE_API_KEYS；失败时静默跳过，不影响 CLI
+        cli_cfg_url = os.environ.get("CLI_CONFIG_URL", "").strip()
+        if cli_cfg_url:
+            try:
+                import json, urllib.request
+                req = urllib.request.Request(cli_cfg_url)
+                # 支持可选的 Bearer Token（例如 Django 的 JWT）
+                token = os.environ.get("CLI_CONFIG_AUTH", "").strip()
+                if token:
+                    req.add_header("Authorization", f"Bearer {token}")
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    if resp.status == 200:
+                        data = json.loads(resp.read().decode("utf-8"))
+                        if isinstance(data, dict):
+                            yt_keys = data.get("YOUTUBE_API_KEYS")
+                            if isinstance(yt_keys, list):
+                                # 去重保持顺序
+                                seen = set()
+                                ordered = []
+                                for p in yt_keys:
+                                    p = str(p).strip()
+                                    if p and p not in seen:
+                                        seen.add(p)
+                                        ordered.append(p)
+                                if ordered:
+                                    self.YOUTUBE_API_KEYS = ordered
+            except Exception:
+                # 安静失败，确保 CLI 在离线/鉴权失败时依旧可运行
+                pass
+
         # 覆盖配置：CLI 参数优先
         if cli_args:
             for key, value in cli_args.items():
