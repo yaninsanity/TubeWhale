@@ -1,108 +1,60 @@
-# Django
-*.db
+## Python / Django basics
 *.pyc
-.env
 __pycache__/
 .coverage*
 .pytest_cache/
+.env
+*.db  # ignore new local SQLite DBs (won't affect already-tracked ones)
 
-# Django Static Files (auto-generated, don't commit)
+## Django static build outputs (keep static/ source tracked)
 /staticfiles/
 /static_collected/
 
-# IDE & System
+## IDE & system
 .DS_Store
 .idea/
 *.swp
 *.swo
+.vscode/
 
-# Virtual Environment
-*venv*/
+## Virtual environments
 venv/
 env/
+*venv*/
+venv_tubewhale/
 
-# Project specific
+## Project runtime artifacts
 /downloads/
 /logs/
 /media/uploads/
 
-# Development temp files
+## Development temp files
 temp_*
+*.tmp
+*.bak
+*.orig
 
-# Translation files (auto-generated, don't commit)
+## Translation build artifacts (keep .po tracked)
 *.mo
 /locale/*/LC_MESSAGES/*.mo
-/locale_backup*/
 /messages.mo
-/locale_*/
-*.tmp
 
-# Development pollution - add these patterns
-# Temporary development files
-*_enhanced.py
-*_clean.py
-*_new.py
-*_temp.py
-*_test.py
-*_debug.py
-whale_*.py
-*_academic.py
-test_*.py
-debug_*.py
-temp*.py
-*_temporary.py
+## DO NOT ignore tests or general source files
+# Removed over-broad patterns (e.g., test_*.py, *_test.py, static/, tests/) that hid real source.
+# Keep your repository clean by deleting junk instead of masking with .gitignore.
 
-# Development docs and reports
-*_REPORT.md
-*_ARCHITECTURE.md
-*_PLAN.md
-README_*.md
-CLEANUP_*.md
-RECOVERY_*.md
-TRANSLATION_*.md
-*_SPEC.md
+## Container/local overrides
+# Keep Dockerfiles/config in git; optionally ignore your local override
+docker-compose.override.yml
 
-# Development scripts
-*.sh
-auto_*.py
-complete_*.py
-final_*.py
-fix_*.py
-force_*.py
-manage_*.py
-performance_*.py
-quick_*.py
-simple_*.py
-update_*.py
-clean_*.py
+## Do not blanket-ignore source directories like docs/, tests/, static/, .github/
 
-# Development configs and containers (keep tracked for deployment)
-# Dockerfile and compose should be committed
-# docker-compose.override.yml may remain local if needed
-docker/
-pyproject.toml
-
-# Development directories
-core/
-docs/
-gradio_interface/
-management/
-requirements/
-scripts/
-service/examples/
-service/templates/
-services/
-static/
-tests/
-tubewhale_platform/
-.github/
-
-# Logs and temporary files
+## Logs and misc local files
 *.log
 server.log
 cookies.txt
 init_db.sql
 
-# Flask development remnants
-flask_requirements.txt
-admin_panel.py
+## (Legacy) If these exist locally, consider deleting instead of ignoring
+# flask_requirements.txt
+# admin_panel.py
