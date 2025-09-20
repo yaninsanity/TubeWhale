@@ -23,7 +23,7 @@ models:
     max_tokens: 8192
     temperature: 0.7
     price:
-      prompt: 0.0000015        # $1.50 / 1 000 000 tokens
+      prompt: 0.000001        # $1.00 / 1 000 000 tokens
       completion: 0.000003     # $3.00 / 1 000 000 tokens
 
   gpt-4-32k:
