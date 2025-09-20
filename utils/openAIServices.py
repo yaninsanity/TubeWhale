@@ -367,7 +367,6 @@ class OpenAIService:
                 with self._lock:
                     self.total_cost += whisper_cost
 
-                self.logger.info(f"Whisper transcription: {duration_minutes:.2f} minutes, cost ${whisper_cost:.6f}")
                 return result
 
             except Exception as e:
