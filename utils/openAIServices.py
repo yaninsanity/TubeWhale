@@ -320,7 +320,7 @@ class OpenAIService:
         with self._lock:
             self.total_prompt_tokens += pt
             self.total_completion_tokens += ct
-            cost = (pt * cfg["price"]["prompt"] + ct * cfg["price"]["completion"]) / 1000
+            cost = (pt * cfg["price"]["prompt"] + ct * cfg["price"]["completion"])
             self.total_cost += cost
         self.logger.info(f"Usage updated: prompt {pt}, completion {ct}, cost ${cost:.6f}")
 
@@ -345,13 +345,49 @@ class OpenAIService:
                 )
                 if hasattr(resp, "model_dump"):
                     resp = resp.model_dump()
+
+                # 获取转录结果
                 if isinstance(resp, dict) and "text" in resp:
-                    return resp["text"]
-                if isinstance(resp, str):
-                    return resp
-                raise RuntimeError(f"Unexpected transcription response: {type(resp)}")
+                    result = resp["text"]
+                elif isinstance(resp, str):
+                    result = resp
+                else:
+                    raise RuntimeError(f"Unexpected transcription response: {type(resp)}")
+
+                # 获取真实音频时长
+                duration_minutes = self.get_audio_duration_minutes(audio_file)
+
+                # 从配置获取whisper价格，回退到默认值0.006
+                whisper_price = 0.006  # 默认价格
+                if "whisper-1" in self.models:
+                    whisper_price = self.models["whisper-1"]["price"]["prompt"]
+
+                whisper_cost = duration_minutes * whisper_price
+
+                with self._lock:
+                    self.total_cost += whisper_cost
+
+                return result
+
             except Exception as e:
                 self.logger.error(f"Whisper attempt {attempt} failed: {e}")
                 if attempt < self.max_retries:
                     await asyncio.sleep(1)
         raise RuntimeError("Whisper transcription failed after all retries.")
+
+    def get_audio_duration_minutes(self, audio_file: BytesIO) -> float:
+        """获取音频文件的真实时长（分钟）"""
+        try:
+            import mutagen
+            audio_file.seek(0)
+            audio_info = mutagen.File(audio_file)
+            if audio_info and hasattr(audio_info, 'info') and hasattr(audio_info.info, 'length'):
+                duration_seconds = audio_info.info.length
+                return duration_seconds / 60.0
+        except Exception as e:
+            self.logger.warning(f"Failed to get audio duration with mutagen: {e}")
+
+        # fallback：文件大小估算
+        audio_file.seek(0, 2)
+        file_size_mb = audio_file.tell() / (1024 * 1024)
+        return max(0.1, file_size_mb)
