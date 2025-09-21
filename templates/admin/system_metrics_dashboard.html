@@ -1,0 +1,224 @@
+{% extends 'admin/base_site.html' %}
+{% load static %}
+{% block title %}System Metrics Dashboard{% endblock %}
+{% block content %}
+<h1>Real-Time System Metrics</h1>
+<p class="help">High‑resolution in‑process telemetry (CPU, memory, load, disk). Updates every 5 seconds (poll or SSE). History retained ~10 minutes.</p>
+<div id="thresholds" class="module" style="margin-bottom:1rem;font-size:.8rem;"></div>
+<div style="margin:.5rem 0 1rem;display:flex;gap:1rem;flex-wrap:wrap;align-items:center;">
+  <button id="toggleMode" type="button" class="button">Switch to SSE</button>
+  <a href="{% url 'admin-system-hotspots' %}" class="button">Hotspot Events</a>
+  <span id="modeLabel" style="font-size:.75rem;opacity:.75;">Mode: Polling</span>
+</div>
+<div id="status-summary" role="status" aria-live="polite" class="inline-group"></div>
+<div id="live-metrics-announce" class="visually-hidden" aria-live="polite"></div>
+<div id="live-metrics-assert" class="visually-hidden" aria-live="assertive"></div>
+<div class="metrics-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1.25rem;align-items:start;">
+  <section aria-labelledby="cpu_heading">
+    <h2 id="cpu_heading">CPU Usage (%)</h2>
+    <canvas id="cpuChart" height="180" aria-label="CPU usage over time" role="img"></canvas>
+  </section>
+  <section aria-labelledby="mem_heading">
+    <h2 id="mem_heading">Memory Usage (%)</h2>
+    <canvas id="memChart" height="180" aria-label="Memory usage over time" role="img"></canvas>
+  </section>
+  <section aria-labelledby="load_heading">
+    <h2 id="load_heading">Load Average</h2>
+    <canvas id="loadChart" height="180" aria-label="System load averages" role="img"></canvas>
+  </section>
+  <section aria-labelledby="disk_heading">
+    <h2 id="disk_heading">Disk Utilization</h2>
+    <div id="disk_info" class="module"></div>
+  </section>
+  <section aria-labelledby="process_heading">
+    <h2 id="process_heading">Process Memory (RSS)</h2>
+    <div id="proc_info" class="module"></div>
+  </section>
+  <section aria-labelledby="rolling_heading">
+    <h2 id="rolling_heading">Rolling Averages (CPU / Memory)</h2>
+    <table class="module" id="rolling_table">
+      <caption style="text-align:left;font-size:.8rem;">1m / 5m / 10m 平滑窗口，帮助判断瞬时尖峰是否持续</caption>
+      <thead>
+        <tr>
+          <th scope="col">Window</th>
+          <th scope="col">CPU %</th>
+          <th scope="col">Mem %</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+</div>
+
+<style>
+  .metrics-grid h2 { font-size:1.05rem; margin:0 0 .5rem; }
+  .status-pill { display:inline-block; padding:2px 8px; border-radius:12px; font-size:.75rem; font-weight:600; margin-right:4px; }
+  .ok { background:#0a4; color:#fff; }
+  .bad { background:#b00; color:#fff; }
+  .warn { background:#e69100; color:#222; }
+  canvas { background:#fff; border:1px solid #e2e2e2; border-radius:4px; }
+  .visually-hidden { position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden; }
+  table.module { width:100%; border-collapse:collapse; font-size:.75rem; }
+  table.module th,table.module td{ padding:4px 6px; border:1px solid #e2e2e2; text-align:right; }
+  table.module th:first-child,table.module td:first-child{text-align:left;}
+  table.module thead{background:#f6f8fa;}
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" integrity="sha384-LvJ3YgS5aXoaZySUdkGFUTkOcJCIZy9lEi5Vf3LXYhIwrKyYVJZZzKzbwQ6VykBLL" crossorigin="anonymous"></script>
+<script>
+(function(){
+  const METRICS_URL = "{% url 'admin-system-metrics-json' %}";
+  const SSE_URL = "{% url 'admin-system-metrics-stream' %}";
+  const POLL_INTERVAL = 5000; // 5s
+  let cpuChart, memChart, loadChart;
+  const MAX_POINTS = 120; // ~10min
+  let useSSE = false;
+  let evtSource = null;
+  function makeChart(ctx, label, color){
+    return new Chart(ctx, {
+      type:'line',
+      data:{labels:[], datasets:[{label, data:[], borderColor:color, backgroundColor:color+'33', tension:.25, pointRadius:0, borderWidth:2, fill:true}]},
+      options:{responsive:true, animation:false, maintainAspectRatio:false, scales:{x:{ticks:{maxRotation:0, autoSkip:true}}, y:{suggestedMin:0}}, plugins:{legend:{display:false}}}
+    });
+  }
+  function ensureCharts(){
+    if(!cpuChart){ cpuChart = makeChart(document.getElementById('cpuChart'), 'CPU %', '#0a84ff'); }
+    if(!memChart){ memChart = makeChart(document.getElementById('memChart'), 'Mem %', '#ff5e0a'); }
+    if(!loadChart){ loadChart = makeChart(document.getElementById('loadChart'), 'Load 1m', '#8e44ad'); }
+  }
+  function updateChart(chart, history, key){
+    chart.data.labels = history.map(h=> new Date(h.ts*1000).toLocaleTimeString([], {hour12:false, minute:'2-digit', second:'2-digit'}));
+    chart.data.datasets[0].data = history.map(h=> h[key]);
+    if(chart.data.labels.length > MAX_POINTS){
+      chart.data.labels = chart.data.labels.slice(-MAX_POINTS);
+      chart.data.datasets[0].data = chart.data.datasets[0].data.slice(-MAX_POINTS);
+    }
+    chart.update();
+  }
+  function statusPill(name, ok){
+    return `<span class="status-pill ${ok?'ok':'bad'}">${name}</span>`;
+  }
+  function warnPill(name){ return `<span class="status-pill warn">${name}</span>`; }
+  function renderSummary(payload){
+    const container = document.getElementById('status-summary');
+    if(!payload || payload.error){ container.innerHTML = `<p class='error'>${payload?payload.error:'Error'}</p>`; return; }
+    const m = payload.system_metrics || {}; const comps = payload.components || [];
+    const thr = payload.thresholds || {};
+    const roll = payload.rolling_averages || {};
+    // Render thresholds once
+    const thrBox = document.getElementById('thresholds');
+    thrBox.innerHTML = `Thresholds: CPU warn ${thr.cpu_warn || '-'} / crit ${thr.cpu_crit || '-'} | Mem warn ${thr.mem_warn || '-'} / crit ${thr.mem_crit || '-'}`;
+    const diskInfo = m.disk_percent != null ? `${m.disk_percent}% (${m.disk_used_gb}/${m.disk_total_gb} GB)` : 'n/a';
+    const procInfo = m.proc_rss_mb != null ? `${m.proc_rss_mb} MB RSS` : 'n/a';
+    document.getElementById('disk_info').innerHTML = `<strong>${diskInfo}</strong>`;
+    document.getElementById('proc_info').innerHTML = `<strong>${procInfo}</strong>`;
+    let compHtml = comps.map(c=> statusPill(c.name, c.ok!==false)).join('');
+    if(m.cpu_percent>85) compHtml += warnPill('CPU High');
+    if(m.mem_percent>85) compHtml += warnPill('Mem High');
+    container.innerHTML = compHtml + `<div style='margin-top:4px;font-size:.75rem;'>Load: ${m.load_avg?m.load_avg['1m']+'/'+m.load_avg['5m']+'/'+m.load_avg['15m']:'n/a'}</div>`;
+
+    // Rolling averages table
+    const tbody = document.querySelector('#rolling_table tbody');
+    if(tbody){
+      const rows = ['1m','5m','10m'].map(win=>{ const r = roll[win]||{}; return `<tr><th scope='row'>${win}</th><td>${r.cpu ?? '—'}</td><td>${r.mem ?? '—'}</td></tr>`; }).join('');
+      tbody.innerHTML = rows;
+    }
+    announceMetrics(m, roll, thr);
+  }
+  let lastAnnounce = 0; let lastCpu = null; let lastMem = null;
+  function announceMetrics(m, roll, thr){
+    const now = Date.now();
+    const diffCpu = lastCpu==null ? 0 : Math.abs(m.cpu_percent - lastCpu);
+    const diffMem = lastMem==null ? 0 : Math.abs(m.mem_percent - lastMem);
+    const should = (now - lastAnnounce) > 15000 || diffCpu >= 10 || diffMem >= 10; // throttle 15s or large delta
+    if(!should) return;
+    lastAnnounce = now; lastCpu = m.cpu_percent; lastMem = m.mem_percent;
+    const summary = `CPU ${m.cpu_percent}% (1m ${roll['1m']?.cpu ?? '—'}, 5m ${roll['5m']?.cpu ?? '—'}), Memory ${m.mem_percent}% (1m ${roll['1m']?.mem ?? '—'}, 5m ${roll['5m']?.mem ?? '—'}).`;
+    document.getElementById('live-metrics-announce').textContent = summary;
+    if(m.cpu_percent >= (thr.cpu_crit||90) || m.mem_percent >= (thr.mem_crit||90)){
+      document.getElementById('live-metrics-assert').textContent = 'Critical resource usage detected.';
+    }
+  }
+  const WATCHDOG_THRESHOLD_MS = 20000;
+  const MAX_SSE_BACKOFF_MS = 60000;
+  let sseBackoffMs = 3000;
+  let lastDataTs = Date.now();
+  let pollingTimer=null, watchdogTimer=null, reconnectTimer=null;
+
+  async function poll(){
+    try{
+      const res = await fetch(METRICS_URL);
+      const payload = await res.json();
+      ensureCharts();
+      const hist = payload.history || [];
+      updateChart(cpuChart, hist, 'cpu');
+      updateChart(memChart, hist, 'mem');
+      if(payload.system_metrics && payload.system_metrics.load_avg){
+        const loadHist = hist.map(h=> ({ts:h.ts, load: payload.system_metrics.load_avg['1m']}));
+        loadChart.data.labels = loadHist.map(h=> new Date(h.ts*1000).toLocaleTimeString([], {hour12:false, minute:'2-digit', second:'2-digit'}));
+        loadChart.data.datasets[0].data = loadHist.map(h=> h.load);
+        if(loadChart.data.labels.length > MAX_POINTS){
+          loadChart.data.labels = loadChart.data.labels.slice(-MAX_POINTS);
+          loadChart.data.datasets[0].data = loadChart.data.datasets[0].data.slice(-MAX_POINTS);
+        }
+        loadChart.update();
+      }
+      renderSummary(payload); lastDataTs = Date.now();
+    }catch(e){ console.error(e); }
+    pollingTimer = setTimeout(poll, POLL_INTERVAL);
+  }
+  function startPolling(){ clearTimeout(pollingTimer); poll(); }
+  function stopPolling(){ clearTimeout(pollingTimer); }
+
+  function startSSE(){
+    if(evtSource) return;
+    useSSE = true; // declare intention to use SSE before opening
+    updateModeLabel();
+    evtSource = new EventSource(SSE_URL);
+    lastDataTs = Date.now();
+    evtSource.onmessage = (e)=>{
+      try{ const payload = JSON.parse(e.data); ensureCharts(); renderSummary(payload);
+        const ts = new Date(payload.ts*1000).toLocaleTimeString([], {hour12:false, minute:'2-digit', second:'2-digit'});
+        if(cpuChart){ cpuChart.data.labels.push(ts); cpuChart.data.datasets[0].data.push(payload.system_metrics.cpu_percent || 0); if(cpuChart.data.labels.length>MAX_POINTS){cpuChart.data.labels.shift();cpuChart.data.datasets[0].data.shift();} cpuChart.update(); }
+        if(memChart){ memChart.data.labels.push(ts); memChart.data.datasets[0].data.push(payload.system_metrics.mem_percent || 0); if(memChart.data.labels.length>MAX_POINTS){memChart.data.labels.shift();memChart.data.datasets[0].data.shift();} memChart.update(); }
+        lastDataTs = Date.now(); sseBackoffMs = 3000; // reset backoff after valid data
+      }catch(err){ console.error(err); }
+    };
+    evtSource.onerror = ()=>{ console.warn('SSE error'); handleSSEError(); };
+    startWatchdog();
+  }
+  function stopSSE(){ if(evtSource){ evtSource.close(); evtSource=null; } stopWatchdog(); }
+  function startWatchdog(){ stopWatchdog(); watchdogTimer = setInterval(()=>{ if(useSSE && Date.now()-lastDataTs>WATCHDOG_THRESHOLD_MS){ announceFallback('No SSE data, switching to polling'); useSSE=false; stopSSE(); startPolling(); updateModeLabel(); scheduleSSEReconnect(); } }, 5000); }
+  function stopWatchdog(){ if(watchdogTimer){ clearInterval(watchdogTimer); watchdogTimer=null; } }
+  function handleSSEError(){
+    stopSSE();
+    if(!useSSE){ scheduleSSEReconnect(); return; }
+    useSSE=false;
+    announceFallback('SSE error, fallback to polling');
+    startPolling();
+    updateModeLabel();
+    sseBackoffMs = Math.min(sseBackoffMs * 2, MAX_SSE_BACKOFF_MS);
+    scheduleSSEReconnect();
+  }
+  function scheduleSSEReconnect(){
+    clearTimeout(reconnectTimer);
+    reconnectTimer = setTimeout(()=>{
+      if(useSSE) return; // already active
+      console.log('Attempting SSE reconnect (backoff='+sseBackoffMs+'ms)');
+      startSSE();
+    }, sseBackoffMs);
+  }
+  function announceFallback(msg){ const region=document.getElementById('live-metrics-announce'); if(region) region.textContent=msg; }
+  function updateModeLabel(){ document.getElementById('modeLabel').textContent = 'Mode: ' + (useSSE?'SSE Stream':'Polling'); document.getElementById('toggleMode').textContent = useSSE?'Switch to Polling':'Switch to SSE'; }
+  // Expose lightweight mode marker for header observe panel
+  function publishMode(){ window.__TW_LAST_STREAM_MODE = useSSE ? 'sse' : 'poll'; }
+  const _origUpdateMode = updateModeLabel;
+  // Wrap updateModeLabel to also publish mode
+  (function(){ const fn = updateModeLabel; updateModeLabel = function(){ fn(); publishMode(); }; })();
+  document.getElementById('toggleMode').addEventListener('click', ()=>{ useSSE = !useSSE; if(useSSE){ stopPolling(); sseBackoffMs=3000; startSSE(); } else { stopSSE(); startPolling(); } updateModeLabel(); });
+  startPolling(); publishMode();
+  setTimeout(()=>{ if(!useSSE){ sseBackoffMs=3000; startSSE(); publishMode(); } }, 1500);
+  updateModeLabel();
+})();
+</script>
+{% endblock %}

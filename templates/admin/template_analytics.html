@@ -1,0 +1,527 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}Template Analytics | TubeWhale Admin{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    /* Analytics-specific styles using design system variables */
+    .analytics-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+        gap: var(--spacing-2xl);
+        margin-bottom: var(--spacing-2xl);
+    }
+    
+    .analytics-card {
+        /* Using design system card with analytics-specific hover */
+        background: var(--white);
+        border: 1px solid var(--border-light);
+        border-radius: var(--radius-xl);
+        padding: var(--spacing-2xl);
+        box-shadow: var(--shadow-md);
+        transition: var(--transition-smooth);
+    }
+    
+    .analytics-card:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--shadow-xl);
+    }
+    
+    .header-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: var(--radius-xl);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: var(--font-size-xl);
+        margin-right: var(--spacing-lg);
+        color: var(--white);
+        font-weight: var(--font-weight-bold);
+    }
+    
+    .icon-usage { background: linear-gradient(135deg, var(--accent-purple) 0%, var(--accent-purple-light) 100%); }
+    .icon-popular { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+    .icon-users { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+    .icon-activity { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+    .icon-tiers { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
+    
+    .overview-stats {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: var(--spacing-xl);
+        margin-bottom: var(--spacing-2xl);
+    }
+    
+    .stat-box {
+        text-align: center;
+        padding: var(--spacing-2xl) var(--spacing-lg);
+        /* default gradient; variants below override */
+        background: linear-gradient(135deg, var(--accent-purple) 0%, var(--accent-purple-light) 100%);
+        color: var(--white);
+        border-radius: var(--radius-xl);
+        position: relative;
+        overflow: hidden;
+    }
+
+    /* stat-box variants to avoid inline styles */
+    .stat-box.variant-pink { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+    .stat-box.variant-blue { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+    .stat-box.variant-green { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+    
+    .stat-box::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255,255,255,0.1);
+        transform: skewY(-3deg);
+        transform-origin: top left;
+    }
+    
+    .stat-number {
+        font-size: var(--font-size-3xl);
+        font-weight: var(--font-weight-bold);
+        display: block;
+        position: relative;
+        z-index: 1;
+        margin-bottom: var(--spacing-sm);
+    }
+    
+    .stat-label {
+        font-size: var(--font-size-base);
+        font-weight: var(--font-weight-medium);
+        opacity: 0.9;
+        position: relative;
+        z-index: 1;
+    }
+    
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: var(--spacing-lg);
+    }
+    
+    .data-table th,
+    .data-table td {
+        padding: var(--spacing-lg);
+        text-align: left;
+        border-bottom: 1px solid var(--border-light);
+    }
+    
+    .data-table th {
+        background: var(--gray-100);
+        font-weight: var(--font-weight-semibold);
+        color: var(--gray-700);
+        font-size: var(--font-size-sm);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .data-table tr:hover {
+        background: var(--gray-50);
+    }
+    
+    .usage-bar {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-lg);
+    }
+    
+    .bar-container {
+        flex: 1;
+        height: 8px;
+        background: var(--gray-200);
+        border-radius: var(--radius-sm);
+        overflow: hidden;
+    }
+    
+    .bar-fill {
+        height: 100%;
+        background: linear-gradient(90deg, var(--accent-purple), var(--accent-purple-light));
+        border-radius: var(--radius-sm);
+        transition: width 0.3s ease;
+    }
+    
+    .activity-timeline {
+        max-height: 400px;
+        overflow-y: auto;
+        margin-top: var(--spacing-lg);
+    }
+    
+    .timeline-item {
+        display: flex;
+        align-items: center;
+        padding: var(--spacing-lg) 0;
+        border-bottom: 1px solid var(--border-light);
+        position: relative;
+    }
+    
+    .timeline-item::before {
+        content: '';
+        position: absolute;
+        left: 20px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: var(--gray-300);
+    }
+    
+    .timeline-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--primary-color);
+        margin-right: var(--spacing-lg);
+        position: relative;
+        z-index: 1;
+        flex-shrink: 0;
+    }
+    
+    .timeline-content {
+        flex: 1;
+        min-width: 0;
+    }
+    
+    .timeline-title {
+        font-weight: var(--font-weight-semibold);
+        margin: 0 0 var(--spacing-xs) 0;
+        color: var(--gray-800);
+    }
+    
+    .timeline-meta {
+        font-size: var(--font-size-sm);
+        color: var(--gray-600);
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-lg);
+    }
+    
+    .tier-chart {
+        display: flex;
+        gap: var(--spacing-lg);
+        margin-top: var(--spacing-xl);
+    }
+    
+    .tier-bar {
+        flex: 1;
+        text-align: center;
+        padding: var(--spacing-xl) var(--spacing-lg);
+        border-radius: var(--radius-lg);
+        color: var(--white);
+        font-weight: var(--font-weight-semibold);
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .tier-basic { background: linear-gradient(135deg, var(--accent-green), #20c997); }
+    .tier-pro { background: linear-gradient(135deg, #007bff, #6610f2); }
+    .tier-enterprise { background: linear-gradient(135deg, #6f42c1, #e83e8c); }
+    
+    .tier-count {
+        font-size: var(--font-size-2xl);
+        font-weight: var(--font-weight-bold);
+        display: block;
+    }
+    
+    .tier-name {
+        font-size: var(--font-size-sm);
+        opacity: 0.9;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    
+    .breadcrumbs {
+        margin-bottom: var(--spacing-2xl);
+        padding: var(--spacing-lg) var(--spacing-xl);
+        background: var(--gray-100);
+        border-radius: var(--radius-lg);
+        border-left: 4px solid var(--primary-color);
+    }
+    
+    .export-actions {
+        margin-top: var(--spacing-2xl);
+        padding: var(--spacing-xl);
+        background: var(--gray-100);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-light);
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: var(--spacing-4xl) var(--spacing-2xl);
+        color: var(--gray-600);
+    }
+    
+    .empty-state-icon {
+        font-size: var(--font-size-3xl);
+        margin-bottom: var(--spacing-lg);
+        opacity: 0.5;
+    }
+    
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .analytics-container {
+            grid-template-columns: 1fr;
+        }
+        
+        .overview-stats {
+            grid-template-columns: 1fr;
+        }
+        
+        .tier-chart {
+            flex-direction: column;
+        }
+        
+        .stat-number {
+            font-size: var(--font-size-2xl);
+        }
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a> &rsaquo;
+    <a href="{% url 'admin-template-dashboard' %}">Template Dashboard</a> &rsaquo;
+    <strong>Analytics & Insights</strong>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Apply widths to usage bars set via data-width attributes (values are numbers 0..100)
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.bar-fill[data-width]').forEach(function(el) {
+        var val = el.getAttribute('data-width');
+        var n = parseFloat(val);
+        if (!isFinite(n) || n < 0) n = 0;
+        if (n > 100) n = 100;
+        el.style.width = n + '%';
+    });
+});
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="analytics-page">
+    <h1>📊 Template Analytics & Insights</h1>
+    <p class="description">Comprehensive analytics and usage patterns for your template management system</p>
+    
+    <!-- Overview Statistics -->
+    <div class="overview-stats">
+        <div class="stat-box">
+            <span class="stat-number">{{ usage_stats.total_usage|default:0 }}</span>
+            <div class="stat-label">Total Template Usage</div>
+        </div>
+        <div class="stat-box variant-pink">
+            <span class="stat-number">{{ usage_stats.unique_users|default:0 }}</span>
+            <div class="stat-label">Active Users</div>
+        </div>
+        <div class="stat-box variant-blue">
+            <span class="stat-number">{{ usage_stats.unique_templates|default:0 }}</span>
+            <div class="stat-label">Templates in Use</div>
+        </div>
+        <div class="stat-box variant-green">
+            <span class="stat-number">{{ usage_stats.avg_usage|floatformat:1|default:0 }}</span>
+            <div class="stat-label">Average Usage per Template</div>
+        </div>
+    </div>
+    
+    <div class="analytics-container">
+        <!-- Most Popular Templates -->
+        <div class="analytics-card">
+            <div class="card-header">
+                <div class="header-icon icon-popular">🏆</div>
+                <h2 class="heading-3">Most Popular Templates</h2>
+            </div>
+            
+            {% if popular_templates %}
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Template</th>
+                        <th>Total Uses</th>
+                        <th>Users</th>
+                        <th>Usage</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for template in popular_templates %}
+                    <tr>
+                        <td>
+                            <strong>{{ template.template_name|default:template.template_id }}</strong>
+                        </td>
+                        <td>{{ template.total_uses }}</td>
+                        <td>{{ template.user_count }}</td>
+                        <td>
+                            <div class="usage-bar">
+                                <div class="bar-container">
+                                    <div class="bar-fill" data-width="{% widthratio template.total_uses popular_templates.0.total_uses 100 %}"></div>
+                                </div>
+                                <span>{% widthratio template.total_uses popular_templates.0.total_uses 100 %}&#37;</span>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-state-icon">📋</div>
+                <p>No template usage data available yet</p>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Active Users -->
+        <div class="analytics-card">
+            <div class="card-header">
+                <div class="header-icon icon-users">👥</div>
+                <h2 class="heading-3">Most Active Users</h2>
+            </div>
+            
+            {% if active_users %}
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>User</th>
+                        <th>Templates Used</th>
+                        <th>Total Usage</th>
+                        <th>Activity</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in active_users %}
+                    <tr>
+                        <td>
+                            <strong>{{ user.user__username }}</strong>
+                        </td>
+                        <td>{{ user.template_count }}</td>
+                        <td>{{ user.total_usage }}</td>
+                        <td>
+                            <div class="usage-bar">
+                                <div class="bar-container">
+                                    <div class="bar-fill" data-width="{% if active_users.0.total_usage %}{% widthratio user.total_usage active_users.0.total_usage 100 %}{% else %}0{% endif %}"></div>
+                                </div>
+                                <span>{% if active_users.0.total_usage %}{% widthratio user.total_usage active_users.0.total_usage 100 %}&#37;{% else %}0&#37;{% endif %}</span>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-state-icon">👤</div>
+                <p>No user activity data available yet</p>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Recent Activity -->
+        <div class="analytics-card">
+            <div class="card-header">
+                <div class="header-icon icon-activity">📈</div>
+                <h2 class="heading-3">Recent Activity (Last 7 Days)</h2>
+            </div>
+            
+            {% if recent_activity %}
+            <div class="activity-timeline">
+                {% for activity in recent_activity %}
+                <div class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-content">
+                        <div class="timeline-title">{{ activity.template_name|default:activity.template_id }}</div>
+                        <div class="timeline-meta">
+                            <span>👤 {{ activity.user.username }}</span>
+                            <span>🔢 {{ activity.usage_count }} uses</span>
+                            <span>⏰ {{ activity.last_used|timesince }} ago</span>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-state-icon">📅</div>
+                <p>No recent activity in the last 7 days</p>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- User Tier Distribution -->
+        <div class="analytics-card">
+            <div class="card-header">
+                <div class="header-icon icon-tiers">🎯</div>
+                <h2 class="heading-3">User Tier Distribution</h2>
+            </div>
+            
+            {% if tier_stats %}
+            <div class="tier-chart">
+                {% for tier in tier_stats %}
+                <div class="tier-bar tier-{{ tier.tier|lower }}">
+                    <span class="tier-count">{{ tier.count }}</span>
+                    <div class="tier-name">{{ tier.tier|title }}</div>
+                </div>
+                {% endfor %}
+            </div>
+            
+            <table class="data-table" style="margin-top: 2rem;">
+                <thead>
+                    <tr>
+                        <th>Tier</th>
+                        <th>User Count</th>
+                        <th>Percentage</th>
+                        <th>Template Access</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tier in tier_stats %}
+                    <tr>
+                        <td><strong>{{ tier.tier|title }}</strong></td>
+                        <td>{{ tier.count }}</td>
+                        <td>{% widthratio tier.count usage_stats.unique_users 100 %}&#37;</td>
+                        <td>
+                            {% if tier.tier == 'basic' %}
+                                3 Core Templates
+                            {% elif tier.tier == 'pro' %}
+                                All Templates
+                            {% elif tier.tier == 'enterprise' %}
+                                All + Custom Templates
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-state-icon">📊</div>
+                <p>No user tier data available</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Export and Actions -->
+    <div class="export-actions">
+        <h3>📥 Export & Actions</h3>
+        <p>Export analytics data or perform bulk operations on your template system.</p>
+        
+        <form method="post" action="{% url 'admin-bulk-operations' %}" style="display: inline;">
+            {% csrf_token %}
+            <input type="hidden" name="operation" value="export_analytics">
+            <button type="submit" class="btn btn-primary">📊 Export Analytics Data</button>
+        </form>
+        
+        <a href="{% url 'admin-template-dashboard' %}" class="btn btn-secondary">🏠 Back to Dashboard</a>
+        <a href="{% url 'admin-engine-templates' %}" class="btn btn-secondary">📋 View Templates</a>
+        <a href="{% url 'admin-bulk-operations' %}" class="btn btn-secondary">🔧 Bulk Operations</a>
+    </div>
+</div>
+{% endblock %}

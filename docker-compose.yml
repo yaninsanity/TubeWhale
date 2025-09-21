@@ -58,37 +58,45 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    env_file:
+      - .env
     environment:
-      # Django 配置
-      DJANGO_SETTINGS_MODULE: tubewhale_project.settings
-      DEBUG: "false"
-      SECRET_KEY: "your-super-secret-key-change-in-production"
-      ALLOWED_HOSTS: "localhost,127.0.0.1,0.0.0.0,backend"
-      
-      # 数据库配置
-      DB_ENGINE: django.db.backends.postgresql
-      DB_NAME: tubewhale
-      DB_USER: tubewhale
-      DB_PASSWORD: tubewhale123
-      DB_HOST: postgres
-      DB_PORT: 5432
-      WAIT_FOR_DB: "true"
-      
-      # Redis 配置
-      REDIS_URL: redis://:redis123@redis:6379/0
-      CELERY_BROKER_URL: redis://:redis123@redis:6379/0
-      CELERY_RESULT_BACKEND: redis://:redis123@redis:6379/0
-      
-      # 应用配置
-      LANGUAGE_CODE: zh-hans
-      TIME_ZONE: Asia/Shanghai
-      USE_I18N: "true"
-      USE_TZ: "true"
+      # Django settings (env overrides via env_file)
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-tubewhale_project.settings}
+      DEBUG: ${DEBUG:-false}
+      SECRET_KEY: ${SECRET_KEY:-your-super-secret-key-change-in-production}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,0.0.0.0,backend}
+
+      # Database settings
+      DB_ENGINE: ${DB_ENGINE:-django.db.backends.postgresql}
+      DB_NAME: ${DB_NAME:-tubewhale}
+      DB_USER: ${DB_USER:-tubewhale}
+      DB_PASSWORD: ${DB_PASSWORD:-tubewhale123}
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      WAIT_FOR_DB: ${WAIT_FOR_DB:-true}
+
+      # Redis / Celery settings
+      REDIS_URL: ${REDIS_URL:-redis://:redis123@redis:6379/0}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://:redis123@redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://:redis123@redis:6379/0}
+
+      # Locale / timezone
+      LANGUAGE_CODE: ${LANGUAGE_CODE:-zh-hans}
+      TIME_ZONE: ${TIME_ZONE:-Asia/Shanghai}
+      USE_I18N: ${USE_I18N:-true}
+      USE_TZ: ${USE_TZ:-true}
       
     volumes:
       - ./media:/app/media
       - ./logs:/app/logs
       - static_volume:/app/staticfiles
+      # Hot reload support for templates and settings
+      - ./service/templates:/app/service/templates:ro
+      - ./templates:/app/templates:ro
+      - ./tubewhale_project:/app/tubewhale_project
+      - ./apps:/app/apps
+      - ./service:/app/service
     ports:
       - "8000:8000"
     healthcheck:
@@ -111,10 +119,12 @@ services:
     depends_on:
       - backend
       - redis
+    env_file:
+      - .env
     environment:
-      DJANGO_SETTINGS_MODULE: tubewhale_project.settings
-      CELERY_BROKER_URL: redis://:redis123@redis:6379/0
-      CELERY_RESULT_BACKEND: redis://:redis123@redis:6379/0
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-tubewhale_project.settings}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://:redis123@redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://:redis123@redis:6379/0}
     volumes:
       - ./media:/app/media
       - ./logs:/app/logs
@@ -133,13 +143,18 @@ services:
     depends_on:
       - backend
       - redis
+    env_file:
+      - .env
     environment:
-      DJANGO_SETTINGS_MODULE: tubewhale_project.settings
-      CELERY_BROKER_URL: redis://:redis123@redis:6379/0
-      CELERY_RESULT_BACKEND: redis://:redis123@redis:6379/0
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-tubewhale_project.settings}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://:redis123@redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://:redis123@redis:6379/0}
     volumes:
       - ./media:/app/media
       - ./logs:/app/logs
+      - ./tubewhale_project:/app/tubewhale_project
+      - ./apps:/app/apps
+      - ./service:/app/service
     command: celery -A tubewhale_project beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
     networks:
       - tubewhale_network

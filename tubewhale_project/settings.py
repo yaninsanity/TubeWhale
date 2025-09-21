@@ -27,6 +27,22 @@ SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 SESSION_COOKIE_AGE = 86400 * 30  # 30 days
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 
+# Session and Cookie Security Settings for Admin
+SESSION_COOKIE_SECURE = False  # Set to True for HTTPS in production
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_SAVE_EVERY_REQUEST = False  # Don't save on every request
+
+# CSRF Protection Settings
+CSRF_COOKIE_SECURE = False  # Set to True for HTTPS in production  
+CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_AGE = 86400 * 7  # 7 days
+CSRF_USE_SESSIONS = False  # Use cookie instead of session for CSRF
+
+# Admin specific settings to prevent logout issues
+ADMIN_SESSION_TIMEOUT = 86400 * 7  # 7 days for admin users
+
 # Admin site language forcing
 ADMIN_LANGUAGE_COOKIE_NAME = 'admin_language'
 ADMIN_LANGUAGE_COOKIE_AGE = 86400 * 365  # 1 year
@@ -39,6 +55,19 @@ ADMIN_LANGUAGE_COOKIE_AGE = 86400 * 365  # 1 year
 import os
 import sys
 from pathlib import Path
+
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    # Load .env from project root
+    dotenv_path = Path(__file__).resolve().parent.parent / '.env'
+    if dotenv_path.exists():
+        load_dotenv(dotenv_path)
+        print(f"✅ Loaded .env from {dotenv_path}")
+    else:
+        print(f"⚠️  No .env file found at {dotenv_path}")
+except ImportError:
+    print("⚠️  python-dotenv not installed, skipping .env loading")
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -80,6 +109,7 @@ THIRD_PARTY_APPS = [
     'guardian',
     'drf_spectacular',
     'django_redis',
+    'django_celery_beat',
 ]
 
 LOCAL_APPS = [
@@ -117,6 +147,9 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'tubewhale_project.urls'
+
+# Force English for prompt/template catalog APIs (override via env)
+FORCE_EN_PROMPTS = os.environ.get('FORCE_EN_PROMPTS', 'true').lower() == 'true'
 
 TEMPLATES = [
     {
@@ -204,6 +237,9 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+if os.environ.get('DISABLE_MANIFEST_STATIC'):
+    # For test environment to avoid errors when admin static not collected
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
 # Media files
 MEDIA_URL = '/media/'
@@ -278,7 +314,7 @@ CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
         'LOCATION': 'unique-snowflake',
-    }
+    },
     # Redis配置（需要Redis服务器）
     # 'default': {
     #     'BACKEND': 'django_redis.cache.RedisCache',
@@ -336,3 +372,24 @@ LOGGING = {
 
 ANONYMOUS_USER_NAME = None
 GUARDIAN_RAISE_403 = True
+
+# ============== TEMPLATE ENGINE / PUBLIC PREVIEW FLAGS ==============
+# 控制是否允许未认证用户通过 /templates-public/ 访问模板列表和只读预览。
+# 生产环境可设为 False 关闭。
+PUBLIC_TEMPLATE_PREVIEW_ENABLED = os.environ.get('PUBLIC_TEMPLATE_PREVIEW_ENABLED', 'true').lower() == 'true'
+
+# 是否在简单仪表板中显示企业引擎实际模板列表（若引擎加载失败则自动降级为空列表）
+ENTERPRISE_TEMPLATE_DASHBOARD_ENABLED = os.environ.get('ENTERPRISE_TEMPLATE_DASHBOARD_ENABLED', 'true').lower() == 'true'
+
+# CLI execution persistence & export safeguards
+CLI_PERSIST_ENABLED = os.environ.get('CLI_PERSIST_ENABLED', 'true').lower() == 'true'
+# Hard cap for export & graph endpoints to prevent accidental massive dumps
+MAX_CLI_EXPORT_LIMIT = int(os.environ.get('MAX_CLI_EXPORT_LIMIT', '5000'))
+
+# ============== SYSTEM METRICS THRESHOLDS ==============
+# Warn / critical thresholds for CPU & memory; used by admin metrics dashboard & hotspot events.
+CPU_WARN_THRESHOLD = float(os.environ.get('CPU_WARN_THRESHOLD', '70'))  # percent
+CPU_CRIT_THRESHOLD = float(os.environ.get('CPU_CRIT_THRESHOLD', '90'))
+MEM_WARN_THRESHOLD = float(os.environ.get('MEM_WARN_THRESHOLD', '75'))
+MEM_CRIT_THRESHOLD = float(os.environ.get('MEM_CRIT_THRESHOLD', '90'))
+HOTSPOT_MIN_DURATION_SEC = int(os.environ.get('HOTSPOT_MIN_DURATION_SEC', '30'))  # consecutive seconds beyond crit to log event

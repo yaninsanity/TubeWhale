@@ -1,0 +1,380 @@
+{% extends 'admin/base_site.html' %}
+{% load template_extras %}
+
+{% block title %}Template Preview - {{ tpl.name }}{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+  .preview-container {
+    max-width: none;
+    padding: 20px;
+  }
+  
+  .preview-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  }
+  
+  .preview-title {
+    margin: 0 0 8px 0;
+    font-size: 24px;
+    font-weight: 600;
+  }
+  
+  .preview-meta {
+    opacity: 0.9;
+    font-size: 14px;
+  }
+  
+  .preview-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-top: 20px;
+  }
+  
+  .panel {
+    background: white;
+    border: 1px solid #e1e5e9;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  
+  .panel-header {
+    background: #f8f9fa;
+    padding: 15px 20px;
+    border-bottom: 1px solid #e1e5e9;
+    font-weight: 600;
+    color: #495057;
+  }
+  
+  .panel-body {
+    padding: 20px;
+  }
+  
+  .variables-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .form-group {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .form-label {
+    font-weight: 600;
+    margin-bottom: 5px;
+    color: #495057;
+    font-size: 14px;
+  }
+  
+  .form-control {
+    padding: 10px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    resize: vertical;
+  }
+  
+  .form-control:focus {
+    border-color: #007cba;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0, 124, 186, 0.25);
+  }
+  
+  .btn-preview {
+    background: #007cba;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+  
+  .btn-preview:hover {
+    background: #005a87;
+  }
+  
+  .btn-back {
+    background: #6c757d;
+    color: white;
+    text-decoration: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 13px;
+    display: inline-block;
+    margin-bottom: 20px;
+  }
+  
+  .btn-back:hover {
+    background: #5a6268;
+    color: white;
+  }
+  
+  .raw-prompt {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 400px;
+    overflow-y: auto;
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 4px;
+    border: 1px solid #e9ecef;
+  }
+  
+  .compiled-output {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 4px;
+    border: 1px solid #e9ecef;
+    min-height: 300px;
+  }
+  
+  .error-message {
+    background: #f8d7da;
+    color: #721c24;
+    padding: 15px;
+    border-radius: 4px;
+    border: 1px solid #f5c6cb;
+    margin-bottom: 15px;
+  }
+  
+  .no-variables {
+    color: #6c757d;
+    font-style: italic;
+    text-align: center;
+    padding: 20px;
+  }
+  
+  .placeholder-text {
+    color: #6c757d;
+    font-style: italic;
+    text-align: center;
+    padding: 60px 20px;
+  }
+  
+  .template-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+  }
+  
+  .stat-card {
+    background: white;
+    border: 1px solid #e1e5e9;
+    border-radius: 6px;
+    padding: 15px;
+    text-align: center;
+  }
+  
+  .stat-value {
+    font-size: 20px;
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 4px;
+  }
+  
+  .stat-label {
+    font-size: 12px;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  
+  .actions-panel {
+    background: white;
+    border: 1px solid #e1e5e9;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  
+  .actions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+  }
+  
+  .action-card {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 15px;
+    text-align: center;
+    transition: all 0.2s ease;
+  }
+  
+  .action-card:hover {
+    background: #e9ecef;
+    border-color: #adb5bd;
+  }
+  
+  .action-card a {
+    text-decoration: none;
+    color: #495057;
+    font-weight: 500;
+  }
+  
+  .action-card a:hover {
+    color: #007cba;
+  }
+  
+  @media (max-width: 768px) {
+    .preview-content {
+      grid-template-columns: 1fr;
+    }
+    
+    .template-stats {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .actions-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="preview-container">
+  <a href="{% url 'admin-engine-templates' %}" class="btn-back">← Back to Template Catalog</a>
+  
+  <div class="preview-header">
+    <h1 class="preview-title">{{ tpl.name|default:template_id }}</h1>
+    <div class="preview-meta">
+      <strong>ID:</strong> {{ template_id }} | 
+      <strong>Domain:</strong> {{ tpl.domain|default:"general"|title }} | 
+      <strong>Type:</strong> {{ tpl.template_type|upper }} | 
+      <strong>Version:</strong> {{ tpl.version|default:"1.0" }}
+    </div>
+  </div>
+
+  <!-- Template Statistics -->
+  <div class="template-stats">
+    <div class="stat-card">
+      <div class="stat-value">{{ required_vars|length }}</div>
+      <div class="stat-label">Variables</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">{{ tpl.prompt|length }}</div>
+      <div class="stat-label">Prompt Length</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">{{ tpl.tags|length|default:"0" }}</div>
+      <div class="stat-label">Tags</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">{% if tpl.immutable %}🔒{% else %}✏️{% endif %}</div>
+      <div class="stat-label">{% if tpl.immutable %}Immutable{% else %}Editable{% endif %}</div>
+    </div>
+  </div>
+
+  <!-- Quick Actions -->
+  <div class="actions-panel">
+    <h3 style="margin: 0 0 15px 0; color: #495057;">🚀 Quick Actions</h3>
+    <div class="actions-grid">
+      <div class="action-card">
+        <a href="{% url 'admin:templates_app_customtemplate_changelist' %}">📋 Manage Custom Templates</a>
+      </div>
+      <div class="action-card">
+        <a href="{% url 'admin-engine-templates' %}">🔙 Template Catalog</a>
+      </div>
+      {% if user.is_staff %}
+      <div class="action-card">
+        <a href="{% url 'admin:templates_app_templateusage_changelist' %}">📊 Usage Analytics</a>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Error Display -->
+  {% if compile_error %}
+  <div class="error-message">
+    <strong>⚠️ Compilation Error:</strong> {{ compile_error }}
+  </div>
+  {% endif %}
+
+  <div class="preview-content">
+    <!-- Variables Panel -->
+    <div class="panel">
+      <div class="panel-header">
+        🎛️ Template Variables
+      </div>
+      <div class="panel-body">
+        {% if required_vars %}
+          <form method="post" class="variables-form">
+            {% csrf_token %}
+            {% for var in required_vars %}
+            <div class="form-group">
+              <label for="var_{{ var }}" class="form-label">{{ var|title }}</label>
+              <textarea 
+                id="var_{{ var }}" 
+                name="{{ var }}" 
+                class="form-control"
+                rows="{% if var == 'transcript' %}8{% else %}3{% endif %}"
+                placeholder="Enter {{ var }} here...">{{ variables|get_item:var }}</textarea>
+            </div>
+            {% endfor %}
+            <button type="submit" class="btn-preview">🔄 Render Preview</button>
+          </form>
+        {% else %}
+          <div class="no-variables">
+            📝 This template doesn't require any variables
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Compiled Output Panel -->
+    <div class="panel">
+      <div class="panel-header">
+        ✨ Compiled Output
+      </div>
+      <div class="panel-body">
+        {% if compiled %}
+          <div class="compiled-output">{{ compiled }}</div>
+        {% else %}
+          <div class="placeholder-text">
+            {% if required_vars %}
+              Fill in the variables and click "Render Preview" to see the compiled template.
+            {% else %}
+              <div class="compiled-output">{{ tpl.prompt }}</div>
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Raw Template Panel -->
+  <div class="panel" style="margin-top: 20px;">
+    <div class="panel-header">
+      📄 Raw Template
+    </div>
+    <div class="panel-body">
+      <div class="raw-prompt">{{ tpl.prompt }}</div>
+    </div>
+  </div>
+</div>
+{% endblock %}

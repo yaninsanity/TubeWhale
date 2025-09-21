@@ -1,0 +1,154 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}
+  {% trans "TubeWhale Engine Configuration" %} | {{ block.super }}
+{% endblock %}
+
+{% block extrahead %}
+  {{ block.super }}
+  <style>
+    .config-empty-container {
+      max-width: 800px;
+      margin: 2rem auto;
+      padding: 2rem;
+      background: #f8f9fa;
+      border-radius: 8px;
+      border: 1px solid #e9ecef;
+    }
+    .config-empty-icon {
+      font-size: 3rem;
+      text-align: center;
+      color: #6c757d;
+      margin-bottom: 1rem;
+    }
+    .config-empty-title {
+      text-align: center;
+      color: #495057;
+      margin-bottom: 1rem;
+    }
+    .config-empty-description {
+      text-align: center;
+      color: #6c757d;
+      margin-bottom: 2rem;
+      line-height: 1.6;
+    }
+    .config-actions {
+      text-align: center;
+    }
+    .btn-create-config {
+      background: #007bff;
+      color: white;
+      padding: 0.75rem 1.5rem;
+      border: none;
+      border-radius: 4px;
+      text-decoration: none;
+      display: inline-block;
+      font-weight: 500;
+      transition: background-color 0.2s;
+    }
+    .btn-create-config:hover {
+      background: #0056b3;
+      color: white;
+      text-decoration: none;
+    }
+    .error-details {
+      background: #f8d7da;
+      border: 1px solid #f5c6cb;
+      border-radius: 4px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      color: #721c24;
+    }
+    .config-features {
+      text-align: left;
+      margin: 2rem 0;
+      padding: 1rem;
+      background: white;
+      border-radius: 4px;
+      border: 1px solid #dee2e6;
+    }
+    .config-features h4 {
+      color: #495057;
+      margin-bottom: 0.5rem;
+    }
+    .config-features ul {
+      margin: 0;
+      padding-left: 1.5rem;
+    }
+    .config-features li {
+      margin: 0.25rem 0;
+      color: #6c757d;
+    }
+  </style>
+{% endblock %}
+
+{% block breadcrumbs %}
+  <div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label='tubewhale_engine' %}">{% trans 'TubeWhale Engine' %}</a>
+    &rsaquo; {% trans 'Configuration' %}
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div class="config-empty-container" role="main" aria-label="{% trans 'TubeWhale Engine Configuration Setup' %}">
+    {% if db_error %}
+      <div class="error-details" role="alert">
+        <h3>🚨 {% trans "Database Migration Required" %}</h3>
+        <p>{% trans "The TubeWhale Engine configuration table hasn't been created yet. Please run database migrations:" %}</p>
+        <code>python manage.py migrate tubewhale_engine</code>
+      </div>
+    {% elif general_error %}
+      <div class="error-details" role="alert">
+        <h3>⚠️ {% trans "Configuration Error" %}</h3>
+        <p>{% trans "There was an error accessing the configuration system:" %}</p>
+        <code>{{ error_message|default:"Unknown error" }}</code>
+        <p>{% trans "Please check the server logs or contact the administrator." %}</p>
+      </div>
+    {% endif %}
+
+    <div class="config-empty-icon" aria-hidden="true">
+      ⚙️
+    </div>
+    
+    <h2 class="config-empty-title">
+      {% trans "TubeWhale Engine Configuration" %}
+    </h2>
+    
+    <p class="config-empty-description" id="config-description">
+      {% trans "Configure your TubeWhale Engine settings including API keys, processing preferences, and notification settings." %}
+    </p>
+
+    <div class="config-features">
+      <h4>🔧 {% trans "Configuration Features" %}</h4>
+      <ul>
+        <li>{% trans "OpenAI API Key for content processing" %}</li>
+        <li>{% trans "YouTube API Key for video access" %}</li>
+        <li>{% trans "Language and audio quality preferences" %}</li>
+        <li>{% trans "Email notifications and webhook settings" %}</li>
+        <li>{% trans "Secure encrypted key storage" %}</li>
+      </ul>
+    </div>
+
+    <div class="config-actions">
+      {% if not db_error and not general_error %}
+        <a href="create-my-config/" 
+           class="btn-create-config" 
+           role="button"
+           aria-describedby="config-description">
+          🚀 {% trans "Create My Configuration" %}
+        </a>
+      {% else %}
+        <p style="color: #dc3545; font-weight: 500;" role="status">
+          ⚠️ {% trans "Please resolve the above issues first to enable configuration." %}
+        </p>
+      {% endif %}
+    </div>
+
+    <div style="margin-top: 2rem; text-align: center; color: #6c757d; font-size: 0.9rem;">
+      {% trans "Each user can have one personal configuration. Administrators can manage all configurations." %}
+    </div>
+  </div>
+{% endblock %}

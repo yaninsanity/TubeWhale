@@ -1,0 +1,1113 @@
+{% load i18n %}
+<div class="tw-language-selector tw-lang-wrapper" role="region" aria-label="{% trans 'Language selector' %}">
+  <!-- Skip Link for Screen Readers -->
+  <a href="#tw-lang-trigger" class="tw-skip-link">{% trans 'Jump to language selector' %}</a>
+  
+  <button type="button" 
+          class="tw-lang-trigger" 
+          role="combobox"
+          aria-haspopup="listbox" 
+          aria-expanded="false" 
+          id="tw-lang-trigger"
+          aria-controls="tw-lang-menu" 
+          aria-label="{% blocktrans with current=current_code|upper count=languages|length %}{{ title }}. Current language: {{ current }}. {{ count }} available languages{% endblocktrans %}">
+    <span class="tw-lang-icon" aria-hidden="true">🌐</span>
+    <span class="tw-lang-text">
+      {{ title }}: <span class="tw-lang-current">{{ current_code|upper }}</span>
+    </span>
+    <span class="tw-lang-arrow" aria-hidden="true">▾</span>
+  </button>
+  
+  <ul class="tw-lang-menu" 
+      id="tw-lang-menu" 
+      role="listbox" 
+      aria-labelledby="tw-lang-trigger"
+      aria-activedescendant="">
+    {% for item in languages %}
+      <li role="option" 
+          aria-selected="{{ item.active|yesno:'true,false' }}" 
+          data-index="{{ forloop.counter0 }}"
+          id="tw-lang-option-{{ forloop.counter0 }}">
+        <a href="{{ item.url }}" 
+           class="tw-lang-item {% if item.active %}active{% endif %}" 
+           data-lang-code="{{ item.code }}" 
+           tabindex="-1"
+           {% if item.active %}aria-current="true"{% endif %}
+           aria-describedby="tw-lang-desc-{{ forloop.counter0 }}">
+          <span class="tw-lang-name">{{ item.label }}</span>
+          <span class="tw-lang-code">({{ item.code|upper }})</span>
+          {% if item.active %}
+            <span class="tw-lang-check" aria-hidden="true">✓</span>
+          {% endif %}
+        </a>
+        <div id="tw-lang-desc-{{ forloop.counter0 }}" class="tw-sr-only">
+          {% if item.active %}
+            {% blocktrans with lang=item.label %}Currently selected language: {{ lang }}{% endblocktrans %}
+          {% else %}
+            {% blocktrans with lang=item.label %}Switch to {{ lang }}{% endblocktrans %}
+          {% endif %}
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
+  
+  <!-- Live Region for Screen Reader Announcements -->
+  <div id="tw-lang-status" class="tw-sr-only" aria-live="polite" aria-atomic="true"></div>
+</div>
+
+<style>
+/* 🎯 AAA级最佳标准语言切换器 - 符合WCAG 2.1 AAA标准 */
+
+/* 屏幕阅读器专用内容 */
+.tw-sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+/* 跳转链接 */
+.tw-skip-link {
+  position: absolute;
+  top: -40px;
+  left: 6px;
+  background: #000;
+  color: #fff;
+  padding: 8px;
+  text-decoration: none;
+  z-index: 9999;
+  border-radius: 4px;
+  font-weight: bold;
+}
+.tw-skip-link:focus {
+  top: 6px;
+}
+
+/* 主容器 */
+.tw-lang-wrapper {
+  position: relative;
+  display: inline-block;
+  font-size: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+  isolation: isolate;
+}
+
+/* 触发按钮 - 最佳标准设计 */
+.tw-lang-trigger {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.5;
+  box-shadow: 
+    0 1px 3px rgba(0, 0, 0, 0.1),
+    0 1px 2px rgba(0, 0, 0, 0.06);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  min-width: 120px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  outline: none;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.tw-lang-trigger:hover {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-color: #3b82f6;
+  box-shadow: 
+    0 4px 6px rgba(0, 0, 0, 0.1),
+    0 2px 4px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
+}
+
+.tw-lang-trigger:focus {
+  border-color: #3b82f6;
+  box-shadow: 
+    0 0 0 3px rgba(59, 130, 246, 0.5),
+    0 4px 6px rgba(0, 0, 0, 0.1);
+  background: #dbeafe;
+}
+
+.tw-lang-trigger[aria-expanded="true"] {
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  border-color: #3b82f6;
+  box-shadow: 
+    0 0 0 3px rgba(59, 130, 246, 0.3),
+    inset 0 2px 4px rgba(0, 0, 0, 0.1);
+  transform: translateY(1px);
+}
+
+/* 图标和文本样式 */
+.tw-lang-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.tw-lang-text {
+  font-weight: 500;
+  white-space: nowrap;
+  flex: 1;
+  text-align: left;
+}
+
+.tw-lang-current {
+  font-weight: 700;
+  color: #3b82f6;
+  font-size: 11px;
+  background: rgba(59, 130, 246, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 4px;
+}
+
+.tw-lang-arrow {
+  font-size: 12px;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+  opacity: 0.7;
+  font-weight: bold;
+}
+
+.tw-lang-wrapper.open .tw-lang-arrow {
+  transform: rotate(180deg);
+}
+
+/* 下拉菜单 - 最佳标准设计 */
+.tw-lang-menu {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  min-width: 240px;
+  background: #ffffff;
+  margin: 0;
+  padding: 8px;
+  list-style: none;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 
+    0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  max-height: 320px;
+  overflow-y: auto;
+  z-index: 1000;
+  backdrop-filter: blur(8px);
+  animation: tw-slideDown 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tw-lang-wrapper.open .tw-lang-menu {
+  display: block;
+}
+
+/* 优雅的动画 */
+@keyframes tw-slideDown {
+  from { 
+    opacity: 0; 
+    transform: translateY(-12px) scale(0.95); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0) scale(1); 
+  }
+}
+
+/* 菜单项容器 */
+.tw-lang-menu li {
+  margin: 0;
+  padding: 0;
+}
+
+/* 菜单项链接 - 最佳标准交互 */
+.tw-lang-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  color: #374151;
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 2px solid transparent;
+  border-radius: 8px;
+  margin: 2px 0;
+  min-height: 44px;
+  position: relative;
+  outline: none;
+}
+
+.tw-lang-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  border-radius: 6px 0 0 6px;
+  transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tw-lang-item:hover {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  color: #1e40af;
+  border-color: transparent;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transform: translateX(4px);
+}
+
+.tw-lang-item:hover::before {
+  width: 4px;
+}
+
+.tw-lang-item:focus {
+  border-color: #3b82f6;
+  background: #dbeafe;
+  color: #1e40af;
+  box-shadow: 
+    0 0 0 3px rgba(59, 130, 246, 0.3),
+    0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.tw-lang-item:focus::before {
+  width: 4px;
+}
+
+.tw-lang-item.active {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: #ffffff;
+  font-weight: 700;
+  border-color: #1d4ed8;
+  box-shadow: 
+    0 4px 14px rgba(59, 130, 246, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.tw-lang-item.active::before {
+  width: 4px;
+  background: linear-gradient(135deg, #ffffff, #e5e7eb);
+}
+
+.tw-lang-item.active:hover {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #ffffff;
+  transform: translateX(2px);
+  box-shadow: 
+    0 6px 20px rgba(59, 130, 246, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.tw-lang-item.active:focus {
+  border-color: #ffffff;
+  box-shadow: 
+    0 0 0 3px rgba(255, 255, 255, 0.8),
+    0 6px 20px rgba(59, 130, 246, 0.5);
+}
+
+/* 语言名称和代码样式 */
+.tw-lang-name {
+  flex: 1;
+  text-align: left;
+  font-weight: 600;
+}
+
+.tw-lang-code {
+  font-size: 10px;
+  opacity: 0.7;
+  margin-left: 12px;
+  font-weight: 500;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.tw-lang-item.active .tw-lang-code {
+  background: rgba(255, 255, 255, 0.2);
+  opacity: 0.9;
+}
+
+.tw-lang-check {
+  margin-left: 12px;
+  font-weight: bold;
+  font-size: 16px;
+  color: #10b981;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.tw-lang-item.active .tw-lang-check {
+  color: #ffffff;
+}
+
+/* 自定义滚动条 */
+.tw-lang-menu::-webkit-scrollbar {
+  width: 6px;
+}
+
+.tw-lang-menu::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 3px;
+}
+
+.tw-lang-menu::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.tw-lang-menu::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* 高对比度支持 */
+@media (prefers-contrast: high) {
+  .tw-lang-trigger {
+    border-width: 3px;
+    border-color: #000000;
+    background: #ffffff;
+  }
+  
+  .tw-lang-trigger:focus {
+    outline: 4px solid #000000;
+    outline-offset: 2px;
+  }
+  
+  .tw-lang-menu {
+    border-width: 3px;
+    border-color: #000000;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  }
+  
+  .tw-lang-item {
+    border-width: 2px;
+  }
+  
+  .tw-lang-item:focus {
+    border-color: #000000;
+    background: #ffffff;
+    color: #000000;
+    outline: 2px solid #000000;
+  }
+  
+  .tw-lang-item.active {
+    background: #000000;
+    color: #ffffff;
+    border-color: #000000;
+  }
+}
+
+/* 减少动画支持 */
+@media (prefers-reduced-motion: reduce) {
+  .tw-lang-trigger,
+  .tw-lang-item,
+  .tw-lang-arrow,
+  .tw-lang-item::before {
+    transition: none;
+  }
+  
+  .tw-lang-menu {
+    animation: none;
+  }
+  
+  @keyframes tw-slideDown {
+    from, to { 
+      opacity: 1; 
+      transform: none; 
+    }
+  }
+}
+
+/* 移动设备优化 */
+@media (max-width: 768px) {
+  .tw-lang-menu {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: 12px;
+    width: auto;
+    max-height: 60vh;
+    border-radius: 16px;
+    padding: 16px;
+    animation: tw-slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .tw-lang-item {
+    padding: 16px 20px;
+    font-size: 16px;
+    min-height: 52px;
+    border-radius: 12px;
+  }
+  
+  .tw-lang-trigger {
+    min-height: 44px;
+    padding: 10px 16px;
+    font-size: 14px;
+    min-width: 140px;
+  }
+  
+  .tw-lang-icon {
+    font-size: 18px;
+  }
+  
+  @keyframes tw-slideUp {
+    from { 
+      opacity: 0; 
+      transform: translateY(100px); 
+    }
+    to { 
+      opacity: 1; 
+      transform: translateY(0); 
+    }
+  }
+}
+
+/* 深色模式支持 */
+@media (prefers-color-scheme: dark) {
+  .tw-lang-trigger {
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    border-color: #475569;
+    color: #f8fafc;
+  }
+  
+  .tw-lang-trigger:hover {
+    background: linear-gradient(135deg, #334155 0%, #475569 100%);
+    border-color: #60a5fa;
+  }
+  
+  .tw-lang-trigger:focus {
+    background: #1e3a8a;
+    border-color: #60a5fa;
+  }
+  
+  .tw-lang-menu {
+    background: #1e293b;
+    border-color: #475569;
+  }
+  
+  .tw-lang-item {
+    color: #f1f5f9;
+  }
+  
+  .tw-lang-item:hover {
+    background: linear-gradient(135deg, #334155 0%, #475569 100%);
+    color: #60a5fa;
+  }
+  
+  .tw-lang-item:focus {
+    background: #1e3a8a;
+    color: #93c5fd;
+  }
+}
+
+/* 打印样式 */
+@media print {
+  .tw-lang-wrapper {
+    display: none;
+  }
+}
+</style>
+
+<script>
+/**
+ * 🎯 AAA级最佳标准语言切换器
+ * 完全符合WCAG 2.1 AAA标准的无障碍访问性实现
+ * 作者: TubeWhale Team
+ * 版本: 2.0
+ */
+(function() {
+  'use strict';
+  
+  // 防止重复初始化
+  if (window.TubeWhaleLangDropdown) {
+    console.warn('Language dropdown already initialized');
+    return;
+  }
+  
+  const wrapper = document.currentScript?.closest?.('.tw-lang-wrapper') || 
+                 document.querySelector('.tw-lang-wrapper');
+  
+  if (!wrapper) {
+    console.error('Language dropdown wrapper not found');
+    return;
+  }
+  
+  // 核心DOM元素
+  const trigger = wrapper.querySelector('.tw-lang-trigger');
+  const menu = wrapper.querySelector('.tw-lang-menu');
+  const items = Array.from(menu.querySelectorAll('.tw-lang-item'));
+  const statusRegion = wrapper.querySelector('#tw-lang-status');
+  
+  // 状态管理
+  let isOpen = false;
+  let currentIndex = -1;
+  let focusTimeout = null;
+  let animationFrame = null;
+  
+  /**
+   * 📢 状态宣布器 - 为屏幕阅读器提供即时反馈
+   */
+  function announceStatus(message, priority = 'polite') {
+    if (!statusRegion) return;
+    
+    // 清除之前的消息
+    statusRegion.textContent = '';
+    statusRegion.setAttribute('aria-live', priority);
+    
+    // 延迟设置新消息，确保屏幕阅读器能检测到变化
+    requestAnimationFrame(() => {
+      statusRegion.textContent = message;
+      
+      // 自动清除消息
+      setTimeout(() => {
+        statusRegion.textContent = '';
+      }, 3000);
+    });
+  }
+  
+  /**
+   * 🎯 精确菜单定位系统
+   */
+  function positionMenu() {
+    if (!isOpen) return;
+    
+    const triggerRect = trigger.getBoundingClientRect();
+    const menuRect = menu.getBoundingClientRect();
+    const viewport = {
+      width: window.innerWidth,
+      height: window.innerHeight,
+      scrollY: window.scrollY
+    };
+    
+    const spaceBelow = viewport.height - triggerRect.bottom;
+    const spaceAbove = triggerRect.top;
+    const menuHeight = menuRect.height || 320; // fallback height
+    
+    // 智能定位逻辑
+    if (spaceBelow >= menuHeight + 20) {
+      // 向下弹出
+      menu.style.top = '100%';
+      menu.style.bottom = 'auto';
+      menu.style.marginTop = '8px';
+      menu.style.marginBottom = '0';
+    } else if (spaceAbove >= menuHeight + 20) {
+      // 向上弹出
+      menu.style.top = 'auto';
+      menu.style.bottom = '100%';
+      menu.style.marginTop = '0';
+      menu.style.marginBottom = '8px';
+    } else {
+      // 屏幕空间不足，使用固定定位
+      if (window.innerWidth <= 768) {
+        menu.style.position = 'fixed';
+        menu.style.left = '12px';
+        menu.style.right = '12px';
+        menu.style.bottom = '12px';
+        menu.style.top = 'auto';
+        menu.style.maxHeight = '60vh';
+      }
+    }
+    
+    // 水平对齐
+    if (triggerRect.right > viewport.width - 240) {
+      menu.style.right = '0';
+      menu.style.left = 'auto';
+    } else {
+      menu.style.left = '0';
+      menu.style.right = 'auto';
+    }
+  }
+  
+  /**
+   * 🔓 打开菜单
+   */
+  function openMenu() {
+    if (isOpen) return;
+    
+    isOpen = true;
+    wrapper.classList.add('open');
+    trigger.setAttribute('aria-expanded', 'true');
+    
+    // 智能定位
+    positionMenu();
+    
+    // 查找焦点目标
+    const activeItem = items.find(item => item.classList.contains('active'));
+    const targetItem = activeItem || items[0];
+    
+    if (targetItem) {
+      currentIndex = items.indexOf(targetItem);
+      setActiveDescendant(currentIndex);
+      
+      // 延迟设置焦点，确保动画完成
+      focusTimeout = setTimeout(() => {
+        targetItem.focus();
+        
+        const langName = targetItem.querySelector('.tw-lang-name')?.textContent || '';
+        const totalCount = items.length;
+        announceStatus(`语言菜单已打开。当前选中: ${langName}。共${totalCount}种语言可选。使用箭头键导航。`);
+      }, 150);
+    }
+  }
+  
+  /**
+   * 🔒 关闭菜单
+   */
+  function closeMenu() {
+    if (!isOpen) return;
+    
+    isOpen = false;
+    wrapper.classList.remove('open');
+    trigger.setAttribute('aria-expanded', 'false');
+    currentIndex = -1;
+    menu.removeAttribute('aria-activedescendant');
+    
+    // 清除定时器
+    if (focusTimeout) {
+      clearTimeout(focusTimeout);
+      focusTimeout = null;
+    }
+    
+    // 返回焦点到触发器
+    trigger.focus();
+    announceStatus('语言菜单已关闭');
+  }
+  
+  /**
+   * 🎯 切换菜单状态
+   */
+  function toggleMenu() {
+    if (isOpen) {
+      closeMenu();
+    } else {
+      openMenu();
+    }
+  }
+  
+  /**
+   * 🎪 设置活动后代
+   */
+  function setActiveDescendant(index) {
+    if (index >= 0 && index < items.length) {
+      currentIndex = index;
+      const optionId = `tw-lang-option-${index}`;
+      menu.setAttribute('aria-activedescendant', optionId);
+      
+      // 确保选项可见
+      const item = items[index];
+      if (item) {
+        item.scrollIntoView({ 
+          block: 'nearest', 
+          inline: 'nearest',
+          behavior: 'smooth' 
+        });
+      }
+    }
+  }
+  
+  /**
+   * ⚡ 智能焦点移动
+   */
+  function moveFocus(direction) {
+    if (!isOpen || items.length === 0) return;
+    
+    let newIndex = currentIndex;
+    
+    switch (direction) {
+      case 'next':
+        newIndex = (currentIndex + 1) % items.length;
+        break;
+      case 'prev':
+        newIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
+        break;
+      case 'first':
+        newIndex = 0;
+        break;
+      case 'last':
+        newIndex = items.length - 1;
+        break;
+      default:
+        return;
+    }
+    
+    if (newIndex !== currentIndex && items[newIndex]) {
+      setActiveDescendant(newIndex);
+      items[newIndex].focus();
+      
+      // 语音反馈
+      const item = items[newIndex];
+      const langName = item.querySelector('.tw-lang-name')?.textContent || '';
+      const langCode = item.querySelector('.tw-lang-code')?.textContent || '';
+      const isActive = item.classList.contains('active');
+      const status = isActive ? '当前语言' : '可选择';
+      const position = `第${newIndex + 1}项，共${items.length}项`;
+      
+      announceStatus(`${langName} ${langCode} - ${status} (${position})`);
+    }
+  }
+  
+  /**
+   * 💾 用户偏好管理
+   */
+  const UserPreferences = {
+    key: 'tw-language-preferences-v2',
+    
+    load() {
+      try {
+        const stored = localStorage.getItem(this.key);
+        if (stored) {
+          const prefs = JSON.parse(stored);
+          this.apply(prefs);
+          return prefs;
+        }
+      } catch (error) {
+        console.warn('Failed to load language preferences:', error);
+      }
+      return null;
+    },
+    
+    save(langCode) {
+      try {
+        const prefs = {
+          lastLanguage: langCode,
+          timestamp: Date.now(),
+          version: '2.0',
+          reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+          colorScheme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        };
+        
+        localStorage.setItem(this.key, JSON.stringify(prefs));
+        return prefs;
+      } catch (error) {
+        console.warn('Failed to save language preferences:', error);
+        return null;
+      }
+    },
+    
+    apply(prefs) {
+      if (!prefs) return;
+      
+      // 应用动画偏好
+      if (prefs.reducedMotion) {
+        wrapper.classList.add('tw-reduced-motion');
+      }
+      
+      // 记录最后使用的语言
+      if (prefs.lastLanguage) {
+        wrapper.setAttribute('data-last-lang', prefs.lastLanguage);
+      }
+    }
+  };
+  
+  /**
+   * 📊 使用统计跟踪
+   */
+  function trackLanguageUsage(langCode, langName) {
+    try {
+      const usage = {
+        language: langCode,
+        name: langName,
+        timestamp: Date.now(),
+        userAgent: navigator.userAgent.substring(0, 100), // 限制长度
+        viewport: {
+          width: window.innerWidth,
+          height: window.innerHeight
+        },
+        referrer: document.referrer.substring(0, 100) // 限制长度
+      };
+      
+      // 发送使用统计（可选）
+      if (window.fetch && typeof window.sendLanguageUsage === 'function') {
+        window.sendLanguageUsage(usage);
+      }
+      
+      // 本地存储使用历史
+      const historyKey = 'tw-lang-usage-history';
+      const history = JSON.parse(localStorage.getItem(historyKey) || '[]');
+      history.unshift(usage);
+      
+      // 只保留最近20条记录
+      const limitedHistory = history.slice(0, 20);
+      localStorage.setItem(historyKey, JSON.stringify(limitedHistory));
+      
+    } catch (error) {
+      // 静默失败，不影响核心功能
+      console.debug('Language usage tracking failed:', error);
+    }
+  }
+  
+  /**
+   * 🎛️ 事件处理器
+   */
+  const EventHandlers = {
+    // 触发按钮点击
+    triggerClick(event) {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleMenu();
+    },
+    
+    // 触发按钮键盘操作
+    triggerKeydown(event) {
+      switch (event.key) {
+        case 'Enter':
+        case ' ':
+        case 'ArrowDown':
+          event.preventDefault();
+          openMenu();
+          break;
+        case 'ArrowUp':
+          event.preventDefault();
+          openMenu();
+          // 打开后跳到最后一项
+          setTimeout(() => moveFocus('last'), 100);
+          break;
+        case 'Escape':
+          event.preventDefault();
+          if (isOpen) closeMenu();
+          break;
+      }
+    },
+    
+    // 菜单项点击
+    itemClick(event) {
+      const item = event.currentTarget;
+      const langName = item.querySelector('.tw-lang-name')?.textContent || '';
+      const langCode = item.getAttribute('data-lang-code') || '';
+      
+      // 如果是当前语言，提示用户
+      if (item.classList.contains('active')) {
+        event.preventDefault();
+        announceStatus(`已经是${langName}语言，无需切换`, 'assertive');
+        closeMenu();
+        return;
+      }
+      
+      // 保存用户偏好
+      UserPreferences.save(langCode);
+      
+      // 记录使用统计
+      trackLanguageUsage(langCode, langName);
+      
+      // 提供即时反馈
+      announceStatus(`正在切换到${langName}...`, 'assertive');
+      
+      // 添加视觉反馈
+      item.style.transform = 'scale(0.95)';
+      setTimeout(() => {
+        item.style.transform = '';
+      }, 150);
+      
+      // 允许正常导航，稍后关闭菜单
+      setTimeout(closeMenu, 100);
+    },
+    
+    // 菜单项键盘操作
+    itemKeydown(event) {
+      switch (event.key) {
+        case 'Enter':
+        case ' ':
+          event.preventDefault();
+          event.currentTarget.click();
+          break;
+        case 'ArrowDown':
+          event.preventDefault();
+          moveFocus('next');
+          break;
+        case 'ArrowUp':
+          event.preventDefault();
+          moveFocus('prev');
+          break;
+        case 'Home':
+          event.preventDefault();
+          moveFocus('first');
+          break;
+        case 'End':
+          event.preventDefault();
+          moveFocus('last');
+          break;
+        case 'Escape':
+          event.preventDefault();
+          closeMenu();
+          break;
+        case 'Tab':
+          // 允许Tab导航离开
+          closeMenu();
+          break;
+      }
+    },
+    
+    // 文档点击 - 外部点击关闭
+    documentClick(event) {
+      if (isOpen && !wrapper.contains(event.target)) {
+        closeMenu();
+      }
+    },
+    
+    // 文档键盘 - 全局Escape
+    documentKeydown(event) {
+      if (isOpen && event.key === 'Escape') {
+        event.preventDefault();
+        closeMenu();
+      }
+    },
+    
+    // 窗口大小改变
+    windowResize() {
+      if (isOpen) {
+        // 使用requestAnimationFrame优化性能
+        if (animationFrame) {
+          cancelAnimationFrame(animationFrame);
+        }
+        animationFrame = requestAnimationFrame(positionMenu);
+      }
+    },
+    
+    // 页面可见性变化
+    visibilityChange() {
+      if (document.hidden && isOpen) {
+        closeMenu();
+      }
+    }
+  };
+  
+  /**
+   * 🚀 初始化系统
+   */
+  function initialize() {
+    // 防止重复初始化
+    if (wrapper.hasAttribute('data-tw-initialized')) {
+      console.warn('Language dropdown already initialized');
+      return false;
+    }
+    
+    // 验证必需元素
+    if (!trigger || !menu || items.length === 0) {
+      console.error('Language dropdown: Missing required elements');
+      return false;
+    }
+    
+    // 标记已初始化
+    wrapper.setAttribute('data-tw-initialized', 'true');
+    
+    // 设置初始ARIA属性
+    const activeItem = items.find(item => item.classList.contains('active'));
+    if (activeItem) {
+      currentIndex = items.indexOf(activeItem);
+      menu.setAttribute('aria-activedescendant', `tw-lang-option-${currentIndex}`);
+    }
+    
+    // 绑定事件
+    trigger.addEventListener('click', EventHandlers.triggerClick);
+    trigger.addEventListener('keydown', EventHandlers.triggerKeydown);
+    
+    items.forEach((item, index) => {
+      item.addEventListener('click', EventHandlers.itemClick);
+      item.addEventListener('keydown', EventHandlers.itemKeydown);
+      
+      // 确保li元素有正确的ID
+      const li = item.closest('li');
+      if (li && !li.id) {
+        li.id = `tw-lang-option-${index}`;
+      }
+    });
+    
+    // 全局事件
+    document.addEventListener('click', EventHandlers.documentClick);
+    document.addEventListener('keydown', EventHandlers.documentKeydown);
+    document.addEventListener('visibilitychange', EventHandlers.visibilityChange);
+    window.addEventListener('resize', EventHandlers.windowResize);
+    
+    // 加载用户偏好
+    UserPreferences.load();
+    
+    // 性能优化：预热动画
+    wrapper.style.willChange = 'transform, opacity';
+    menu.style.willChange = 'transform, opacity';
+    
+    console.log('✅ TubeWhale Language Dropdown v2.0 initialized successfully');
+    return true;
+  }
+  
+  /**
+   * 🧹 清理函数
+   */
+  function cleanup() {
+    // 移除事件监听器
+    trigger?.removeEventListener('click', EventHandlers.triggerClick);
+    trigger?.removeEventListener('keydown', EventHandlers.triggerKeydown);
+    
+    items.forEach(item => {
+      item.removeEventListener('click', EventHandlers.itemClick);
+      item.removeEventListener('keydown', EventHandlers.itemKeydown);
+    });
+    
+    document.removeEventListener('click', EventHandlers.documentClick);
+    document.removeEventListener('keydown', EventHandlers.documentKeydown);
+    document.removeEventListener('visibilitychange', EventHandlers.visibilityChange);
+    window.removeEventListener('resize', EventHandlers.windowResize);
+    
+    // 清除定时器
+    if (focusTimeout) {
+      clearTimeout(focusTimeout);
+    }
+    if (animationFrame) {
+      cancelAnimationFrame(animationFrame);
+    }
+    
+    // 重置状态
+    isOpen = false;
+    currentIndex = -1;
+    wrapper.classList.remove('open');
+    wrapper.removeAttribute('data-tw-initialized');
+    
+    console.log('🧹 Language dropdown cleaned up');
+  }
+  
+  /**
+   * 🌐 公开API
+   */
+  const API = {
+    open: openMenu,
+    close: closeMenu,
+    toggle: toggleMenu,
+    isOpen: () => isOpen,
+    getCurrentIndex: () => currentIndex,
+    getItems: () => [...items],
+    moveFocus,
+    cleanup,
+    reinitialize() {
+      cleanup();
+      return initialize();
+    }
+  };
+  
+  // 暴露API到wrapper元素
+  wrapper.languageDropdown = API;
+  
+  // 注册到全局命名空间
+  window.TubeWhaleLangDropdown = API;
+  
+  /**
+   * 🎬 启动初始化
+   */
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initialize);
+  } else {
+    // DOM已加载完成，立即初始化
+    initialize();
+  }
+  
+  // 页面卸载时清理
+  window.addEventListener('beforeunload', cleanup);
+  
+})();
+</script>

@@ -74,10 +74,15 @@ create_directories() {
 
 # Generate environment file
 generate_env_file() {
-    if [ ! -f ".env" ]; then
-        print_message "$BLUE" "⚙️  Generating .env file..."
-        
-        cat > .env << EOF
+    # Single source: .env. If missing, generate one with sensible defaults.
+    if [ -f ".env" ]; then
+        print_message "$YELLOW" "⚠️  Found .env. Skipping generation."
+        return 0
+    fi
+
+    print_message "$BLUE" "⚙️  Generating .env (defaults)..."
+    
+    cat > .env << EOF
 # Django settings
 DJANGO_SETTINGS_MODULE=tubewhale_project.settings
 DEBUG=false
@@ -103,11 +108,8 @@ TIME_ZONE=Asia/Shanghai
 USE_I18N=true
 USE_TZ=true
 EOF
-        
-        print_message "$GREEN" "✅ .env file generated"
-    else
-        print_message "$YELLOW" "⚠️  .env file already exists. Skipping generation"
-    fi
+    
+    print_message "$GREEN" "✅ .env generated"
 }
 
 # Build Docker images
@@ -150,7 +152,26 @@ start_services() {
         docker-compose up -d nginx
     fi
     
-    print_message "$GREEN" "✅ All services started"
+    print_message "$GREEN" "✅ All services started (waiting for backend health)"
+
+    # Health polling
+    local retries=40
+    local sleep_sec=3
+    local ok=0
+    print_message "$BLUE" "🩺 Polling backend health endpoint..."
+    while [ $retries -gt 0 ]; do
+        if curl -fsS http://localhost:8000/api/v1/tubewhale/health/ > /dev/null 2>&1; then
+            ok=1
+            break
+        fi
+        retries=$((retries-1))
+        sleep $sleep_sec
+    done
+    if [ $ok -eq 1 ]; then
+        print_message "$GREEN" "✅ Backend healthy"
+    else
+        print_message "$YELLOW" "⚠️  Backend health not confirmed (timed out) – check logs"
+    fi
 }
 
 # Show status

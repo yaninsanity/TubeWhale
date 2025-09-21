@@ -1,0 +1,30 @@
+{% extends 'admin/base_site.html' %}
+{% block title %}Expert Prompts Overview{% endblock %}
+{% block content %}
+<h1>Expert Prompt Seeds</h1>
+{% if missing %}
+  <div class="errornote">No ExpertPrompt records found. Run migrations or reseed.</div>
+{% else %}
+  <table class="listing" style="width:100%">
+    <thead>
+      <tr><th>Slug</th><th>Title</th><th>Role</th><th>Domain</th><th>Weight</th><th>Active</th></tr>
+    </thead>
+    <tbody>
+      {% for p in prompts %}
+        <tr>
+          <td>{{ p.slug }}</td>
+          <td>{{ p.title }}</td>
+          <td>{{ p.get_role_display }}</td>
+          <td>{{ p.get_domain_display }}</td>
+          <td>{{ p.weight }}</td>
+          <td>{{ p.active }}</td>
+        </tr>
+        <tr>
+          <td colspan="6" style="background:#f9f9f9;font-size:12px;white-space:pre-wrap"><strong>Description:</strong> {{ p.description }}\n<strong>Intro:</strong> {{ p.prompt_intro|truncatechars:400 }}\n<strong>Outro:</strong> {{ p.prompt_outro|truncatechars:400 }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endif %}
+<p class="help">These prompts are seedable via migration 0005. Editing content directly here requires admin model edit.</p>
+{% endblock %}

@@ -12,8 +12,8 @@ from typing import Dict, Any, List, Optional, Set, Union
 from pathlib import Path
 from datetime import datetime
 
-from .templates.core_templates import CORE_TEMPLATES
-from .templates.domain_templates import DOMAIN_TEMPLATES
+from service.templates.core_templates import CORE_TEMPLATES
+from service.templates.domain_templates import DOMAIN_TEMPLATES
 
 
 class TemplateValidationError(Exception):

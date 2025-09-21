@@ -1,0 +1,44 @@
+{% extends 'admin/base_site.html' %}
+{% block title %}CLI DB Table Preview{% endblock %}
+{% block content %}
+<h1>Table: {{ table }}</h1>
+<p><a href="{% url 'admin-cli-db-overview' %}">Back to overview</a></p>
+{% if error %}<div class="errornote">{{ error }}</div>{% endif %}
+<p>Schema:</p>
+<table class="listing" style="width:100%;">
+  <thead><tr><th>Name</th><th>Type</th><th>PK</th><th>Not Null</th><th>Default</th></tr></thead>
+  <tbody>
+  {% for c in schema %}
+    <tr>
+      <td>{{ c.name }}</td>
+      <td>{{ c.type }}</td>
+      <td>{% if c.primary_key %}✓{% endif %}</td>
+      <td>{% if c.notnull %}✓{% endif %}</td>
+      <td>{{ c.default }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h2>Rows (limit {{ limit }}, offset {{ offset }})</h2>
+<table class="listing" style="width:100%; font-size:12px;">
+  <thead>
+    <tr>
+      {% for col in columns %}<th>{{ col }}</th>{% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+      <tr>{% for v in r %}<td style="max-width:240px; white-space:pre-wrap; word-break:break-word;">{{ v }}</td>{% endfor %}</tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<form method="get" style="margin-top:1em;">
+  <label>Limit <input type="number" name="limit" value="{{ limit }}" min="1" max="{{ max_preview }}"></label>
+  <label>Offset <input type="number" name="offset" value="{{ offset }}" min="0"></label>
+  <button type="submit" class="button">Apply</button>
+</form>
+
+<p class="help">Exports: <a href="{% url 'admin-cli-db-export' table %}?fmt=json">JSON</a> | <a href="{% url 'admin-cli-db-export' table %}?fmt=ndjson">NDJSON</a> | <a href="{% url 'admin-cli-db-export' table %}?fmt=csv">CSV</a></p>
+{% endblock %}

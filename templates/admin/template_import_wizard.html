@@ -1,0 +1,666 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}Template Import Wizard | TubeWhale Admin{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    .wizard-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.07);
+        overflow: hidden;
+    }
+    
+    .wizard-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        text-align: center;
+    }
+    
+    .wizard-title {
+        font-size: 2rem;
+        font-weight: 700;
+        margin: 0 0 0.5rem 0;
+    }
+    
+    .wizard-subtitle {
+        font-size: 1.1rem;
+        opacity: 0.9;
+        margin: 0;
+    }
+    
+    .step-indicator {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 2rem;
+        background: #f8f9fa;
+        border-bottom: 1px solid #dee2e6;
+    }
+    
+    .step {
+        display: flex;
+        align-items: center;
+        margin: 0 1rem;
+    }
+    
+    .step-number {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        margin-right: 0.75rem;
+        transition: all 0.3s;
+    }
+    
+    .step.active .step-number {
+        background: #007cba;
+        color: white;
+    }
+    
+    .step.completed .step-number {
+        background: #28a745;
+        color: white;
+    }
+    
+    .step.inactive .step-number {
+        background: #e9ecef;
+        color: #6c757d;
+    }
+    
+    .step-arrow {
+        margin: 0 1rem;
+        color: #dee2e6;
+        font-size: 1.2rem;
+    }
+    
+    .wizard-content {
+        padding: 3rem;
+    }
+    
+    .template-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+        gap: 1.5rem;
+        margin-top: 2rem;
+    }
+    
+    .template-card {
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        padding: 1.5rem;
+        transition: all 0.2s;
+        cursor: pointer;
+        position: relative;
+    }
+    
+    .template-card:hover {
+        border-color: #007cba;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    .template-card.selected {
+        border-color: #007cba;
+        background: rgba(0, 124, 186, 0.05);
+    }
+    
+    .template-card.imported {
+        border-color: #28a745;
+        background: rgba(40, 167, 69, 0.05);
+        opacity: 0.7;
+    }
+    
+    .card-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+    
+    .template-checkbox {
+        margin-right: 1rem;
+        transform: scale(1.2);
+    }
+    
+    .template-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+        margin-right: 1rem;
+    }
+    
+    .template-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #333;
+        margin: 0;
+        flex: 1;
+    }
+    
+    .template-domain {
+        background: #e9ecef;
+        color: #495057;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+    
+    .template-description {
+        color: #666;
+        margin: 1rem 0;
+        line-height: 1.5;
+    }
+    
+    .template-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.85rem;
+        color: #6c757d;
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid #eee;
+    }
+    
+    .template-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    
+    .tag {
+        background: #f8f9fa;
+        color: #495057;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        border: 1px solid #dee2e6;
+    }
+    
+    .status-badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .status-new {
+        background: #d1ecf1;
+        color: #0c5460;
+    }
+    
+    .status-imported {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-bottom: 2rem;
+        padding: 1.5rem;
+        background: #f8f9fa;
+        border-radius: 8px;
+        border: 1px solid #dee2e6;
+    }
+    
+    .filter-group {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .filter-label {
+        font-weight: 500;
+        color: #495057;
+    }
+    
+    .filter-select {
+        padding: 0.5rem;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        background: white;
+    }
+    
+    .selection-summary {
+        padding: 1.5rem;
+        background: #e3f2fd;
+        border: 1px solid #bbdefb;
+        border-radius: 8px;
+        margin-bottom: 2rem;
+    }
+    
+    .selection-count {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #1976d2;
+        margin-bottom: 0.5rem;
+    }
+    
+    .import-options {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1.5rem;
+        margin: 2rem 0;
+    }
+    
+    .option-card {
+        padding: 1.5rem;
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        transition: border-color 0.2s;
+    }
+    
+    .option-card:hover {
+        border-color: #007cba;
+    }
+    
+    .option-title {
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        display: flex;
+        align-items: center;
+    }
+    
+    .option-checkbox {
+        margin-right: 0.75rem;
+        transform: scale(1.1);
+    }
+    
+    .option-description {
+        color: #666;
+        font-size: 0.9rem;
+        line-height: 1.4;
+    }
+    
+    .wizard-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 2rem;
+        background: #f8f9fa;
+        border-top: 1px solid #dee2e6;
+    }
+    
+    .action-btn {
+        padding: 0.75rem 2rem;
+        border: none;
+        border-radius: 6px;
+        font-weight: 500;
+        text-decoration: none;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .btn-primary {
+        background: #007cba;
+        color: white;
+    }
+    
+    .btn-primary:hover {
+        background: #005a87;
+        color: white;
+        text-decoration: none;
+    }
+    
+    .btn-secondary {
+        background: #6c757d;
+        color: white;
+    }
+    
+    .btn-secondary:hover {
+        background: #545b62;
+        color: white;
+        text-decoration: none;
+    }
+    
+    .btn-success {
+        background: #28a745;
+        color: white;
+    }
+    
+    .btn-success:hover {
+        background: #1e7e34;
+        color: white;
+        text-decoration: none;
+    }
+    
+    .breadcrumbs {
+        margin-bottom: 2rem;
+        padding: 1rem 1.5rem;
+        background: #f8f9fa;
+        border-radius: 8px;
+        border-left: 4px solid #007cba;
+    }
+    
+    @media (max-width: 768px) {
+        .template-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .import-options {
+            grid-template-columns: 1fr;
+        }
+        
+        .filters {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        
+        .wizard-actions {
+            flex-direction: column;
+            gap: 1rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a> &rsaquo;
+    <a href="{% url 'admin-template-dashboard' %}">Template Dashboard</a> &rsaquo;
+    <strong>Import Wizard</strong>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="wizard-container">
+    <div class="wizard-header">
+        <h1 class="wizard-title">🧙‍♂️ Template Import Wizard</h1>
+        <p class="wizard-subtitle">Import templates from the enterprise engine into your custom collection</p>
+    </div>
+    
+    <div class="step-indicator">
+        <div class="step {% if step == 1 %}active{% elif step > 1 %}completed{% else %}inactive{% endif %}">
+            <div class="step-number">1</div>
+            <span>Select Templates</span>
+        </div>
+        <div class="step-arrow">→</div>
+        <div class="step {% if step == 2 %}active{% elif step > 2 %}completed{% else %}inactive{% endif %}">
+            <div class="step-number">2</div>
+            <span>Configure Import</span>
+        </div>
+    </div>
+    
+    {% if step == 1 %}
+    <div class="wizard-content">
+        <h2>📋 Select Templates to Import</h2>
+        <p>Choose which templates you'd like to import from the enterprise engine. Imported templates will be available for customization.</p>
+        
+        <form method="post" id="template-selection-form">
+            {% csrf_token %}
+            <input type="hidden" name="step" value="1">
+            
+            <div class="filters">
+                <div class="filter-group">
+                    <label class="filter-label">Domain:</label>
+                    <select class="filter-select" id="domain-filter">
+                        <option value="">All Domains</option>
+                        {% for domain in domains %}
+                        <option value="{{ domain }}">{{ domain|title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label class="filter-label">Status:</label>
+                    <select class="filter-select" id="status-filter">
+                        <option value="">All Templates</option>
+                        <option value="new">Not Imported</option>
+                        <option value="imported">Already Imported</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <button type="button" class="action-btn btn-secondary" onclick="selectAll()">Select All Visible</button>
+                    <button type="button" class="action-btn btn-secondary" onclick="selectNone()">Select None</button>
+                </div>
+            </div>
+            
+            <div class="selection-summary" id="selection-summary" style="display: none;">
+                <div class="selection-count" id="selection-count">0 templates selected</div>
+                <div>These templates will be imported into your custom collection for editing and customization.</div>
+            </div>
+            
+            <div class="template-grid">
+                {% for template in templates %}
+                <div class="template-card {% if template.is_imported %}imported{% endif %}" 
+                     data-domain="{{ template.domain|default:'general' }}" 
+                     data-status="{% if template.is_imported %}imported{% else %}new{% endif %}">
+                    
+                    <div class="card-header">
+                        {% if not template.is_imported %}
+                        <input type="checkbox" 
+                               name="selected_templates" 
+                               value="{{ template.id }}" 
+                               class="template-checkbox"
+                               onchange="updateSelection()">
+                        {% endif %}
+                        
+                        <div class="template-icon">
+                            {% if template.domain == 'business' %}💼
+                            {% elif template.domain == 'data_science' %}📊
+                            {% elif template.domain == 'education' %}🎓
+                            {% elif template.domain == 'marketing' %}📢
+                            {% else %}📋{% endif %}
+                        </div>
+                        
+                        <div class="template-title">{{ template.name|default:template.id }}</div>
+                        
+                        <div class="template-domain">{{ template.domain|default:'general'|title }}</div>
+                    </div>
+                    
+                    <div class="template-description">
+                        {{ template.description|default:'No description available'|truncatewords:20 }}
+                    </div>
+                    
+                    {% if template.tags %}
+                    <div class="template-tags">
+                        {% for tag in template.tags %}
+                        <span class="tag">{{ tag }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    
+                    <div class="template-meta">
+                        <span>ID: {{ template.id }}</span>
+                        <span class="status-badge {% if template.is_imported %}status-imported{% else %}status-new{% endif %}">
+                            {% if template.is_imported %}Already Imported{% else %}Available{% endif %}
+                        </span>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="col-span-full text-center py-8">
+                    <div class="text-gray-500">
+                        <div class="text-4xl mb-4">📋</div>
+                        <p>No templates found matching your criteria.</p>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </form>
+    </div>
+    
+    <div class="wizard-actions">
+        <a href="{% url 'admin-template-dashboard' %}" class="action-btn btn-secondary">
+            ← Cancel
+        </a>
+        
+        <button type="submit" form="template-selection-form" class="action-btn btn-primary" id="next-button" disabled>
+            Next: Configure Import →
+        </button>
+    </div>
+    
+    {% elif step == 2 %}
+    <div class="wizard-content">
+        <h2>⚙️ Configure Import Options</h2>
+        <p>Review your selection and configure how the templates should be imported.</p>
+        
+        <div class="selection-summary">
+            <div class="selection-count">{{ selected_templates|length }} template{{ selected_templates|length|pluralize }} selected for import</div>
+            <div>Configure the import options below to customize how these templates are processed.</div>
+        </div>
+        
+        <h3>📋 Selected Templates</h3>
+        <div class="template-grid">
+            {% for template in selected_templates %}
+            <div class="template-card selected">
+                <div class="card-header">
+                    <div class="template-icon">
+                        {% if template.domain == 'business' %}💼
+                        {% elif template.domain == 'data_science' %}📊
+                        {% elif template.domain == 'education' %}🎓
+                        {% elif template.domain == 'marketing' %}📢
+                        {% else %}📋{% endif %}
+                    </div>
+                    <div class="template-title">{{ template.name|default:template.id }}</div>
+                    <div class="template-domain">{{ template.domain|default:'general'|title }}</div>
+                </div>
+                <div class="template-description">
+                    {{ template.description|default:'No description available'|truncatewords:15 }}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <h3>⚙️ Import Options</h3>
+        <form method="post" id="import-form">
+            {% csrf_token %}
+            <input type="hidden" name="step" value="2">
+            
+            <div class="import-options">
+                <div class="option-card">
+                    <div class="option-title">
+                        <input type="checkbox" name="overwrite_existing" class="option-checkbox" id="overwrite">
+                        <label for="overwrite">Overwrite Existing</label>
+                    </div>
+                    <div class="option-description">
+                        Replace any templates with matching IDs that are already in your custom collection.
+                    </div>
+                </div>
+                
+                <div class="option-card">
+                    <div class="option-title">
+                        <input type="checkbox" name="make_immutable" class="option-checkbox" id="immutable">
+                        <label for="immutable">Make Immutable</label>
+                    </div>
+                    <div class="option-description">
+                        Import templates as read-only. This prevents accidental modifications to core templates.
+                    </div>
+                </div>
+                
+                <div class="option-card">
+                    <div class="option-title">
+                        <input type="checkbox" name="auto_categorize" class="option-checkbox" id="categorize" checked>
+                        <label for="categorize">Auto-Categorize</label>
+                    </div>
+                    <div class="option-description">
+                        Automatically organize templates by domain and add appropriate tags for easy discovery.
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+    
+    <div class="wizard-actions">
+        <a href="{% url 'admin-template-import-wizard' %}" class="action-btn btn-secondary">
+            ← Back to Selection
+        </a>
+        
+        <button type="submit" form="import-form" class="action-btn btn-success">
+            🎉 Import Templates
+        </button>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function updateSelection() {
+    const checkboxes = document.querySelectorAll('input[name="selected_templates"]:checked');
+    const count = checkboxes.length;
+    const summary = document.getElementById('selection-summary');
+    const countElement = document.getElementById('selection-count');
+    const nextButton = document.getElementById('next-button');
+    
+    countElement.textContent = count + ' template' + (count !== 1 ? 's' : '') + ' selected';
+    
+    if (count > 0) {
+        summary.style.display = 'block';
+        nextButton.disabled = false;
+    } else {
+        summary.style.display = 'none';
+        nextButton.disabled = true;
+    }
+}
+
+function selectAll() {
+    const visibleCheckboxes = document.querySelectorAll('.template-card:not([style*="display: none"]) input[name="selected_templates"]');
+    visibleCheckboxes.forEach(cb => cb.checked = true);
+    updateSelection();
+}
+
+function selectNone() {
+    const checkboxes = document.querySelectorAll('input[name="selected_templates"]');
+    checkboxes.forEach(cb => cb.checked = false);
+    updateSelection();
+}
+
+// Filter functionality
+document.getElementById('domain-filter').addEventListener('change', function() {
+    filterTemplates();
+});
+
+document.getElementById('status-filter').addEventListener('change', function() {
+    filterTemplates();
+});
+
+function filterTemplates() {
+    const domainFilter = document.getElementById('domain-filter').value;
+    const statusFilter = document.getElementById('status-filter').value;
+    const cards = document.querySelectorAll('.template-card');
+    
+    cards.forEach(card => {
+        const cardDomain = card.getAttribute('data-domain');
+        const cardStatus = card.getAttribute('data-status');
+        
+        let show = true;
+        
+        if (domainFilter && cardDomain !== domainFilter) {
+            show = false;
+        }
+        
+        if (statusFilter && cardStatus !== statusFilter) {
+            show = false;
+        }
+        
+        card.style.display = show ? 'block' : 'none';
+    });
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    updateSelection();
+});
+</script>
+{% endblock %}

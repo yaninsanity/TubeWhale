@@ -1,0 +1,16 @@
+{% extends 'admin/base_site.html' %}
+{% block title %}Admin Dashboard{% endblock %}
+{% block content %}
+<h1>Admin Dashboard</h1>
+<p class="help">快速可视化：系统健康、作业、执行与最近失败。以下数据为轻量实时查询。</p>
+<div style="margin:1rem 0;display:flex;gap:1rem;flex-wrap:wrap;">
+  <a class="button" href="/admin/system-health/">System Health</a>
+  <a class="button" href="/admin/templates_app/job/">Jobs</a>
+  <a class="button" href="/admin/templates_app/cliexecution/">CLI Executions</a>
+  <a class="button" href="/admin/templates_app/usertemplateselection/">Template Selections</a>
+  <a class="button" href="/admin/templates_app/customtemplate/">Custom Templates</a>
+  <a class="button" href="/admin/templates_app/expertprompt/">Expert Prompts</a>
+</div>
+<hr>
+{% include 'admin/dashboard_embed.html' %}
+{% endblock %}

@@ -1,0 +1,29 @@
+{% extends 'admin/base_site.html' %}
+{% block title %}CLI DB Overview{% endblock %}
+{% block content %}
+<h1>CLI External DB Overview</h1>
+{% if missing %}
+  <div class="errornote">DB file not found. Set DB_PATH in .env and ensure CLI has run.</div>
+{% else %}
+  <p><strong>Path:</strong> {{ db_path }}</p>
+  <p>Total Tables: {{ tables|length }}</p>
+  <table class="listing" style="width:100%;">
+    <thead><tr><th>Table</th><th>Rows</th><th>Preview</th><th>Export</th></tr></thead>
+    <tbody>
+    {% for t in tables %}
+      <tr>
+        <td>{{ t.name }}</td>
+        <td>{{ t.row_count|default:'?' }}</td>
+        <td><a href="{% url 'admin-cli-db-preview' t.name %}?limit=50">View</a></td>
+        <td>
+          <a href="{% url 'admin-cli-db-export' t.name %}?fmt=json" title="JSON">JSON</a>
+          | <a href="{% url 'admin-cli-db-export' t.name %}?fmt=ndjson" title="NDJSON">NDJSON</a>
+          | <a href="{% url 'admin-cli-db-export' t.name %}?fmt=csv" title="CSV">CSV</a>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p class="help">Preview limited to {{ max_preview }} rows; export limited to {{ max_export }} rows.</p>
+{% endif %}
+{% endblock %}

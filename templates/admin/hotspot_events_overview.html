@@ -1,0 +1,35 @@
+{% extends 'admin/base_site.html' %}
+{% block title %}Hotspot Events{% endblock %}
+{% block content %}
+<h1>Resource Hotspot Events</h1>
+<p class="help">Sustained critical CPU / Memory periods (auto-generated). Oldest first limited to recent 200.</p>
+<table class="adminlist" style="width:100%;border-collapse:collapse;">
+  <thead>
+    <tr>
+      <th>Resource</th>
+      <th>Level</th>
+      <th>Started</th>
+      <th>Ended</th>
+      <th>Duration(s)</th>
+      <th>Peak %</th>
+      <th>Resolved</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for e in events %}
+    <tr>
+      <td>{{ e.get_resource_display }}</td>
+      <td>{{ e.level }}</td>
+      <td>{{ e.started_at|date:'Y-m-d H:i:s' }}</td>
+      <td>{% if e.ended_at %}{{ e.ended_at|date:'Y-m-d H:i:s' }}{% else %}-{% endif %}</td>
+      <td>{{ e.duration_sec }}</td>
+      <td>{{ e.peak_percent|floatformat:2 }}</td>
+      <td>{% if e.resolved %}Yes{% else %}<strong>No</strong>{% endif %}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="7">No hotspot events recorded.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+<p><a href="{% url 'admin-system-metrics-dashboard' %}">← Back to Metrics Dashboard</a></p>
+{% endblock %}

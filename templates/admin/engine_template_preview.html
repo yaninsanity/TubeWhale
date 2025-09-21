@@ -1,0 +1,62 @@
+{% extends 'admin/base_site.html' %}
+{% load template_extras %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-md-12">
+      <h1>🔎 Preview: {{ tpl.name }} <small class="text-muted">({{ template_id }})</small></h1>
+      <p class="text-muted">Domain: <strong>{{ tpl.domain }}</strong> · Type: <strong>{{ tpl.template_type }}</strong> · Version: {{ tpl.version|default:'-' }}</p>
+      <p><a href="{% url 'admin-engine-templates' %}" class="btn btn-default btn-sm">« Back to Catalog</a></p>
+    </div>
+  </div>
+
+  {% if compile_error %}
+  <div class="alert alert-warning">{{ compile_error }}</div>
+  {% endif %}
+
+  <div class="row">
+    <div class="col-md-5">
+      <div class="panel panel-default">
+        <div class="panel-heading">Variables</div>
+        <div class="panel-body">
+          <form method="post">
+            {% csrf_token %}
+            {% if required_vars %}
+              {% for v in required_vars %}
+              <div class="form-group">
+                <label>{{ v }}</label>
+                <textarea name="{{ v }}" rows="{% if v == 'transcript' %}6{% else %}2{% endif %}" class="form-control">{{ variables|get_item:v }}</textarea>
+              </div>
+              {% endfor %}
+            {% else %}
+              <p class="text-muted">No variables detected in this template.</p>
+            {% endif %}
+            <button type="submit" class="btn btn-primary">Render Preview</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="panel panel-default">
+        <div class="panel-heading">Raw Prompt</div>
+        <div class="panel-body">
+          <pre style="white-space:pre-wrap; word-break:break-word; max-height:280px; overflow:auto;">{{ tpl.prompt }}</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-7">
+      <div class="panel panel-default">
+        <div class="panel-heading">Compiled Preview</div>
+        <div class="panel-body">
+          {% if compiled %}
+            <pre style="white-space:pre-wrap; word-break:break-word;">{{ compiled }}</pre>
+          {% else %}
+            <p class="text-muted">Fill variables and click Render Preview.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

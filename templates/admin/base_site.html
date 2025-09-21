@@ -1,15 +1,63 @@
 {% extends "admin/base.html" %}
 {% load i18n %}
+{% load language_menu %}
 
 {% block extrahead %}
 {{ block.super }}
 {% load static %}
+<link rel="stylesheet" href="{% static 'admin/css/design-system.css' %}">
 <script src="{% static 'admin/js/language_switcher.js' %}"></script>
 {% endblock %}
 
 {% block extrastyle %}
 {{ block.super }}
 <style>
+/* AAA级无障碍性样式 */
+
+/* 跳转链接 - 符合WCAG 2.1 AAA标准 */
+.skip-links {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 9999;
+    background: #000;
+    padding: 0;
+    margin: 0;
+}
+
+.skip-links a {
+    position: absolute;
+    left: -9999px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    color: #fff;
+    background: #000;
+    text-decoration: none;
+    padding: 8px 16px;
+    font-weight: bold;
+    border-radius: 0 0 4px 4px;
+    border: 2px solid #fff;
+    border-top: none;
+}
+
+.skip-links a:focus {
+    position: static;
+    left: auto;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+    margin: 0 8px 0 0;
+    display: inline-block;
+}
+
+.skip-links a:focus:hover {
+    background: #333;
+    text-decoration: underline;
+}
+
 /* Language Switcher in Top Bar */
 .language-switcher {
     position: fixed;
@@ -45,6 +93,14 @@
     font-weight: 500;
     transition: all 0.2s;
     cursor: pointer;
+    min-height: 24px;
+    display: inline-flex;
+    align-items: center;
+}
+
+.lang-btn:focus {
+    outline: 3px solid #0969da;
+    outline-offset: 2px;
 }
 
 .lang-btn.active {
@@ -63,6 +119,35 @@
     text-decoration: none;
 }
 
+/* 高对比度模式支持 */
+@media (prefers-contrast: high) {
+    .skip-links a {
+        border-width: 3px;
+    }
+    
+    .skip-links a:focus {
+        background: #000;
+        color: #fff;
+        border-color: #fff;
+    }
+    
+    .lang-btn {
+        border-width: 2px;
+    }
+    
+    .lang-btn:focus {
+        outline-width: 4px;
+        outline-color: #000;
+    }
+}
+
+/* 减少动画模式支持 */
+@media (prefers-reduced-motion: reduce) {
+    .lang-btn {
+        transition: none;
+    }
+}
+
 /* Mobile responsive */
 @media (max-width: 768px) {
     .language-switcher {
@@ -72,6 +157,11 @@
         margin: 10px;
         border-radius: 8px;
         border: 1px solid #ddd;
+    }
+    
+    .skip-links a:focus {
+        padding: 12px 20px;
+        font-size: 16px;
     }
 }
 
@@ -84,33 +174,439 @@
 .main > .container-fluid {
     padding-top: 20px;
 }
+
+/* 为主要地标添加标识 */
+#main-content {
+    scroll-margin-top: 1rem;
+}
+
+#nav-shortcuts {
+    scroll-margin-top: 1rem;
+}
+
+#language-menu {
+    scroll-margin-top: 1rem;
+}
+
+/* 改善表单无障碍性 */
+.form-row label {
+    font-weight: 600;
+    color: #333;
+}
+
+.form-row .help {
+    color: #666;
+    font-style: italic;
+}
+
+.errorlist {
+    color: #d63384;
+    font-weight: 600;
+    list-style: none;
+    padding: 0;
+    margin: 4px 0;
+}
+
+.errorlist li {
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    border-radius: 4px;
+    padding: 8px 12px;
+    margin: 4px 0;
+}
+
+/* 改善按钮无障碍性 */
+.button, .btn, input[type="submit"], input[type="button"] {
+    min-height: 32px;
+    font-weight: 500;
+}
+
+.button:focus, .btn:focus, input[type="submit"]:focus, input[type="button"]:focus {
+    outline: 3px solid #0969da;
+    outline-offset: 2px;
+}
+
+/* 改善链接无障碍性 */
+a:focus {
+    outline: 2px solid #0969da;
+    outline-offset: 2px;
+    border-radius: 2px;
+}
+
+/* 状态消息无障碍性 */
+.messages {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.messages li {
+    margin: 8px 0;
+    padding: 12px 16px;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+.messages .info {
+    background: #d1ecf1;
+    border: 1px solid #bee5eb;
+    color: #0c5460;
+}
+
+.messages .success {
+    background: #d4edda;
+    border: 1px solid #c3e6cb;
+    color: #155724;
+}
+
+.messages .warning {
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    color: #856404;
+}
+
+.messages .error {
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+}
 </style>
 {% endblock %}
 
 {% block nav-global %}
 {{ block.super }}
-<!-- Top Language Switcher -->
-<div class="language-switcher">
-    <div class="language-switcher-title">{% trans "Language" %}</div>
-    <div class="language-links">
-        {% get_current_language as CURRENT_LANGUAGE %}
-        <a href="{% url 'admin:index' %}?admin_lang=en{% if request.GET.items %}{% for key, value in request.GET.items %}{% if key != 'admin_lang' %}&{{ key }}={{ value }}{% endif %}{% endfor %}{% endif %}" 
-           class="lang-btn {% if CURRENT_LANGUAGE == 'en' %}active{% else %}inactive{% endif %}"
-           title="Switch to English">
-            EN
-        </a>
-        <a href="{% url 'admin:index' %}?admin_lang=zh-hans{% if request.GET.items %}{% for key, value in request.GET.items %}{% if key != 'admin_lang' %}&{{ key }}={{ value }}{% endif %}{% endfor %}{% endif %}" 
-           class="lang-btn {% if CURRENT_LANGUAGE == 'zh-hans' %}active{% else %}inactive{% endif %}"
-           title="切换到中文">
-            中文
-        </a>
-        <a href="{% url 'admin:index' %}?admin_lang=ja{% if request.GET.items %}{% for key, value in request.GET.items %}{% if key != 'admin_lang' %}&{{ key }}={{ value }}{% endif %}{% endfor %}{% endif %}" 
-           class="lang-btn {% if CURRENT_LANGUAGE == 'ja' %}active{% else %}inactive{% endif %}"
-           title="日本語に切り替え">
-            JP
-        </a>
+
+<!-- AAA级无障碍跳转链接 -->
+<div class="skip-links" role="navigation" aria-label="{% trans 'Accessibility shortcuts' %}">
+    <a href="#main-content" class="skip-link">{% trans 'Skip to main content' %}</a>
+    <a href="#nav-shortcuts" class="skip-link">{% trans 'Skip to navigation' %}</a>
+    <a href="#language-menu" class="skip-link">{% trans 'Skip to language selector' %}</a>
+    <a href="#footer" class="skip-link">{% trans 'Skip to footer' %}</a>
+</div>
+<div class="tw-topbar-cluster">
+        <div class="tw-cluster-left" id="language-menu" aria-label="{% trans 'Language selector' %}">
+                {% language_dropdown %}
+    </div>
+        <div class="tw-cluster-right" id="nav-shortcuts" role="navigation" aria-label="{% trans 'Quick shortcuts' %}">
+        <a href="{% url 'admin-engine-templates' %}" class="tw-shortcut">{% trans 'Engine Templates Catalog' %}</a>
+        <a href="{% url 'admin:app_list' 'templates_app' %}" class="tw-shortcut">{% trans 'Custom Templates' %}</a>
+        <a href="{% url 'admin-env-config' %}" class="tw-shortcut">{% trans '.env Editor' %}</a>
+        <button type="button" class="tw-shortcut" id="tw-contrast-toggle" aria-pressed="false" aria-label="{% trans 'Toggle high contrast mode' %}">
+            {% trans 'High Contrast' %}
+        </button>
+        <button type="button" class="tw-shortcut" id="tw-activity-toggle" aria-expanded="false" aria-label="{% trans 'Toggle activity panel' %}">
+            {% trans 'Activity' %}
+        </button>
+        <span id="tw-observe" class="tw-observe" aria-live="polite" title="System snapshot loading…">
+            <span class="obs-dot" aria-hidden="true"></span>
+            <span class="obs-text">—</span>
+        </span>
     </div>
 </div>
+<div id="tw-activity-panel" class="tw-activity-panel" style="display:none;" aria-hidden="true">
+    <div class="activity-header">
+        <h3>{% trans 'Recent Activity' %}</h3>
+        <button type="button" class="activity-close" aria-label="{% trans 'Close activity panel' %}">&times;</button>
+    </div>
+    <div class="activity-content">
+        <div class="activity-section">
+            <h4>{% trans 'CLI Commands' %}</h4>
+            <div id="recent-cli" class="activity-list">{% trans 'Loading...' %}</div>
+        </div>
+        <div class="activity-section">
+            <h4>{% trans 'System Hotspots' %}</h4>
+            <div id="recent-hotspots" class="activity-list">{% trans 'Loading...' %}</div>
+        </div>
+    </div>
+</div>
+<style>
+.skip-links{position:absolute;top:0;left:0;z-index:2000;padding:0;margin:0}
+.skip-links a{position:absolute;left:-999px;top:auto;width:1px;height:1px;overflow:hidden;background:#111;color:#fff;padding:8px 14px;border-radius:0 0 6px 0;text-decoration:none;font-size:14px;box-shadow:0 2px 6px rgba(0,0,0,.4)}
+.skip-links a:focus,.skip-links a:active{left:0;width:auto;height:auto}
+.tw-topbar-cluster{position:fixed;top:0;right:12px;display:flex;align-items:center;gap:16px;z-index:1001;background:rgba(255,255,255,.92);padding:6px 12px;border:1px solid #d0d7de;border-top:none;border-radius:0 0 10px 10px;backdrop-filter:blur(6px);box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.tw-shortcut{font-size:12px;font-weight:500;color:#0969da;text-decoration:none;padding:4px 6px;border-radius:6px;line-height:1.2}
+.tw-shortcut:hover{background:#f2f8ff;text-decoration:none}
+@media (max-width:900px){.tw-topbar-cluster{flex-direction:column;align-items:stretch;left:12px;right:12px}.tw-cluster-right{display:flex;flex-wrap:wrap;gap:4px}.tw-shortcut{padding:6px 8px}}
+body{padding-top:58px}
+.tw-observe{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 6px;border-radius:14px;background:#f6f8fa;border:1px solid #d0d7de;line-height:1}
+.tw-observe.ok{background:#e6f6ec;border-color:#2ea043}
+.tw-observe.warn{background:#fff8e6;border-color:#e5a100}
+.tw-observe.crit{background:#ffe6e6;border-color:#d1242f}
+.obs-dot{width:8px;height:8px;border-radius:50%;background:#8c959f;display:inline-block}
+.obs-dot.sse{background:#0969da}
+.obs-dot.poll{background:#57606a}
+.obs-dot.err{background:#d1242f}
+.tw-activity-panel{position:fixed;top:60px;right:12px;width:320px;max-height:400px;background:#fff;border:1px solid #d0d7de;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.1);z-index:999;overflow:hidden}
+.activity-header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#f6f8fa;border-bottom:1px solid #d0d7de}
+.activity-header h3{margin:0;font-size:14px;font-weight:600}
+.activity-close{background:none;border:none;font-size:18px;cursor:pointer;color:#656d76;padding:0;width:20px;height:20px;display:flex;align-items:center;justify-content:center}
+.activity-close:hover{color:#d1242f}
+.activity-content{padding:8px;max-height:320px;overflow-y:auto}
+.activity-section{margin-bottom:12px}
+.activity-section h4{margin:0 0 6px;font-size:12px;font-weight:600;color:#656d76;text-transform:uppercase}
+.activity-list{font-size:11px;line-height:1.3}
+.activity-item{padding:4px 8px;margin-bottom:2px;background:#f6f8fa;border-radius:4px;border-left:3px solid #d0d7de}
+.activity-item.cli{border-left-color:#0969da}
+.activity-item.hotspot{border-left-color:#d1242f}
+.activity-item.resolved{border-left-color:#2ea043}
+.activity-time{color:#656d76;font-size:10px}
+@media (max-width:900px){.tw-activity-panel{right:12px;left:12px;width:auto}}
+</style>
+<script>
+// Inject a main content landmark & improve focus management
+document.addEventListener('DOMContentLoaded', function(){
+    const content = document.getElementById('content');
+    if(content){
+        // Assign main role if not set
+        if(!content.hasAttribute('role')) content.setAttribute('role','main');
+        // Create an anchor target for skip links if missing
+        if(!document.getElementById('main-content')){
+            const anchor = document.createElement('div');
+            anchor.id = 'main-content';
+            anchor.tabIndex = -1; // focusable container for skip target
+            anchor.className = 'visually-hidden-anchor';
+            content.prepend(anchor);
+        }
+    }
+    
+    // High contrast mode toggle
+    const contrastToggle = document.getElementById('tw-contrast-toggle');
+    const isHighContrast = localStorage.getItem('tw-high-contrast') === 'true';
+    
+    function setHighContrast(enabled) {
+        if (enabled) {
+            document.documentElement.classList.add('tw-high-contrast');
+            contrastToggle.setAttribute('aria-pressed', 'true');
+            contrastToggle.textContent = '{% trans "Disable High Contrast" %}';
+            localStorage.setItem('tw-high-contrast', 'true');
+        } else {
+            document.documentElement.classList.remove('tw-high-contrast');
+            contrastToggle.setAttribute('aria-pressed', 'false');
+            contrastToggle.textContent = '{% trans "High Contrast" %}';
+            localStorage.setItem('tw-high-contrast', 'false');
+        }
+        
+        // Announce change to screen readers
+        const statusEl = document.getElementById('tw-lang-status') || 
+                         document.createElement('div');
+        if (!statusEl.id) {
+            statusEl.id = 'tw-accessibility-status';
+            statusEl.className = 'tw-sr-only';
+            statusEl.setAttribute('aria-live', 'polite');
+            document.body.appendChild(statusEl);
+        }
+        statusEl.textContent = enabled ? 
+            '{% trans "High contrast mode enabled" %}' : 
+            '{% trans "High contrast mode disabled" %}';
+    }
+    
+    // Initialize high contrast mode
+    setHighContrast(isHighContrast);
+    
+    if (contrastToggle) {
+        contrastToggle.addEventListener('click', function() {
+            const currentState = this.getAttribute('aria-pressed') === 'true';
+            setHighContrast(!currentState);
+        });
+    }
+    
+    // Add high contrast styles
+    if (!document.getElementById('tw-high-contrast-styles')) {
+        const style = document.createElement('style');
+        style.id = 'tw-high-contrast-styles';
+        style.textContent = `
+            .tw-high-contrast {
+                --tw-bg-primary: #000000;
+                --tw-bg-secondary: #1a1a1a;
+                --tw-text-primary: #ffffff;
+                --tw-text-secondary: #cccccc;
+                --tw-border-primary: #ffffff;
+                --tw-link-color: #66ccff;
+                --tw-link-hover: #99ddff;
+                --tw-button-bg: #333333;
+                --tw-button-border: #ffffff;
+                --tw-focus-color: #ffff00;
+            }
+            
+            .tw-high-contrast body {
+                background: var(--tw-bg-primary) !important;
+                color: var(--tw-text-primary) !important;
+            }
+            
+            .tw-high-contrast .module,
+            .tw-high-contrast .form-row,
+            .tw-high-contrast .results {
+                background: var(--tw-bg-secondary) !important;
+                border-color: var(--tw-border-primary) !important;
+                color: var(--tw-text-primary) !important;
+            }
+            
+            .tw-high-contrast a {
+                color: var(--tw-link-color) !important;
+            }
+            
+            .tw-high-contrast a:hover {
+                color: var(--tw-link-hover) !important;
+            }
+            
+            .tw-high-contrast input,
+            .tw-high-contrast select,
+            .tw-high-contrast textarea {
+                background: var(--tw-bg-primary) !important;
+                color: var(--tw-text-primary) !important;
+                border: 2px solid var(--tw-border-primary) !important;
+            }
+            
+            .tw-high-contrast .button,
+            .tw-high-contrast .btn,
+            .tw-high-contrast input[type="submit"] {
+                background: var(--tw-button-bg) !important;
+                color: var(--tw-text-primary) !important;
+                border: 2px solid var(--tw-button-border) !important;
+            }
+            
+            .tw-high-contrast *:focus {
+                outline: 3px solid var(--tw-focus-color) !important;
+                outline-offset: 2px !important;
+            }
+            
+            .tw-high-contrast .tw-lang-menu {
+                background: var(--tw-bg-secondary) !important;
+                border: 2px solid var(--tw-border-primary) !important;
+            }
+            
+            .tw-high-contrast .tw-lang-item {
+                color: var(--tw-text-primary) !important;
+            }
+            
+            .tw-high-contrast .tw-lang-item:hover {
+                background: var(--tw-button-bg) !important;
+            }
+            
+            .tw-high-contrast .tw-lang-item.active {
+                background: var(--tw-link-color) !important;
+                color: var(--tw-bg-primary) !important;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+        // High contrast toggle
+        const toggle = document.getElementById('tw-contrast-toggle');
+        if(toggle){
+            const key='tw_high_contrast';
+            const stored=localStorage.getItem(key);
+            if(stored==='1'){document.body.classList.add('tw-high-contrast');toggle.setAttribute('aria-pressed','true');}
+            toggle.addEventListener('click',()=>{
+                const on=document.body.classList.toggle('tw-high-contrast');
+                toggle.setAttribute('aria-pressed',on?'true':'false');
+                localStorage.setItem(key,on?'1':'0');
+            });
+        }
+        // Observability header panel
+        const obsEl = document.getElementById('tw-observe');
+    const STATUS_URL = "{% url 'admin-header-status-json' %}";
+        async function refreshHeaderStatus(){
+            if(!obsEl) return;
+            try{
+                const r = await fetch(STATUS_URL, {cache:'no-store'});
+                if(!r.ok) throw new Error('HTTP '+r.status);
+                const j = await r.json();
+                // Determine severity simple heuristic
+                let sev='ok';
+                if(j.cpu!=null && j.mem!=null){
+                    if(j.cpu>=90 || j.mem>=90) sev='crit';
+                    else if(j.cpu>=75 || j.mem>=80) sev='warn';
+                }
+                obsEl.classList.remove('ok','warn','crit');
+                obsEl.classList.add(sev);
+                const textParts=[];
+                if(j.cpu!=null) textParts.push(`CPU ${j.cpu.toFixed(0)}%`);
+                if(j.mem!=null) textParts.push(`Mem ${j.mem.toFixed(0)}%`);
+                if(typeof j.hotspots==='number' && j.hotspots>0) textParts.push(`Hot ${j.hotspots}`);
+                if(j.last_cli) textParts.push('CLI ✓');
+                obsEl.querySelector('.obs-text').textContent = textParts.join(' | ') || '—';
+                const dot = obsEl.querySelector('.obs-dot');
+                // If metrics dashboard injected global SSE marker window.__TW_SSE_MODE we can reflect it
+                if(window.__TW_LAST_STREAM_MODE){
+                    dot.classList.remove('sse','poll','err');
+                    dot.classList.add(window.__TW_LAST_STREAM_MODE);
+                }
+                obsEl.title = `Updated ${new Date().toLocaleTimeString()} (${sev})`;
+            }catch(e){
+                obsEl.classList.remove('ok','warn');
+                obsEl.classList.add('crit');
+                obsEl.querySelector('.obs-text').textContent='ERR';
+                const dot = obsEl.querySelector('.obs-dot');
+                dot.classList.remove('sse','poll');
+                dot.classList.add('err');
+                obsEl.title = 'Status fetch failed';
+            }
+        }
+        refreshHeaderStatus();
+        setInterval(refreshHeaderStatus, 15000);
+        
+        // Activity panel toggle
+        const activityToggle = document.getElementById('tw-activity-toggle');
+        const activityPanel = document.getElementById('tw-activity-panel');
+        const activityClose = document.querySelector('.activity-close');
+        
+        function toggleActivityPanel(){
+            const isOpen = activityPanel.style.display !== 'none';
+            if(isOpen){
+                activityPanel.style.display = 'none';
+                activityPanel.setAttribute('aria-hidden', 'true');
+                activityToggle.setAttribute('aria-expanded', 'false');
+            } else {
+                activityPanel.style.display = 'block';
+                activityPanel.setAttribute('aria-hidden', 'false');
+                activityToggle.setAttribute('aria-expanded', 'true');
+                loadActivityData();
+            }
+        }
+        
+        async function loadActivityData(){
+            try {
+                // Fetch recent CLI logs
+                const cliResp = await fetch('{% url "admin-cli-logs" %}?format=json&limit=5', {cache:'no-store'});
+                if(cliResp.ok){
+                    const cliData = await cliResp.json();
+                    const cliHtml = cliData.results?.map(item => 
+                        `<div class="activity-item cli">
+                            <div>${item.command || 'CLI Command'}</div>
+                            <div class="activity-time">${new Date(item.created_at).toLocaleString()}</div>
+                        </div>`
+                    ).join('') || '<div class="activity-item">No recent CLI activity</div>';
+                    document.getElementById('recent-cli').innerHTML = cliHtml;
+                }
+            } catch(e){
+                document.getElementById('recent-cli').innerHTML = '<div class="activity-item">CLI data unavailable</div>';
+            }
+            
+            try {
+                // Fetch recent hotspot events (reuse metrics endpoint structure)
+                const hotspotResp = await fetch('{% url "admin-system-hotspots" %}?format=json&limit=5', {cache:'no-store'});
+                if(hotspotResp.ok){
+                    const hotspotData = await hotspotResp.json();
+                    const hotspotHtml = hotspotData.events?.map(item => 
+                        `<div class="activity-item ${item.resolved ? 'resolved' : 'hotspot'}">
+                            <div>${item.resource} hotspot ${item.resolved ? 'resolved' : 'active'}</div>
+                            <div class="activity-time">${new Date(item.created_at).toLocaleString()}</div>
+                        </div>`
+                    ).join('') || '<div class="activity-item">No recent hotspots</div>';
+                    document.getElementById('recent-hotspots').innerHTML = hotspotHtml;
+                } else {
+                    // Fallback: just show count from header status
+                    document.getElementById('recent-hotspots').innerHTML = '<div class="activity-item">Check metrics dashboard for details</div>';
+                }
+            } catch(e){
+                document.getElementById('recent-hotspots').innerHTML = '<div class="activity-item">Hotspot data unavailable</div>';
+            }
+        }
+        
+        if(activityToggle) activityToggle.addEventListener('click', toggleActivityPanel);
+        if(activityClose) activityClose.addEventListener('click', toggleActivityPanel);
+});
+</script>
 {% endblock %}
 
 {% block title %}{% trans "TubeWhale Administration" %}{% endblock %}

@@ -1,0 +1,49 @@
+{% extends 'admin/base_site.html' %}
+{% block title %}System Health Overview{% endblock %}
+{% block content %}
+<h1>System Health Overview</h1>
+<h2>Database</h2>
+<ul>
+  <li>Engine: {{ db_engine }}</li>
+  <li>Name: {{ db_name }}</li>
+  <li>Pending Migrations: {{ pending_count }}</li>
+</ul>
+{% if pending_migrations %}
+<details><summary>Pending Migration List</summary>
+  <pre>{{ pending_migrations|join:'\n' }}</pre>
+</details>
+{% endif %}
+<h2>Celery Beat Tables</h2>
+<table class="listing">
+  <thead><tr><th>Table</th><th>Exists</th></tr></thead>
+  <tbody>
+  {% for table, ok in beat_status.items %}
+    <tr><td>{{ table }}</td><td>{% if ok %}✅{% else %}❌{% endif %}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+<h2>Template Selections</h2>
+<ul>
+  <li>Total Active Selections: {{ total_active_selections }}</li>
+  <li>Users With Selections: {{ users_with_selections }}</li>
+  <li>Users Over Limit: {{ over_limit_users|length }}</li>
+</ul>
+{% if over_limit_users %}
+<details><summary>Over-limit User IDs</summary>
+  <pre>{{ over_limit_users|join:', ' }}</pre>
+</details>
+{% endif %}
+<p class="help">Automatically pruned on tier downgrade; manual reconcile available via signal utility.</p>
+<h2>Runtime Metrics</h2>
+<ul>
+  <li>CPU: {{ system_metrics.cpu_percent|default:'—' }} %</li>
+  <li>Memory: {{ system_metrics.mem_used_mb|default:'—' }} MB / {{ system_metrics.mem_total_mb|default:'—' }} MB ({{ system_metrics.mem_percent|default:'—' }}%)</li>
+  <li>Disk: {{ system_metrics.disk_used_gb|default:'—' }} GB / {{ system_metrics.disk_total_gb|default:'—' }} GB ({{ system_metrics.disk_percent|default:'—' }}%)</li>
+  {% if system_metrics.load_avg %}<li>Load Avg: {{ system_metrics.load_avg.1m }}/{{ system_metrics.load_avg.5m }}/{{ system_metrics.load_avg.15m }}</li>{% endif %}
+</ul>
+{% if not psutil_available %}
+<p class="help"><strong>Metrics Notice:</strong> psutil dependency is now required; install & rebuild environment if placeholders appear.</p>
+{% endif %}
+<h2>Celery Workers</h2>
+<p>Status: {% if celery_ok %}✅ Responsive{% else %}❌ Unreachable{% endif %}</p>
+{% endblock %}

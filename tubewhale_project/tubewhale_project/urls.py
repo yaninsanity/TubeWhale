@@ -19,6 +19,11 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.views.generic import RedirectView
+from apps.templates_app.admin_views import (
+    cli_db_overview,
+    cli_db_table_preview,
+    cli_db_table_export,
+)
 
 # Admin customization
 admin.site.site_header = "🐋 TubeWhale Platform Admin"
@@ -46,6 +51,11 @@ urlpatterns = [
     
     # Root redirect to dashboard
     path('', RedirectView.as_view(url='/dashboard/', permanent=False)),
+
+    # CLI external DB introspection (mirrored for consistency with outer urls)
+    path('admin/templates/cli-db/', cli_db_overview, name='admin-cli-db-overview'),
+    path('admin/templates/cli-db/preview/<str:table>/', cli_db_table_preview, name='admin-cli-db-preview'),
+    path('admin/templates/cli-db/export/<str:table>/', cli_db_table_export, name='admin-cli-db-export'),
 ]
 
 # Serve media files in development

@@ -1,0 +1,21 @@
+{% extends "admin/base_site.html" %}
+
+{% block title %}Template Import Wizard | TubeWhale Admin{% endblock %}
+
+{% block content %}
+<div style="padding: 2rem; text-align: center;">
+    <h1>🧙‍♂️ Template Import Wizard</h1>
+    <p style="font-size: 1.2rem; color: #666; margin: 2rem 0;">{{ message }}</p>
+    
+    <div style="margin-top: 3rem;">
+        <a href="{% url 'admin-template-dashboard' %}" style="
+            padding: 1rem 2rem;
+            background: #007cba;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 500;
+        ">← Back to Dashboard</a>
+    </div>
+</div>
+{% endblock %}

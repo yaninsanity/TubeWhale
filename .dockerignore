@@ -1,0 +1,43 @@
+# Docker build context slimming
+.git
+.gitignore
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.log
+*.tmp
+*.bak
+*.orig
+*.coverage
+*.prof
+
+# Virtual environments
+venv/
+env/
+*venv*/
+venv_tubewhale/
+
+# Local env / secrets (keep .env for container config)
+# .env - REMOVED: need this for container runtime config
+*.db
+*.sqlite
+*.sqlite3
+
+# Heavy runtime artifacts not needed in image
+downloads/
+logs/
+media/uploads/
+exports/
+
+# Optionally exclude tests in production image
+tests/
+
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+docker-compose.override.yml

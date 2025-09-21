@@ -1,0 +1,42 @@
+{% load tz %}
+<div class="dashboard-section">
+  <h2>📊 Operational Snapshot</h2>
+  <div style="display:flex;gap:2rem;flex-wrap:wrap;">
+    <div><strong>Total Jobs</strong><br>{{ total_jobs }}</div>
+    <div><strong>Total Executions</strong><br>{{ total_execs }}</div>
+    <div><strong>Active Users (7d)</strong><br>{{ active_users_7d }}</div>
+  </div>
+  <h3 style="margin-top:1.5rem;">Recent Jobs</h3>
+  <table class="listing">
+    <thead><tr><th>ID</th><th>Command</th><th>Status</th><th>Created</th></tr></thead>
+    <tbody>
+      {% for j in recent_jobs %}
+      <tr><td>{{ j.id }}</td><td>{{ j.command }}</td><td>{{ j.status }}</td><td>{{ j.created_at|date:'Y-m-d H:i:s' }}</td></tr>
+      {% empty %}
+      <tr><td colspan="4"><em>No jobs</em></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <h3>Failed Jobs</h3>
+  <table class="listing">
+    <thead><tr><th>ID</th><th>Command</th><th>Status</th><th>Error (truncated)</th></tr></thead>
+    <tbody>
+      {% for j in failed_jobs %}
+      <tr><td>{{ j.id }}</td><td>{{ j.command }}</td><td>{{ j.status }}</td><td>{{ j.error|slice:':80' }}</td></tr>
+      {% empty %}
+      <tr><td colspan="4"><em>No failures</em></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <h3>Recent Executions</h3>
+  <table class="listing">
+    <thead><tr><th>ID</th><th>Command</th><th>Status</th><th>Created</th></tr></thead>
+    <tbody>
+      {% for e in recent_execs %}
+      <tr><td>{{ e.id }}</td><td>{{ e.command }}</td><td>{{ e.status }}</td><td>{{ e.created_at|date:'Y-m-d H:i:s' }}</td></tr>
+      {% empty %}
+      <tr><td colspan="4"><em>No executions</em></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

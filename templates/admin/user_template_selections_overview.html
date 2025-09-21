@@ -1,0 +1,22 @@
+{% extends 'admin/base_site.html' %}
+{% block title %}User Template Selections{% endblock %}
+{% block content %}
+<h1>User Template Selections (Active)</h1>
+<p>Total Users With Selections: {{ total_users }}</p>
+<table class="listing" style="width:100%">
+  <thead>
+    <tr><th>User</th><th>Count</th><th>Template IDs</th><th>Latest Locked</th></tr>
+  </thead>
+  <tbody>
+  {% for r in rows %}
+    <tr>
+      <td>{{ r.user.username }}</td>
+      <td>{{ r.count }}</td>
+      <td>{{ r.template_ids|join:', ' }}</td>
+      <td>{{ r.latest }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p class="help">BASIC 用户最多应为 3 个。若出现超过 3 个，可在后端调用 reconcile 函数（未来可加按钮）。</p>
+{% endblock %}

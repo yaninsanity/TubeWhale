@@ -153,3 +153,47 @@ class TubeWhaleEngineConfig(models.Model):
     
     def __str__(self):
         return f"{self.user.username} - TubeWhale Config"
+
+
+class CLICommandLog(models.Model):
+    """Audit log of CLI commands executed via admin integration.
+
+    Stores sanitized command name, allowed args, execution metadata, truncated outputs,
+    and rate limiting correlation fields.
+    """
+    id = models.BigAutoField(primary_key=True)
+    user = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='cli_command_logs')
+    command = models.CharField(max_length=100, db_index=True)
+    args = models.JSONField(default=list, blank=True)
+    return_code = models.IntegerField(null=True, blank=True)
+    success = models.BooleanField(default=False)
+    stdout_truncated = models.TextField(blank=True)
+    stderr_truncated = models.TextField(blank=True)
+    duration_ms = models.IntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    rate_bucket = models.CharField(max_length=64, blank=True, help_text=_('Rate limiting bucket key'))
+    error_flag = models.BooleanField(default=False)
+    meta = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        verbose_name = _('CLI Command Log')
+        verbose_name_plural = _('CLI Command Logs')
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['command', 'created_at']),
+            models.Index(fields=['user', 'created_at']),
+        ]
+
+    MAX_OUTPUT_CHARS = 4000
+
+    @classmethod
+    def truncate(cls, text: str | None):  # type: ignore[override]
+        if not text:
+            return ''
+        if len(text) > cls.MAX_OUTPUT_CHARS:
+            return text[:cls.MAX_OUTPUT_CHARS] + f"\n...[truncated {len(text)-cls.MAX_OUTPUT_CHARS} chars]"
+        return text
+
+    def __str__(self):  # pragma: no cover
+        return f"{self.command} ({'ok' if self.success else 'fail'}) @ {self.created_at:%Y-%m-%d %H:%M:%S}"

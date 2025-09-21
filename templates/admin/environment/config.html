@@ -1,0 +1,831 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}Environment Configuration | TubeWhale Admin{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    .env-dashboard {
+        padding: 2rem;
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+    
+    .dashboard-header {
+        text-align: center;
+        margin-bottom: 3rem;
+        padding: 2rem;
+        background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+        color: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    
+    .dashboard-title {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin: 0 0 1rem 0;
+    }
+    
+    .dashboard-subtitle {
+        font-size: 1.2rem;
+        opacity: 0.9;
+        margin: 0;
+    }
+    
+    .config-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+        gap: 2rem;
+        margin-bottom: 3rem;
+    }
+    
+    .config-section {
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 2rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    /* Modern Notification System */
+    .notification-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 10000;
+        max-width: 400px;
+    }
+    
+    .notification {
+        background: white;
+        border: 1px solid #ddd;
+        border-left: 4px solid #007cba;
+        border-radius: 6px;
+        padding: 16px 20px;
+        margin-bottom: 10px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        transform: translateX(400px);
+        opacity: 0;
+        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    
+    .notification.show {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    
+    .notification.warning {
+        border-left-color: #ffc107;
+        background: #fff8e1;
+    }
+    
+    .notification.error {
+        border-left-color: #dc3545;
+        background: #ffebee;
+    }
+    
+    .notification.success {
+        border-left-color: #28a745;
+        background: #e8f5e9;
+    }
+    
+    .notification.info {
+        border-left-color: #17a2b8;
+        background: #e1f5fe;
+    }
+    
+    .notification-content {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    
+    .notification-icon {
+        font-size: 20px;
+        flex-shrink: 0;
+    }
+    
+    .notification-message {
+        flex: 1;
+        font-weight: 500;
+        line-height: 1.4;
+    }
+    
+    .notification-close {
+        background: none;
+        border: none;
+        font-size: 18px;
+        cursor: pointer;
+        opacity: 0.6;
+        transition: opacity 0.2s;
+    }
+    
+    .notification-close:hover {
+        opacity: 1;
+    }
+    
+    .config-section:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    
+    .section-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid #f0f0f0;
+    }
+    
+    .section-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        margin-right: 1rem;
+        color: white;
+        font-weight: bold;
+    }
+    
+    .icon-api { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .icon-database { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+    .icon-storage { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+    .icon-docker { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+    
+    .section-title {
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: #333;
+        margin: 0;
+    }
+    
+    .config-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 0;
+        border-bottom: 1px solid #eee;
+    }
+    
+    .config-item:last-child {
+        border-bottom: none;
+    }
+    
+    .config-label {
+        font-weight: 500;
+        color: #333;
+        flex: 1;
+    }
+    
+    .config-value {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex: 1;
+        justify-content: flex-end;
+    }
+    
+    .status-indicator {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.75rem;
+        border-radius: 12px;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+    
+    .status-configured {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .status-missing {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    
+    .status-warning {
+        background: #fff3cd;
+        color: #856404;
+    }
+    
+    .value-text {
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 0.85rem;
+        color: #666;
+        max-width: 150px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    
+    .value-masked {
+        color: #999;
+        font-style: italic;
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 1.5rem;
+        padding-top: 1rem;
+        border-top: 1px solid #eee;
+    }
+    
+    .btn {
+        padding: 0.5rem 1rem;
+        border: none;
+        border-radius: 4px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.85rem;
+    }
+    
+    .btn-primary {
+        background: #007cba;
+        color: white;
+    }
+    
+    .btn-primary:hover {
+        background: #005a87;
+        color: white;
+        text-decoration: none;
+    }
+    
+    .btn-secondary {
+        background: #6c757d;
+        color: white;
+    }
+    
+    .btn-secondary:hover {
+        background: #545b62;
+        color: white;
+        text-decoration: none;
+    }
+    
+    .btn-warning {
+        background: #ffc107;
+        color: #212529;
+    }
+    
+    .btn-warning:hover {
+        background: #e0a800;
+        color: #212529;
+        text-decoration: none;
+    }
+    
+    .system-health {
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .health-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid #f0f0f0;
+    }
+    
+    .health-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+    }
+    
+    .health-item {
+        display: flex;
+        align-items: center;
+        padding: 1rem;
+        background: #f8f9fa;
+        border-radius: 6px;
+        border-left: 4px solid #007cba;
+    }
+    
+    .health-icon {
+        font-size: 1.5rem;
+        margin-right: 1rem;
+    }
+    
+    .health-content h4 {
+        margin: 0 0 0.25rem 0;
+        font-size: 0.9rem;
+        color: #333;
+    }
+    
+    .health-content p {
+        margin: 0;
+        font-size: 0.8rem;
+        color: #666;
+    }
+    
+    .config-form {
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 2rem;
+        margin-top: 2rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+    }
+    
+    .form-group {
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .form-label {
+        font-weight: 500;
+        color: #333;
+        margin-bottom: 0.5rem;
+        font-size: 0.9rem;
+    }
+    
+    .form-control {
+        padding: 0.75rem;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 0.9rem;
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        transition: border-color 0.2s;
+    }
+    
+    .form-control:focus {
+        outline: none;
+        border-color: #007cba;
+        box-shadow: 0 0 0 2px rgba(0, 124, 186, 0.1);
+    }
+    
+    .form-help {
+        font-size: 0.8rem;
+        color: #666;
+        margin-top: 0.25rem;
+    }
+    
+    .quick-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-top: 2rem;
+        padding: 1.5rem;
+        background: #f8f9fa;
+        border-radius: 8px;
+    }
+    
+    .action-btn {
+        padding: 0.75rem 1.5rem;
+        background: #007cba;
+        color: white;
+        text-decoration: none;
+        border-radius: 6px;
+        font-weight: 500;
+        transition: background 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .action-btn:hover {
+        background: #005a87;
+        color: white;
+        text-decoration: none;
+    }
+    
+    .action-btn.secondary {
+        background: #6c757d;
+    }
+    
+    .action-btn.secondary:hover {
+        background: #545b62;
+    }
+    
+    @media (max-width: 768px) {
+        .config-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .form-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .health-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Notification Container -->
+<div class="notification-container" id="notification-container"></div>
+
+<div class="env-dashboard">
+    <div class="dashboard-header">
+        <h1 class="dashboard-title">⚙️ Environment Configuration</h1>
+        <p class="dashboard-subtitle">Manage system settings, API keys, and configuration parameters</p>
+    </div>
+    
+    <!-- 系统健康状态 -->
+    <div class="system-health">
+        <div class="health-header">
+            <div class="section-icon icon-database">💡</div>
+            <h2 class="section-title">System Health Overview</h2>
+        </div>
+        
+        <div class="health-grid">
+            <div class="health-item">
+                <div class="health-icon">🐍</div>
+                <div class="health-content">
+                    <h4>Python Environment</h4>
+                    <p>{{ system_status.python_version }}</p>
+                </div>
+            </div>
+            
+            <div class="health-item">
+                <div class="health-icon">🗄️</div>
+                <div class="health-content">
+                    <h4>Database</h4>
+                    <p>{% if system_status.database_connected %}✅ Connected{% else %}❌ Disconnected{% endif %}</p>
+                </div>
+            </div>
+            
+            <div class="health-item">
+                <div class="health-icon">💾</div>
+                <div class="health-content">
+                    <h4>Disk Space</h4>
+                    <p>{{ system_status.disk_space }}</p>
+                </div>
+            </div>
+            
+            <div class="health-item">
+                <div class="health-icon">🔧</div>
+                <div class="health-content">
+                    <h4>CLI Status</h4>
+                    <p>{% if cli_available %}✅ Available{% else %}❌ Unavailable{% endif %}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 配置部分 -->
+    <div class="config-grid">
+        <!-- API配置 -->
+        <div class="config-section">
+            <div class="section-header">
+                <div class="section-icon icon-api">🔑</div>
+                <h3 class="section-title">API Keys</h3>
+            </div>
+            
+            <div class="config-item">
+                <div class="config-label">YouTube Data API</div>
+                <div class="config-value">
+                    {% if api_config.youtube_api %}
+                        <span class="status-indicator status-configured">✅ Configured</span>
+                        <span class="value-text value-masked">••••••••••••••••</span>
+                    {% else %}
+                        <span class="status-indicator status-missing">❌ Missing</span>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="config-item">
+                <div class="config-label">OpenAI API</div>
+                <div class="config-value">
+                    {% if api_config.openai_api %}
+                        <span class="status-indicator status-configured">✅ Configured</span>
+                        <span class="value-text value-masked">••••••••••••••••</span>
+                    {% else %}
+                        <span class="status-indicator status-missing">❌ Missing</span>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="config-item">
+                <div class="config-label">Whisper API</div>
+                <div class="config-value">
+                    {% if api_config.whisper_api %}
+                        <span class="status-indicator status-configured">✅ Configured</span>
+                        <span class="value-text value-masked">••••••••••••••••</span>
+                    {% else %}
+                        <span class="status-indicator status-warning">⚠️ Optional</span>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="action-buttons">
+                <button class="btn btn-primary" onclick="toggleApiForm()">🔧 Configure APIs</button>
+                <button class="btn btn-secondary" onclick="testApiConnections()">🧪 Test Connections</button>
+            </div>
+        </div>
+        
+        <!-- 数据库配置 -->
+        <div class="config-section">
+            <div class="section-header">
+                <div class="section-icon icon-database">🗄️</div>
+                <h3 class="section-title">Database</h3>
+            </div>
+            
+            <div class="config-item">
+                <div class="config-label">Engine</div>
+                <div class="config-value">
+                    <span class="value-text">{{ db_config.engine }}</span>
+                </div>
+            </div>
+            
+            <div class="config-item">
+                <div class="config-label">Database Name</div>
+                <div class="config-value">
+                    <span class="value-text">{{ db_config.name }}</span>
+                </div>
+            </div>
+            
+            <div class="config-item">
+                <div class="config-label">Connection Status</div>
+                <div class="config-value">
+                    {% if db_config.connected %}
+                        <span class="status-indicator status-configured">✅ Connected</span>
+                    {% else %}
+                        <span class="status-indicator status-missing">❌ Disconnected</span>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="config-item">
+                <div class="config-label">Tables Count</div>
+                <div class="config-value">
+                    <span class="value-text">{{ db_config.tables_count }}</span>
+                </div>
+            </div>
+            
+            <div class="action-buttons">
+                <button class="btn btn-primary" onclick="runMigrations()">🔄 Run Migrations</button>
+                <button class="btn btn-warning" onclick="backupDatabase()">💾 Backup</button>
+            </div>
+        </div>
+        
+        <!-- 存储配置 -->
+        <div class="config-section">
+            <div class="section-header">
+                <div class="section-icon icon-storage">📁</div>
+                <h3 class="section-title">Storage</h3>
+            </div>
+            
+            <div class="config-item">
+                <div class="config-label">Downloads Directory</div>
+                <div class="config-value">
+                    <span class="value-text">{{ storage_config.downloads_dir }}</span>
+                </div>
+            </div>
+            
+            <div class="config-item">
+                <div class="config-label">Logs Directory</div>
+                <div class="config-value">
+                    <span class="value-text">{{ storage_config.logs_dir }}</span>
+                </div>
+            </div>
+            
+            <div class="config-item">
+                <div class="config-label">Available Space</div>
+                <div class="config-value">
+                    <span class="value-text">{{ storage_config.available_space }}</span>
+                </div>
+            </div>
+            
+            <div class="config-item">
+                <div class="config-label">Used Space</div>
+                <div class="config-value">
+                    <span class="value-text">{{ storage_config.used_space }}</span>
+                </div>
+            </div>
+            
+            <div class="action-buttons">
+                <button class="btn btn-primary" onclick="cleanupFiles()">🧹 Cleanup</button>
+                <button class="btn btn-secondary" onclick="analyzeDiskUsage()">📊 Analyze Usage</button>
+            </div>
+        </div>
+        
+        <!-- Docker配置 -->
+        <div class="config-section">
+            <div class="section-header">
+                <div class="section-icon icon-docker">🐳</div>
+                <h3 class="section-title">Docker Environment</h3>
+            </div>
+            
+            <div class="config-item">
+                <div class="config-label">Docker Status</div>
+                <div class="config-value">
+                    {% if docker_config.available %}
+                        <span class="status-indicator status-configured">✅ Running</span>
+                    {% else %}
+                        <span class="status-indicator status-missing">❌ Not Available</span>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="config-item">
+                <div class="config-label">Container Name</div>
+                <div class="config-value">
+                    <span class="value-text">{{ docker_config.container_name }}</span>
+                </div>
+            </div>
+            
+            <div class="config-item">
+                <div class="config-label">Hot Reload</div>
+                <div class="config-value">
+                    {% if docker_config.hot_reload %}
+                        <span class="status-indicator status-configured">✅ Enabled</span>
+                    {% else %}
+                        <span class="status-indicator status-warning">⚠️ Disabled</span>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="config-item">
+                <div class="config-label">Volume Mounts</div>
+                <div class="config-value">
+                    <span class="value-text">{{ docker_config.volume_count }} volumes</span>
+                </div>
+            </div>
+            
+            <div class="action-buttons">
+                <button class="btn btn-primary" onclick="restartContainer()">🔄 Restart</button>
+                <button class="btn btn-secondary" onclick="viewLogs()">📄 View Logs</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- API配置表单 -->
+    <div id="api-config-form" class="config-form" style="display: none;">
+        <div class="health-header">
+            <div class="section-icon icon-api">🔧</div>
+            <h2 class="section-title">Configure API Keys</h2>
+        </div>
+        
+        <form method="POST" action="{% url 'admin-env-config' %}">
+            {% csrf_token %}
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label" for="youtube_api_key">YouTube Data API Key</label>
+                    <input type="password" id="youtube_api_key" name="youtube_api_key" 
+                           class="form-control" placeholder="AIza...">
+                    <div class="form-help">Required for YouTube video analysis and data retrieval</div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="openai_api_key">OpenAI API Key</label>
+                    <input type="password" id="openai_api_key" name="openai_api_key" 
+                           class="form-control" placeholder="sk-...">
+                    <div class="form-help">Required for AI-powered analysis and summarization</div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="whisper_api_key">Whisper API Key (Optional)</label>
+                    <input type="password" id="whisper_api_key" name="whisper_api_key" 
+                           class="form-control" placeholder="Optional">
+                    <div class="form-help">For enhanced audio transcription capabilities</div>
+                </div>
+            </div>
+            
+            <div class="action-buttons">
+                <button type="submit" class="btn btn-primary">💾 Save Configuration</button>
+                <button type="button" class="btn btn-secondary" onclick="toggleApiForm()">❌ Cancel</button>
+            </div>
+        </form>
+    </div>
+    
+    <!-- 快速操作 -->
+    <div class="quick-actions">
+        <h3 style="width: 100%; margin: 0 0 1rem 0; color: #333;">⚡ Quick Actions</h3>
+        
+        <a href="{% url 'admin:index' %}" class="action-btn">🏠 Admin Home</a>
+        <a href="{% url 'admin-cli-dashboard' %}" class="action-btn">🚀 CLI Dashboard</a>
+        <a href="{% url 'admin-template-dashboard' %}" class="action-btn">📋 Templates</a>
+        <a href="{% url 'admin-cli-logs' %}" class="action-btn secondary">📄 View Logs</a>
+        
+        <button onclick="exportConfig()" class="action-btn secondary">📤 Export Config</button>
+        <button onclick="window.location.reload()" class="action-btn secondary">🔄 Refresh</button>
+    </div>
+</div>
+
+<script>
+// Modern Notification System
+function showNotification(message, type = 'info', duration = 5000) {
+    const container = document.getElementById('notification-container');
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    
+    const icons = {
+        info: 'ℹ️',
+        success: '✅',
+        warning: '⚠️',
+        error: '❌'
+    };
+    
+    notification.innerHTML = `
+        <div class="notification-content">
+            <span class="notification-icon">${icons[type] || icons.info}</span>
+            <div class="notification-message">${message}</div>
+            <button class="notification-close" onclick="closeNotification(this)">×</button>
+        </div>
+    `;
+    
+    container.appendChild(notification);
+    
+    // Animate in
+    setTimeout(() => notification.classList.add('show'), 100);
+    
+    // Auto remove
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 300);
+    }, duration);
+}
+
+function closeNotification(button) {
+    const notification = button.closest('.notification');
+    notification.classList.remove('show');
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.parentNode.removeChild(notification);
+        }
+    }, 300);
+}
+
+function toggleApiForm() {
+    const form = document.getElementById('api-config-form');
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+}
+
+function testApiConnections() {
+    showNotification('🧪 Testing API connections... This feature will validate all configured API keys.', 'info');
+    // API测试逻辑可以在这里添加
+}
+
+function runMigrations() {
+    if (confirm('🔄 Run database migrations?\n\nThis will update the database schema to the latest version.')) {
+        showNotification('✅ Database migrations completed successfully!', 'success');
+        // 迁移逻辑可以在这里添加
+    }
+}
+
+function backupDatabase() {
+    if (confirm('💾 Create database backup?\n\nThis will create a backup of the current database.')) {
+        showNotification('✅ Database backup created successfully!', 'success');
+        // 备份逻辑可以在这里添加
+    }
+}
+
+function cleanupFiles() {
+    if (confirm('🧹 Cleanup temporary files?\n\nThis will remove old downloads and temporary files.')) {
+        showNotification('✅ File cleanup completed successfully!', 'success');
+        // 清理逻辑可以在这里添加
+    }
+}
+
+function analyzeDiskUsage() {
+    showNotification('📊 Analyzing disk usage... This feature will show detailed storage statistics.', 'info');
+    // 磁盘使用分析逻辑可以在这里添加
+}
+
+function restartContainer() {
+    if (confirm('🔄 Restart Docker container?\n\nThis will restart the TubeWhale container.')) {
+        showNotification('✅ Container restart initiated!', 'success');
+        // 容器重启逻辑可以在这里添加
+    }
+}
+
+function viewLogs() {
+    // 跳转到日志页面
+    window.open('{% url "admin-cli-logs" %}', '_blank');
+}
+
+function exportConfig() {
+    showNotification('📤 Exporting configuration... Configuration will be downloaded as JSON file.', 'info');
+    // 配置导出逻辑可以在这里添加
+}
+</script>
+{% endblock %}

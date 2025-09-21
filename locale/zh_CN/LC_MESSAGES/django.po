@@ -1,0 +1,1247 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-09-20 18:44+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: apps/analysis_app/admin.py:22 apps/analysis_app/admin.py:50
+#: apps/analysis_app/admin.py:108 apps/analysis_app/admin.py:150
+#: apps/user_app/admin.py:71 apps/video_app/admin.py:24
+#: apps/video_app/admin.py:69 apps/video_app/admin.py:106
+#: apps/video_app/admin.py:147
+msgid "Basic Information"
+msgstr ""
+
+#: apps/analysis_app/admin.py:25
+#: templates/admin/tubewhale_engine/config_empty.html:91
+msgid "Configuration"
+msgstr ""
+
+#: apps/analysis_app/admin.py:29
+msgid "Weight Settings"
+msgstr ""
+
+#: apps/analysis_app/admin.py:32 apps/analysis_app/admin.py:63
+#: apps/analysis_app/admin.py:118 apps/analysis_app/admin.py:163
+#: apps/user_app/admin.py:121 apps/video_app/admin.py:115
+msgid "Timestamps"
+msgstr ""
+
+#: apps/analysis_app/admin.py:53
+msgid "Report Content"
+msgstr ""
+
+#: apps/analysis_app/admin.py:56 apps/user_app/admin.py:158
+msgid "Metadata"
+msgstr ""
+
+#: apps/analysis_app/admin.py:60
+msgid "Quality Assessment"
+msgstr ""
+
+#: apps/analysis_app/admin.py:73 apps/tubewhale_engine/admin.py:157
+#: apps/video_app/admin.py:89 apps/video_app/admin.py:125
+#: apps/video_app/admin.py:160
+msgid "Video Title"
+msgstr ""
+
+#: apps/analysis_app/admin.py:111
+msgid "Value Information"
+msgstr ""
+
+#: apps/analysis_app/admin.py:114
+msgid "Calculation Information"
+msgstr ""
+
+#: apps/analysis_app/admin.py:128 apps/analysis_app/admin.py:173
+msgid "Report Title"
+msgstr ""
+
+#: apps/analysis_app/admin.py:134
+msgid "Normalized Value"
+msgstr ""
+
+#: apps/analysis_app/admin.py:153
+msgid "Supporting Data"
+msgstr ""
+
+#: apps/analysis_app/admin.py:157
+msgid "Classification"
+msgstr ""
+
+#: apps/analysis_app/admin.py:160
+msgid "Action Items"
+msgstr ""
+
+#: apps/analysis_app/apps.py:8
+msgid "Analysis Management"
+msgstr ""
+
+#: apps/analysis_app/models.py:40
+msgid "Expert Domain"
+msgstr ""
+
+#: apps/analysis_app/models.py:41
+msgid "Expert Domain Management"
+msgstr ""
+
+#: apps/analysis_app/models.py:100
+msgid "Analysis Report"
+msgstr ""
+
+#: apps/analysis_app/models.py:101
+msgid "Analysis Report Management"
+msgstr ""
+
+#: apps/analysis_app/models.py:169
+msgid "Analysis Metric"
+msgstr ""
+
+#: apps/analysis_app/models.py:170
+msgid "Analysis Metric Management"
+msgstr ""
+
+#: apps/analysis_app/models.py:243
+msgid "Analysis Insight"
+msgstr ""
+
+#: apps/analysis_app/models.py:244
+msgid "Analysis Insight Management"
+msgstr ""
+
+#: apps/api_app/apps.py:8
+msgid "REST API Management"
+msgstr ""
+
+#: apps/templates_app/admin.py:64
+msgid "Preview"
+msgstr "预览"
+
+#: apps/templates_app/admin.py:138
+msgid "👁️ Preview Selected Template"
+msgstr "👁️ 预览选中模板"
+
+#: apps/templates_app/admin.py:144
+msgid "📤 Export Templates"
+msgstr "📤 导出模板"
+
+#: apps/templates_app/admin.py:171
+msgid "Expert Prompts (by domain)"
+msgstr "专家提示（按领域）"
+
+#: apps/templates_app/admin.py:203
+msgid "Role"
+msgstr "角色"
+
+#: apps/templates_app/admin.py:215
+msgid "Domain"
+msgstr "领域"
+
+#: apps/templates_app/admin.py:221 apps/tubewhale_engine/admin.py:63
+#: apps/video_app/admin.py:39
+msgid "Status"
+msgstr "状态"
+
+#: apps/templates_app/admin.py:228
+msgid "Intro"
+msgstr "简介"
+
+#: apps/templates_app/admin.py:234
+msgid "✅ Activate selected"
+msgstr "✅ 激活选中项"
+
+#: apps/templates_app/admin.py:239
+msgid "🚫 Deactivate selected"
+msgstr "🚫 停用选中项"
+
+#: apps/templates_app/admin.py:246
+msgid "♻️ Reseed canonical (force)"
+msgstr "♻️ 重新播种规范（强制）"
+
+#: apps/templates_app/templatetags/language_menu.py:38
+#: apps/user_app/models.py:49
+msgid "Language"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:34 apps/tubewhale_engine/admin.py:339
+msgid "基本信息"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:37
+msgid "状态信息"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:40
+msgid "时间信息"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:43
+msgid "配置和结果"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:80
+msgid "Progress"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:87 apps/video_app/admin.py:53
+msgid "Duration"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:103
+msgid "Actions"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:119
+msgid "Result Preview"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:135
+msgid "关联信息"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:138
+msgid "视频信息"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:142
+msgid "处理结果"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:145
+msgid "分析结果"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:148 apps/tubewhale_engine/admin.py:342
+msgid "元数据"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:162 apps/user_app/models.py:83
+#: apps/user_app/models.py:113 apps/video_app/models.py:30
+msgid "User"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:167
+msgid "Transcript"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:172
+msgid "Summary"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:190 apps/tubewhale_engine/admin.py:191
+msgid "留空或输入 \"********\" 保持不变"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:220
+msgid "用户信息"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:221
+msgid "API配置"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:221
+msgid "API密钥将被加密存储"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:222
+msgid "处理偏好"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:223
+msgid "通知设置"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:224
+msgid "时间戳"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:234
+msgid "Keys"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:272 apps/tubewhale_engine/admin.py:284
+#: apps/tubewhale_engine/admin.py:295
+#: templates/admin/tubewhale_engine/config_empty.html:6
+#: templates/admin/tubewhale_engine/config_empty.html:117
+msgid "TubeWhale Engine Configuration"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:316
+#, python-format
+msgid "Configuration %s"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:319
+msgid "Database not migrated yet – run migrate."
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:324
+msgid "TubeWhale Engine Administration"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:325 apps/tubewhale_engine/apps.py:8
+#: templates/admin/tubewhale_engine/config_empty.html:90
+msgid "TubeWhale Engine"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:326
+msgid "Welcome to TubeWhale Engine Management"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:340
+msgid "执行详情"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:341
+msgid "输出"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:356
+msgid "Args"
+msgstr ""
+
+#: apps/tubewhale_engine/admin.py:362
+msgid "Stdout"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:18 apps/video_app/models.py:21
+msgid "Pending"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:19
+msgid "Processing"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:20 apps/video_app/models.py:25
+msgid "Completed"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:21 apps/video_app/models.py:26
+msgid "Failed"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:22
+msgid "Cancelled"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:26
+msgid "Transcript Only"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:27
+msgid "Audio Processing"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:28
+msgid "Full Analysis"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:29
+msgid "Summary Generation"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:30
+msgid "Related Video Search"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:35
+msgid "YouTube Video ID"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:40
+msgid "Processing options"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:48
+msgid "Processing result"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:49
+msgid "Error message if failed"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:52
+msgid "Progress percentage (0-100)"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:53
+msgid "Current processing step"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:56
+msgid "TubeWhale Processing Job"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:57
+msgid "TubeWhale Processing Jobs"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:89
+msgid "Duration in seconds"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:94
+msgid "Video transcript"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:95
+msgid "Audio processing summary"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:96
+msgid "AI generated summary"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:99
+msgid "Extracted key topics"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:100
+msgid "Sentiment analysis result"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:101
+msgid "Detected language code"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:104
+msgid "Related videos found"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:107
+msgid "Processing metadata"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:113
+msgid "Video Processing Result"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:114
+msgid "Video Processing Results"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:131
+msgid "OpenAI API Key"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:132
+msgid "YouTube API Key"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:135
+msgid "Default processing language"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:136
+msgid "Auto generate summaries"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:139
+msgid "Low"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:139
+msgid "Medium"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:139
+msgid "High"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:144
+msgid "Email notifications"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:145
+msgid "Webhook URL for notifications"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:151
+msgid "TubeWhale Engine Config"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:152
+msgid "TubeWhale Engine Configs"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:175
+msgid "Rate limiting bucket key"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:180
+msgid "CLI Command Log"
+msgstr ""
+
+#: apps/tubewhale_engine/models.py:181
+msgid "CLI Command Logs"
+msgstr ""
+
+#: apps/user_app/admin.py:28 apps/user_app/admin.py:42
+msgid "Extended Information"
+msgstr ""
+
+#: apps/user_app/admin.py:31
+msgid "API Statistics"
+msgstr ""
+
+#: apps/user_app/admin.py:35
+msgid "Invitation"
+msgstr ""
+
+#: apps/user_app/admin.py:54
+msgid "None"
+msgstr ""
+
+#: apps/user_app/admin.py:55
+msgid "Invitation Code Used"
+msgstr ""
+
+#: apps/user_app/admin.py:74
+msgid "Key Information"
+msgstr ""
+
+#: apps/user_app/admin.py:78
+msgid "Permission Settings"
+msgstr ""
+
+#: apps/user_app/admin.py:81 apps/video_app/admin.py:109
+msgid "Statistics"
+msgstr ""
+
+#: apps/user_app/admin.py:92
+msgid "Key Prefix"
+msgstr ""
+
+#: apps/user_app/admin.py:99 apps/user_app/admin.py:131
+#: apps/user_app/models.py:142 apps/user_app/models.py:177
+msgid "API Key"
+msgstr ""
+
+#: apps/user_app/admin.py:115
+msgid "Request Information"
+msgstr ""
+
+#: apps/user_app/admin.py:118
+msgid "Response Information"
+msgstr ""
+
+#: apps/user_app/admin.py:148
+msgid "Code Information"
+msgstr ""
+
+#: apps/user_app/admin.py:151
+msgid "Usage Settings"
+msgstr ""
+
+#: apps/user_app/admin.py:154
+msgid "Usage Tracking"
+msgstr ""
+
+#: apps/user_app/admin.py:180
+msgid "Bulk code generation feature coming soon"
+msgstr ""
+
+#: apps/user_app/admin.py:181
+msgid "Generate bulk invitation codes"
+msgstr ""
+
+#: apps/user_app/admin.py:188
+msgid "Mark as expired"
+msgstr ""
+
+#: apps/user_app/apps.py:8 apps/user_app/models.py:84
+msgid "User Management"
+msgstr ""
+
+#: apps/user_app/forms.py:24
+msgid "Enter invitation code"
+msgstr ""
+
+#: apps/user_app/forms.py:27 apps/user_app/models.py:217
+#: apps/user_app/models.py:253
+msgid "Invitation Code"
+msgstr ""
+
+#: apps/user_app/forms.py:28
+msgid "You need a valid invitation code to register"
+msgstr ""
+
+#: apps/user_app/forms.py:35
+msgid "Enter your email"
+msgstr ""
+
+#: apps/user_app/forms.py:37
+msgid "Email Address"
+msgstr ""
+
+#: apps/user_app/forms.py:45
+msgid "First name"
+msgstr ""
+
+#: apps/user_app/forms.py:47
+msgid "First Name"
+msgstr ""
+
+#: apps/user_app/forms.py:55
+msgid "Last name"
+msgstr ""
+
+#: apps/user_app/forms.py:57
+msgid "Last Name"
+msgstr ""
+
+#: apps/user_app/forms.py:65
+msgid "Phone number (optional)"
+msgstr ""
+
+#: apps/user_app/forms.py:67 apps/user_app/models.py:23
+msgid "Phone Number"
+msgstr ""
+
+#: apps/user_app/forms.py:89
+msgid "Invitation code is required"
+msgstr ""
+
+#: apps/user_app/forms.py:94
+msgid "Invalid invitation code"
+msgstr ""
+
+#: apps/user_app/forms.py:99
+msgid "This invitation code has been used up"
+msgstr ""
+
+#: apps/user_app/forms.py:101
+msgid "This invitation code has expired"
+msgstr ""
+
+#: apps/user_app/forms.py:103
+msgid "This invitation code is not valid"
+msgstr ""
+
+#: apps/user_app/forms.py:114
+msgid "Email is required"
+msgstr ""
+
+#: apps/user_app/forms.py:118
+msgid "A user with this email already exists"
+msgstr ""
+
+#: apps/user_app/forms.py:123
+msgid "Your email domain is not allowed for this invitation code"
+msgstr ""
+
+#: apps/user_app/forms.py:155
+msgid "Expires in (days)"
+msgstr ""
+
+#: apps/user_app/forms.py:156
+msgid "Number of days until this code expires"
+msgstr ""
+
+#: apps/user_app/models.py:23
+msgid "User phone number"
+msgstr ""
+
+#: apps/user_app/models.py:25
+msgid "Avatar"
+msgstr ""
+
+#: apps/user_app/models.py:25
+msgid "User avatar image"
+msgstr ""
+
+#: apps/user_app/models.py:31
+msgid "Timezone"
+msgstr ""
+
+#: apps/user_app/models.py:32
+msgid "User timezone setting"
+msgstr ""
+
+#: apps/user_app/models.py:50
+msgid "User interface language"
+msgstr ""
+
+#: apps/user_app/models.py:54
+msgid "Verified"
+msgstr ""
+
+#: apps/user_app/models.py:55
+msgid "Email verification status"
+msgstr ""
+
+#: apps/user_app/models.py:56
+msgid "API Calls Today"
+msgstr ""
+
+#: apps/user_app/models.py:57
+msgid "Today's API call count"
+msgstr ""
+
+#: apps/user_app/models.py:58
+msgid "Total API Calls"
+msgstr ""
+
+#: apps/user_app/models.py:59
+msgid "Total API call count"
+msgstr ""
+
+#: apps/user_app/models.py:60
+msgid "Last Activity"
+msgstr ""
+
+#: apps/user_app/models.py:61
+msgid "Last activity timestamp"
+msgstr ""
+
+#: apps/user_app/models.py:66
+msgid "Groups"
+msgstr ""
+
+#: apps/user_app/models.py:68
+msgid "The groups this user belongs to."
+msgstr ""
+
+#: apps/user_app/models.py:74
+msgid "User Permissions"
+msgstr ""
+
+#: apps/user_app/models.py:76
+msgid "Specific permissions for this user."
+msgstr ""
+
+#: apps/user_app/models.py:116
+msgid "Name"
+msgstr ""
+
+#: apps/user_app/models.py:117
+msgid "API Key name"
+msgstr ""
+
+#: apps/user_app/models.py:118
+msgid "Key"
+msgstr ""
+
+#: apps/user_app/models.py:119
+msgid "API key string"
+msgstr ""
+
+#: apps/user_app/models.py:120
+msgid "Prefix"
+msgstr ""
+
+#: apps/user_app/models.py:121
+msgid "Key prefix"
+msgstr ""
+
+#: apps/user_app/models.py:124 apps/user_app/models.py:322
+msgid "Active"
+msgstr ""
+
+#: apps/user_app/models.py:125
+msgid "Whether the key is active"
+msgstr ""
+
+#: apps/user_app/models.py:126
+msgid "Rate Limit"
+msgstr ""
+
+#: apps/user_app/models.py:127
+msgid "Daily call limit"
+msgstr ""
+
+#: apps/user_app/models.py:128
+msgid "Allowed IPs"
+msgstr ""
+
+#: apps/user_app/models.py:129
+msgid "Allowed IP addresses, comma separated"
+msgstr ""
+
+#: apps/user_app/models.py:132 apps/user_app/models.py:243
+msgid "Created At"
+msgstr ""
+
+#: apps/user_app/models.py:133 apps/user_app/models.py:231
+msgid "Expires At"
+msgstr ""
+
+#: apps/user_app/models.py:134
+msgid "Last Used"
+msgstr ""
+
+#: apps/user_app/models.py:137
+msgid "Usage Count"
+msgstr ""
+
+#: apps/user_app/models.py:138
+msgid "Number of times used"
+msgstr ""
+
+#: apps/user_app/models.py:143
+msgid "API Key Management"
+msgstr ""
+
+#: apps/user_app/models.py:180
+msgid "Endpoint"
+msgstr ""
+
+#: apps/user_app/models.py:181
+msgid "API endpoint"
+msgstr ""
+
+#: apps/user_app/models.py:182
+msgid "Method"
+msgstr ""
+
+#: apps/user_app/models.py:183
+msgid "HTTP method"
+msgstr ""
+
+#: apps/user_app/models.py:184
+msgid "IP Address"
+msgstr ""
+
+#: apps/user_app/models.py:185
+msgid "Client IP address"
+msgstr ""
+
+#: apps/user_app/models.py:186
+msgid "User Agent"
+msgstr ""
+
+#: apps/user_app/models.py:187
+msgid "User agent string"
+msgstr ""
+
+#: apps/user_app/models.py:190
+msgid "Status Code"
+msgstr ""
+
+#: apps/user_app/models.py:191
+msgid "HTTP status code"
+msgstr ""
+
+#: apps/user_app/models.py:192
+msgid "Response Time"
+msgstr ""
+
+#: apps/user_app/models.py:193
+msgid "Response time in seconds"
+msgstr ""
+
+#: apps/user_app/models.py:196
+msgid "Timestamp"
+msgstr ""
+
+#: apps/user_app/models.py:200
+msgid "API Usage Log"
+msgstr ""
+
+#: apps/user_app/models.py:201
+msgid "API Usage Logs"
+msgstr ""
+
+#: apps/user_app/models.py:218
+msgid "Unique invitation code"
+msgstr ""
+
+#: apps/user_app/models.py:221 apps/user_app/models.py:322
+msgid "Used"
+msgstr ""
+
+#: apps/user_app/models.py:222
+msgid "Whether this code has been used"
+msgstr ""
+
+#: apps/user_app/models.py:225
+msgid "Used By"
+msgstr ""
+
+#: apps/user_app/models.py:226
+msgid "User who used this code"
+msgstr ""
+
+#: apps/user_app/models.py:227
+msgid "Used At"
+msgstr ""
+
+#: apps/user_app/models.py:228
+msgid "When this code was used"
+msgstr ""
+
+#: apps/user_app/models.py:232
+msgid "When this code expires"
+msgstr ""
+
+#: apps/user_app/models.py:233
+msgid "Max Uses"
+msgstr ""
+
+#: apps/user_app/models.py:234
+msgid "Maximum number of times this code can be used"
+msgstr ""
+
+#: apps/user_app/models.py:235
+msgid "Current Uses"
+msgstr ""
+
+#: apps/user_app/models.py:236
+msgid "Number of times this code has been used"
+msgstr ""
+
+#: apps/user_app/models.py:241
+msgid "Created By"
+msgstr ""
+
+#: apps/user_app/models.py:242
+msgid "Admin who created this code"
+msgstr ""
+
+#: apps/user_app/models.py:244
+msgid "Notes"
+msgstr ""
+
+#: apps/user_app/models.py:245
+msgid "Additional notes about this invitation code"
+msgstr ""
+
+#: apps/user_app/models.py:248
+msgid "Allowed Domains"
+msgstr ""
+
+#: apps/user_app/models.py:249
+msgid "Comma-separated list of allowed email domains"
+msgstr ""
+
+#: apps/user_app/models.py:254
+msgid "Invitation Codes"
+msgstr ""
+
+#: apps/user_app/models.py:310
+msgid "Invitation code is not valid"
+msgstr ""
+
+#: apps/user_app/views.py:27
+msgid "Registration successful! Welcome to TubeWhale."
+msgstr ""
+
+#: apps/user_app/views.py:30
+msgid "Please correct the errors below."
+msgstr ""
+
+#: apps/user_app/views.py:123
+msgid "Code is required"
+msgstr ""
+
+#: apps/user_app/views.py:130
+msgid "Valid invitation code"
+msgstr ""
+
+#: apps/user_app/views.py:137
+msgid "This code has been used up"
+msgstr ""
+
+#: apps/user_app/views.py:139
+msgid "This code has expired"
+msgstr ""
+
+#: apps/user_app/views.py:141
+msgid "This code is not valid"
+msgstr ""
+
+#: apps/user_app/views.py:146
+msgid "Invalid code"
+msgstr ""
+
+#: apps/video_app/admin.py:27
+msgid "Video Metadata"
+msgstr ""
+
+#: apps/video_app/admin.py:31
+msgid "Channel Information"
+msgstr ""
+
+#: apps/video_app/admin.py:35
+msgid "File Information"
+msgstr ""
+
+#: apps/video_app/admin.py:72
+msgid "Task Status"
+msgstr ""
+
+#: apps/video_app/admin.py:75
+msgid "Result Data"
+msgstr ""
+
+#: apps/video_app/admin.py:79
+msgid "Time Records"
+msgstr ""
+
+#: apps/video_app/admin.py:112
+msgid "Analysis Results"
+msgstr ""
+
+#: apps/video_app/admin.py:131
+msgid "Comment Content"
+msgstr ""
+
+#: apps/video_app/admin.py:150
+msgid "Source Information"
+msgstr ""
+
+#: apps/video_app/apps.py:8 apps/video_app/models.py:62
+msgid "Video Management"
+msgstr ""
+
+#: apps/video_app/models.py:22
+msgid "Downloading"
+msgstr ""
+
+#: apps/video_app/models.py:23
+msgid "Downloaded"
+msgstr ""
+
+#: apps/video_app/models.py:24
+msgid "Analyzing"
+msgstr ""
+
+#: apps/video_app/models.py:61
+msgid "Video"
+msgstr ""
+
+#: apps/video_app/models.py:152
+msgid "Analysis Task"
+msgstr ""
+
+#: apps/video_app/models.py:153
+msgid "Analysis Task Management"
+msgstr ""
+
+#: apps/video_app/models.py:212
+msgid "Video Comment"
+msgstr ""
+
+#: apps/video_app/models.py:213
+msgid "Video Comment Management"
+msgstr ""
+
+#: apps/video_app/models.py:250
+msgid "Video Tag"
+msgstr ""
+
+#: apps/video_app/models.py:251
+msgid "Video Tag Management"
+msgstr ""
+
+#: templates/admin/base_site.html:280
+msgid "Accessibility shortcuts"
+msgstr ""
+
+#: templates/admin/base_site.html:281
+msgid "Skip to main content"
+msgstr ""
+
+#: templates/admin/base_site.html:282
+msgid "Skip to navigation"
+msgstr ""
+
+#: templates/admin/base_site.html:283
+msgid "Skip to language selector"
+msgstr ""
+
+#: templates/admin/base_site.html:284
+msgid "Skip to footer"
+msgstr ""
+
+#: templates/admin/base_site.html:287
+#: templates/admin/partials/language_dropdown.html:2
+msgid "Language selector"
+msgstr ""
+
+#: templates/admin/base_site.html:290
+msgid "Quick shortcuts"
+msgstr ""
+
+#: templates/admin/base_site.html:291
+msgid "Engine Templates Catalog"
+msgstr ""
+
+#: templates/admin/base_site.html:292
+msgid "Custom Templates"
+msgstr ""
+
+#: templates/admin/base_site.html:293
+msgid ".env Editor"
+msgstr ""
+
+#: templates/admin/base_site.html:294
+msgid "Toggle high contrast mode"
+msgstr ""
+
+#: templates/admin/base_site.html:295 templates/admin/base_site.html:385
+msgid "High Contrast"
+msgstr ""
+
+#: templates/admin/base_site.html:297
+msgid "Toggle activity panel"
+msgstr ""
+
+#: templates/admin/base_site.html:298
+msgid "Activity"
+msgstr ""
+
+#: templates/admin/base_site.html:308
+msgid "Recent Activity"
+msgstr ""
+
+#: templates/admin/base_site.html:309
+msgid "Close activity panel"
+msgstr ""
+
+#: templates/admin/base_site.html:313
+msgid "CLI Commands"
+msgstr ""
+
+#: templates/admin/base_site.html:314 templates/admin/base_site.html:318
+msgid "Loading..."
+msgstr ""
+
+#: templates/admin/base_site.html:317
+msgid "System Hotspots"
+msgstr ""
+
+#: templates/admin/base_site.html:380
+msgid "Disable High Contrast"
+msgstr ""
+
+#: templates/admin/base_site.html:399
+msgid "High contrast mode enabled"
+msgstr ""
+
+#: templates/admin/base_site.html:400
+msgid "High contrast mode disabled"
+msgstr ""
+
+#: templates/admin/base_site.html:612 templates/admin/base_site.html:617
+msgid "TubeWhale Administration"
+msgstr ""
+
+#: templates/admin/partials/language_dropdown.html:4
+msgid "Jump to language selector"
+msgstr ""
+
+#: templates/admin/partials/language_dropdown.html:13
+#, python-format
+msgid "%(title)s. Current language: %(current)s. %(count)s available languages"
+msgstr ""
+
+#: templates/admin/partials/language_dropdown.html:45
+#, python-format
+msgid "Currently selected language: %(lang)s"
+msgstr ""
+
+#: templates/admin/partials/language_dropdown.html:47
+#, python-format
+msgid "Switch to %(lang)s"
+msgstr ""
+
+#: templates/admin/tubewhale_engine/config_empty.html:89
+msgid "Home"
+msgstr ""
+
+#: templates/admin/tubewhale_engine/config_empty.html:96
+msgid "TubeWhale Engine Configuration Setup"
+msgstr ""
+
+#: templates/admin/tubewhale_engine/config_empty.html:99
+msgid "Database Migration Required"
+msgstr ""
+
+#: templates/admin/tubewhale_engine/config_empty.html:100
+msgid ""
+"The TubeWhale Engine configuration table hasn't been created yet. Please run "
+"database migrations:"
+msgstr ""
+
+#: templates/admin/tubewhale_engine/config_empty.html:105
+msgid "Configuration Error"
+msgstr ""
+
+#: templates/admin/tubewhale_engine/config_empty.html:106
+msgid "There was an error accessing the configuration system:"
+msgstr ""
+
+#: templates/admin/tubewhale_engine/config_empty.html:108
+msgid "Please check the server logs or contact the administrator."
+msgstr ""
+
+#: templates/admin/tubewhale_engine/config_empty.html:121
+msgid ""
+"Configure your TubeWhale Engine settings including API keys, processing "
+"preferences, and notification settings."
+msgstr ""
+
+#: templates/admin/tubewhale_engine/config_empty.html:125
+msgid "Configuration Features"
+msgstr ""
+
+#: templates/admin/tubewhale_engine/config_empty.html:127
+msgid "OpenAI API Key for content processing"
+msgstr ""
+
+#: templates/admin/tubewhale_engine/config_empty.html:128
+msgid "YouTube API Key for video access"
+msgstr ""
+
+#: templates/admin/tubewhale_engine/config_empty.html:129
+msgid "Language and audio quality preferences"
+msgstr ""
+
+#: templates/admin/tubewhale_engine/config_empty.html:130
+msgid "Email notifications and webhook settings"
+msgstr ""
+
+#: templates/admin/tubewhale_engine/config_empty.html:131
+msgid "Secure encrypted key storage"
+msgstr ""
+
+#: templates/admin/tubewhale_engine/config_empty.html:141
+msgid "Create My Configuration"
+msgstr ""
+
+#: templates/admin/tubewhale_engine/config_empty.html:145
+msgid "Please resolve the above issues first to enable configuration."
+msgstr ""
+
+#: templates/admin/tubewhale_engine/config_empty.html:151
+msgid ""
+"Each user can have one personal configuration. Administrators can manage all "
+"configurations."
+msgstr ""
+
+#: tubewhale_project/urls.py:121
+msgid "TubeWhale Admin"
+msgstr ""
+
+#: tubewhale_project/urls.py:122
+msgid "TubeWhale"
+msgstr ""
+
+#: tubewhale_project/urls.py:123
+msgid "Welcome to TubeWhale Management System"
+msgstr ""

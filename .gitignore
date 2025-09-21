@@ -5,6 +5,8 @@ __pycache__/
 .pytest_cache/
 .env
 *.db  # ignore new local SQLite DBs (won't affect already-tracked ones)
+*.sqlite
+*.sqlite3
 
 ## Django static build outputs (keep static/ source tracked)
 /staticfiles/
@@ -27,6 +29,10 @@ venv_tubewhale/
 /downloads/
 /logs/
 /media/uploads/
+/exports/
+/*.ndjson
+/*.csv
+/*.jsonl
 
 ## Development temp files
 temp_*
@@ -54,6 +60,18 @@ docker-compose.override.yml
 server.log
 cookies.txt
 init_db.sql
+profile.prof
+*.coverage
+.mypy_cache/
+.ruff_cache/
+__pypackages__/
+
+# Large media (if transient) – comment out if you deliberately track
+*.mp3
+*.webm
+*.wav
+*.m4a
+*.part
 
 ## (Legacy) If these exist locally, consider deleting instead of ignoring
 # flask_requirements.txt

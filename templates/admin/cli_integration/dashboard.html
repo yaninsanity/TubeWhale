@@ -1,0 +1,646 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}CLI Integration Dashboard | TubeWhale Admin{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    .cli-dashboard {
+        padding: 2rem;
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+    
+    .dashboard-header {
+        text-align: center;
+        margin-bottom: 3rem;
+        padding: 2rem;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    
+    .dashboard-title {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin: 0 0 1rem 0;
+    }
+    
+    .dashboard-subtitle {
+        font-size: 1.2rem;
+        opacity: 0.9;
+        margin: 0;
+    }
+    
+    .status-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 2rem;
+        margin-bottom: 3rem;
+    }
+    
+    .status-card {
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 2rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .status-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    
+    .card-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid #f0f0f0;
+    }
+    
+    .card-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        margin-right: 1rem;
+        color: white;
+        font-weight: bold;
+    }
+    
+    .icon-cli { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .icon-jobs { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+    .icon-system { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+    .icon-logs { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+    
+    .card-title {
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: #333;
+        margin: 0;
+    }
+    
+    .status-indicator {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        font-weight: 500;
+        margin-bottom: 1rem;
+    }
+    
+    .status-available {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .status-unavailable {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    
+    .system-info {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        font-size: 0.9rem;
+    }
+    
+    .info-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #eee;
+    }
+    
+    .info-label {
+        font-weight: 500;
+        color: #666;
+    }
+    
+    .info-value {
+        color: #333;
+    }
+    
+    .jobs-list {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    
+    .job-item {
+        display: flex;
+        align-items: center;
+        padding: 1rem;
+        margin-bottom: 0.5rem;
+        background: #f8f9fa;
+        border-radius: 6px;
+        border-left: 4px solid #007cba;
+    }
+    
+    .job-status {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-right: 1rem;
+        flex-shrink: 0;
+    }
+    
+    .status-completed { background: #28a745; }
+    .status-running { background: #ffc107; animation: pulse 2s infinite; }
+    .status-failed { background: #dc3545; }
+    
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.5; }
+        100% { opacity: 1; }
+    }
+    
+    /* Modern Notification System */
+    .notification-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 10000;
+        max-width: 400px;
+    }
+    
+    .notification {
+        background: white;
+        border: 1px solid #ddd;
+        border-left: 4px solid #007cba;
+        border-radius: 6px;
+        padding: 16px 20px;
+        margin-bottom: 10px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        transform: translateX(400px);
+        opacity: 0;
+        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    
+    .notification.show {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    
+    .notification.warning {
+        border-left-color: #ffc107;
+        background: #fff8e1;
+    }
+    
+    .notification.error {
+        border-left-color: #dc3545;
+        background: #ffebee;
+    }
+    
+    .notification.success {
+        border-left-color: #28a745;
+        background: #e8f5e9;
+    }
+    
+    .notification-content {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    
+    .notification-icon {
+        font-size: 20px;
+        flex-shrink: 0;
+    }
+    
+    .notification-message {
+        flex: 1;
+        font-weight: 500;
+        line-height: 1.4;
+    }
+    
+    .notification-close {
+        background: none;
+        border: none;
+        font-size: 18px;
+        cursor: pointer;
+        opacity: 0.6;
+        transition: opacity 0.2s;
+    }
+    
+    .notification-close:hover {
+        opacity: 1;
+    }
+    
+    .job-content {
+        flex: 1;
+        min-width: 0;
+    }
+    
+    .job-command {
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 0.25rem;
+    }
+    
+    .job-time {
+        font-size: 0.8rem;
+        color: #666;
+    }
+    
+    .cli-controls {
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 2rem;
+        margin-top: 2rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .controls-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 2rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid #f0f0f0;
+    }
+    
+    .command-form {
+        display: grid;
+        grid-template-columns: 200px 1fr auto;
+        gap: 1rem;
+        align-items: end;
+    }
+    
+    .form-group {
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .form-label {
+        font-weight: 500;
+        color: #333;
+        margin-bottom: 0.5rem;
+    }
+    
+    .form-control {
+        padding: 0.75rem;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 0.9rem;
+        transition: border-color 0.2s;
+    }
+    
+    .form-control:focus {
+        outline: none;
+        border-color: #007cba;
+        box-shadow: 0 0 0 2px rgba(0, 124, 186, 0.1);
+    }
+    
+    .btn {
+        padding: 0.75rem 1.5rem;
+        border: none;
+        border-radius: 4px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .btn-primary {
+        background: #007cba;
+        color: white;
+    }
+    
+    .btn-primary:hover {
+        background: #005a87;
+        color: white;
+        text-decoration: none;
+    }
+    
+    .btn-secondary {
+        background: #6c757d;
+        color: white;
+    }
+    
+    .btn-secondary:hover {
+        background: #545b62;
+        color: white;
+        text-decoration: none;
+    }
+    
+    .quick-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-top: 2rem;
+        padding: 1.5rem;
+        background: #f8f9fa;
+        border-radius: 8px;
+    }
+    
+    .action-btn {
+        padding: 0.75rem 1.5rem;
+        background: #007cba;
+        color: white;
+        text-decoration: none;
+        border-radius: 6px;
+        font-weight: 500;
+        transition: background 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .action-btn:hover {
+        background: #005a87;
+        color: white;
+        text-decoration: none;
+    }
+    
+    .action-btn.secondary {
+        background: #6c757d;
+    }
+    
+    .action-btn.secondary:hover {
+        background: #545b62;
+    }
+    
+    @media (max-width: 768px) {
+        .status-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .command-form {
+            grid-template-columns: 1fr;
+        }
+        
+        .system-info {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Notification Container -->
+<div class="notification-container" id="notification-container"></div>
+
+<div class="cli-dashboard">
+    <div class="dashboard-header">
+        <h1 class="dashboard-title">🔧 CLI Integration Center</h1>
+        <p class="dashboard-subtitle">Professional command-line interface integration for TubeWhale management</p>
+    </div>
+    
+    <div class="status-grid">
+        <!-- CLI状态 -->
+        <div class="status-card">
+            <div class="card-header">
+                <div class="card-icon icon-cli">🚀</div>
+                <h2 class="card-title">CLI Status</h2>
+            </div>
+            
+            <div class="status-indicator {% if cli_available %}status-available{% else %}status-unavailable{% endif %}">
+                {% if cli_available %}
+                    ✅ CLI Available
+                {% else %}
+                    ❌ CLI Unavailable
+                {% endif %}
+            </div>
+            
+            <p>命令行工具状态和可用性检查</p>
+            
+            <div class="info-item">
+                <span class="info-label">Main Script:</span>
+                <span class="info-value">{% if cli_available %}✅ Found{% else %}❌ Missing{% endif %}</span>
+            </div>
+        </div>
+        
+        <!-- 最近作业 -->
+        <div class="status-card">
+            <div class="card-header">
+                <div class="card-icon icon-jobs">📋</div>
+                <h2 class="card-title">Recent Jobs</h2>
+            </div>
+            
+            <div class="jobs-list">
+                {% for job in recent_jobs %}
+                <div class="job-item">
+                    <div class="job-status status-{{ job.status }}"></div>
+                    <div class="job-content">
+                        <div class="job-command">{{ job.command }}</div>
+                        <div class="job-time">{{ job.started_at }}</div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="job-item">
+                    <div class="job-content">
+                        <div class="job-command">No recent jobs</div>
+                        <div class="job-time">CLI jobs will appear here</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <!-- 系统状态 -->
+        <div class="status-card">
+            <div class="card-header">
+                <div class="card-icon icon-system">⚙️</div>
+                <h2 class="card-title">System Status</h2>
+            </div>
+            
+            <div class="system-info">
+                <div class="info-item">
+                    <span class="info-label">Python:</span>
+                    <span class="info-value">{{ system_status.python_version }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Database:</span>
+                    <span class="info-value">{% if system_status.database_connected %}✅ Connected{% else %}❌ Disconnected{% endif %}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">YouTube API:</span>
+                    <span class="info-value">{% if system_status.api_keys_configured.youtube_api %}✅ Configured{% else %}❌ Missing{% endif %}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">OpenAI API:</span>
+                    <span class="info-value">{% if system_status.api_keys_configured.openai_api %}✅ Configured{% else %}❌ Missing{% endif %}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Disk Space:</span>
+                    <span class="info-value">{{ system_status.disk_space }}</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 日志状态 -->
+        <div class="status-card">
+            <div class="card-header">
+                <div class="card-icon icon-logs">📄</div>
+                <h2 class="card-title">System Logs</h2>
+            </div>
+            
+            <p>查看CLI执行日志和系统事件</p>
+            
+            <div style="margin-top: 1rem;">
+                <a href="{% url 'admin-cli-logs' %}" class="btn btn-primary">📄 View Logs</a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- CLI命令控制 -->
+    <div class="cli-controls">
+        <div class="controls-header">
+            <div class="card-icon icon-cli">🎮</div>
+            <h2 class="card-title">CLI Command Center</h2>
+        </div>
+        
+        <form id="cli-command-form" class="command-form">
+            <div class="form-group">
+                <label class="form-label" for="command">Command</label>
+                <select id="command" name="command" class="form-control" required>
+                    <option value="">Select Command</option>
+                    <option value="analyze_videos">Analyze Videos</option>
+                    <option value="generate_report">Generate Report</option>
+                    <option value="download_audio">Download Audio</option>
+                    <option value="update_database">Update Database</option>
+                    <option value="health_check">Health Check</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label" for="args">Arguments</label>
+                <input type="text" id="args" name="args" class="form-control" 
+                       placeholder="--keyword 'AI' --max-results 10">
+            </div>
+            
+            <div class="form-group">
+                <button type="submit" class="btn btn-primary">
+                    🚀 Execute
+                </button>
+            </div>
+        </form>
+        
+        <div id="command-result" style="display: none; margin-top: 2rem;">
+            <h4>Execution Result:</h4>
+            <pre id="result-content" style="background: #f8f9fa; padding: 1rem; border-radius: 4px; overflow-x: auto;"></pre>
+        </div>
+    </div>
+    
+    <!-- 快速操作 -->
+    <div class="quick-actions">
+        <h3 style="width: 100%; margin: 0 0 1rem 0; color: #333;">⚡ Quick Actions</h3>
+        
+        <a href="{% url 'admin:index' %}" class="action-btn">🏠 Admin Home</a>
+        <a href="{% url 'admin-template-dashboard' %}" class="action-btn">📋 Templates</a>
+        <a href="{% url 'admin-cli-logs' %}" class="action-btn secondary">📄 View Logs</a>
+        <a href="{% url 'admin-env-config' %}" class="action-btn secondary">⚙️ Environment</a>
+        
+        <button onclick="window.location.reload()" class="action-btn secondary">🔄 Refresh</button>
+    </div>
+</div>
+
+<script>
+// Modern Notification System
+function showNotification(message, type = 'info', duration = 5000) {
+    const container = document.getElementById('notification-container');
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    
+    const icons = {
+        info: 'ℹ️',
+        success: '✅',
+        warning: '⚠️',
+        error: '❌'
+    };
+    
+    notification.innerHTML = `
+        <div class="notification-content">
+            <span class="notification-icon">${icons[type] || icons.info}</span>
+            <div class="notification-message">${message}</div>
+            <button class="notification-close" onclick="closeNotification(this)">×</button>
+        </div>
+    `;
+    
+    container.appendChild(notification);
+    
+    // Animate in
+    setTimeout(() => notification.classList.add('show'), 100);
+    
+    // Auto remove
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 300);
+    }, duration);
+}
+
+function closeNotification(button) {
+    const notification = button.closest('.notification');
+    notification.classList.remove('show');
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.parentNode.removeChild(notification);
+        }
+    }, 300);
+}
+
+document.getElementById('cli-command-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const command = document.getElementById('command').value;
+    const args = document.getElementById('args').value;
+    const resultDiv = document.getElementById('command-result');
+    const resultContent = document.getElementById('result-content');
+    
+    if (!command) {
+        showNotification('⚠️ Please select a command first', 'warning');
+        return;
+    }
+    
+    // 显示加载状态
+    resultContent.textContent = '🔄 Executing command...';
+    resultDiv.style.display = 'block';
+    
+    // 准备表单数据
+    const formData = new FormData();
+    formData.append('command', command);
+    
+    if (args) {
+        const argList = args.split(' ').filter(arg => arg.trim());
+        argList.forEach(arg => formData.append('args', arg));
+    }
+    
+    // 执行命令
+    fetch('{% url "admin-cli-execute" %}', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            resultContent.textContent = `✅ Command executed successfully\n\nSTDOUT:\n${data.result.stdout}\n\nSTDERR:\n${data.result.stderr}`;
+        } else {
+            resultContent.textContent = `❌ Command failed\n\nError: ${data.error}`;
+        }
+    })
+    .catch(error => {
+        resultContent.textContent = `❌ Network error: ${error.message}`;
+    });
+});
+</script>
+{% endblock %}

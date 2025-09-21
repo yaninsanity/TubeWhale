@@ -1,0 +1,102 @@
+{% extends 'admin/base_site.html' %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-md-12">
+      <h1>📚 Engine Templates Catalog</h1>
+      <p class="lead">Browse built-in templates and import them for customization</p>
+      
+      {% if user_stats %}
+      <div class="alert alert-info">
+        <strong>Your Tier:</strong> {{ user_stats.tier_display }} |
+        <strong>Templates Used:</strong> {{ user_stats.used_templates }}/{{ user_stats.max_templates }} |
+        {% if user_stats.can_customize %}
+          <span class="text-success">✓ Custom Templates Enabled</span>
+        {% else %}
+          <span class="text-muted">Custom Templates: Upgrade to Enterprise</span>
+        {% endif %}
+      </div>
+      {% endif %}
+      
+          <div class="actions">
+        <a class="btn btn-link" href="{% url 'admin:templates_app_customtemplate_changelist' %}">Go to Custom Templates »</a>
+        <span class="sep">·</span>
+          <a class="btn btn-success btn-sm" href="{% url 'admin:templates_app_customtemplate_add' %}">+ Create Custom Template</a>
+    </div>
+    </div>
+  </div>
+
+  <form method="get" class="form-inline" style="margin-bottom: 15px;">
+    <div class="form-group">
+      <label for="q">Search:</label>
+      <input type="text" id="q" name="q" class="form-control" value="{{ q }}" placeholder="name, description, domain, tags">
+    </div>
+    <div class="form-group" style="margin-left:8px;">
+      <label for="domain">Domain:</label>
+      <select id="domain" name="domain" class="form-control">
+        <option value="">All</option>
+        {% for d in domains %}
+        <option value="{{ d }}" {% if d == domain_selected %}selected{% endif %}>{{ d }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group" style="margin-left:8px;">
+      <label for="type">Type:</label>
+      <select id="type" name="type" class="form-control">
+        <option value="">All</option>
+        {% for t in types %}
+        <option value="{{ t }}" {% if t == type_selected %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn btn-default" style="margin-left:8px;">Filter</button>
+  </form>
+
+  <div class="panel panel-default">
+    <div class="panel-heading">Templates</div>
+    <div class="panel-body" style="padding:0;">
+      <table class="table table-striped">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Domain</th>
+            <th>Type</th>
+            <th>Version</th>
+            <th>Params</th>
+            <th style="width:220px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in templates %}
+          <tr>
+            <td>{{ t.id }}</td>
+            <td>{{ t.name }}</td>
+            <td>{{ t.domain }}</td>
+            <td>{{ t.template_type }}</td>
+            <td>{{ t.version }}</td>
+            <td>{{ t.parameter_count }}</td>
+            <td>
+              <a class="btn btn-xs btn-default" href="{% url 'admin-engine-template-preview' t.id %}">Preview</a>
+              {% if t.imported %}
+                <span class="label label-success" style="margin-left:6px;">Imported</span>
+              {% else %}
+                <form method="post" style="display:inline; margin-left:6px;">
+                  {% csrf_token %}
+                  <input type="hidden" name="template_id" value="{{ t.id }}">
+                  <button type="submit" class="btn btn-xs btn-primary">Import</button>
+                </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="7" class="text-center">No templates found</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
