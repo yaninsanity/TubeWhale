@@ -488,6 +488,27 @@ def admin_header_status(request: HttpRequest) -> JsonResponse:
 @staff_member_required
 def hotspot_events_overview(request: HttpRequest) -> HttpResponse:
     from .models import SystemHotspotEvent
+    
+    # Check if JSON format is requested
+    if request.GET.get('format') == 'json':
+        limit = min(int(request.GET.get('limit', 10)), 100)  # Max 100 items
+        events_queryset = SystemHotspotEvent.objects.all().order_by('-created_at')[:limit]
+        
+        events = []
+        for event in events_queryset:
+            events.append({
+                'resource': getattr(event, 'resource', 'System'),
+                'resolved': getattr(event, 'resolved', False),
+                'created_at': event.created_at.isoformat() if hasattr(event, 'created_at') else None,
+                'description': getattr(event, 'description', 'System hotspot detected')
+            })
+        
+        return JsonResponse({
+            'events': events,
+            'count': len(events)
+        })
+    
+    # Default HTML response
     qs = SystemHotspotEvent.objects.all()[:200]
     return render(request, 'admin/hotspot_events_overview.html', {
         'events': qs,

@@ -323,10 +323,27 @@ a:focus {
 .skip-links{position:absolute;top:0;left:0;z-index:2000;padding:0;margin:0}
 .skip-links a{position:absolute;left:-999px;top:auto;width:1px;height:1px;overflow:hidden;background:#111;color:#fff;padding:8px 14px;border-radius:0 0 6px 0;text-decoration:none;font-size:14px;box-shadow:0 2px 6px rgba(0,0,0,.4)}
 .skip-links a:focus,.skip-links a:active{left:0;width:auto;height:auto}
-.tw-topbar-cluster{position:fixed;top:0;right:12px;display:flex;align-items:center;gap:16px;z-index:1001;background:rgba(255,255,255,.92);padding:6px 12px;border:1px solid #d0d7de;border-top:none;border-radius:0 0 10px 10px;backdrop-filter:blur(6px);box-shadow:0 2px 8px rgba(0,0,0,.06)}
-.tw-shortcut{font-size:12px;font-weight:500;color:#0969da;text-decoration:none;padding:4px 6px;border-radius:6px;line-height:1.2}
-.tw-shortcut:hover{background:#f2f8ff;text-decoration:none}
-@media (max-width:900px){.tw-topbar-cluster{flex-direction:column;align-items:stretch;left:12px;right:12px}.tw-cluster-right{display:flex;flex-wrap:wrap;gap:4px}.tw-shortcut{padding:6px 8px}}
+.tw-topbar-cluster{position:fixed;top:0;right:12px;display:flex;align-items:center;gap:16px;z-index:1001;background:rgba(255,255,255,.95);padding:6px 12px;border:1px solid #d0d7de;border-top:none;border-radius:0 0 10px 10px;backdrop-filter:blur(6px);box-shadow:0 2px 8px rgba(0,0,0,.12)}
+.tw-shortcut{font-size:12px;font-weight:600;color:#24292f;text-decoration:none;padding:6px 8px;border-radius:6px;line-height:1.3;border:1px solid transparent;transition:all 0.2s ease}
+.tw-shortcut:hover{background:#f6f8fa;text-decoration:none;border-color:#d0d7de;color:#0969da}
+.tw-shortcut:active,.tw-shortcut[aria-pressed="true"]{background:#e7f3ff;border-color:#0969da;color:#0969da}
+/* FORCE VISIBLE TEXT - SUPER IMPORTANT RULES */
+.tw-topbar-cluster *{color:#000000 !important}
+.tw-topbar-cluster .tw-shortcut{color:#000000 !important;background:rgba(255,255,255,0.9) !important}
+.tw-topbar-cluster .tw-shortcut:hover{background:#f6f8fa !important;border-color:#d0d7de !important;color:#0969da !important}
+.tw-topbar-cluster button.tw-shortcut{color:#000000 !important}
+.tw-topbar-cluster a.tw-shortcut{color:#000000 !important}
+.tw-topbar-cluster .tw-shortcut[aria-pressed="false"]{color:#000000 !important;background:rgba(255,255,255,0.9) !important}
+.tw-topbar-cluster .tw-shortcut[aria-expanded="false"]{color:#000000 !important;background:rgba(255,255,255,0.9) !important}
+#tw-contrast-toggle{color:#000000 !important;background:rgba(255,255,255,0.9) !important}
+#tw-contrast-toggle[aria-pressed="false"]{color:#000000 !important;background:rgba(255,255,255,0.9) !important;border-color:transparent !important}
+#tw-contrast-toggle[aria-pressed="true"]{background:#e7f3ff !important;border-color:#0969da !important;color:#0969da !important}
+#tw-contrast-toggle:hover{background:#f6f8fa !important;border-color:#d0d7de !important;color:#0969da !important}
+#tw-activity-toggle{color:#000000 !important;background:rgba(255,255,255,0.9) !important}
+#tw-activity-toggle[aria-expanded="false"]{color:#000000 !important;background:rgba(255,255,255,0.9) !important;border-color:transparent !important}
+#tw-activity-toggle[aria-expanded="true"]{background:#e7f3ff !important;border-color:#0969da !important;color:#0969da !important}
+#tw-activity-toggle:hover{background:#f6f8fa !important;border-color:#d0d7de !important;color:#0969da !important}
+@media (max-width:900px){.tw-topbar-cluster{flex-direction:column;align-items:stretch;left:12px;right:12px}.tw-cluster-right{display:flex;flex-wrap:wrap;gap:4px}.tw-shortcut{padding:8px 10px;font-size:13px}}
 body{padding-top:58px}
 .tw-observe{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 6px;border-radius:14px;background:#f6f8fa;border:1px solid #d0d7de;line-height:1}
 .tw-observe.ok{background:#e6f6ec;border-color:#2ea043}
@@ -345,7 +362,7 @@ body{padding-top:58px}
 .activity-section{margin-bottom:12px}
 .activity-section h4{margin:0 0 6px;font-size:12px;font-weight:600;color:#656d76;text-transform:uppercase}
 .activity-list{font-size:11px;line-height:1.3}
-.activity-item{padding:4px 8px;margin-bottom:2px;background:#f6f8fa;border-radius:4px;border-left:3px solid #d0d7de}
+.activity-item{padding:4px 8px;margin-bottom:2px;background:#f6f8fa;border-radius:4px;border-left:3px solid #d0d7de;color:#24292f}
 .activity-item.cli{border-left-color:#0969da}
 .activity-item.hotspot{border-left-color:#d1242f}
 .activity-item.resolved{border-left-color:#2ea043}
@@ -416,21 +433,82 @@ document.addEventListener('DOMContentLoaded', function(){
         style.id = 'tw-high-contrast-styles';
         style.textContent = `
             .tw-high-contrast {
-                --tw-bg-primary: #000000;
-                --tw-bg-secondary: #1a1a1a;
-                --tw-text-primary: #ffffff;
-                --tw-text-secondary: #cccccc;
-                --tw-border-primary: #ffffff;
-                --tw-link-color: #66ccff;
-                --tw-link-hover: #99ddff;
-                --tw-button-bg: #333333;
-                --tw-button-border: #ffffff;
-                --tw-focus-color: #ffff00;
+                --tw-bg-primary: #1a1a1a;
+                --tw-bg-secondary: #2d2d2d;
+                --tw-text-primary: #f0f6fc;
+                --tw-text-secondary: #c9d1d9;
+                --tw-border-primary: #444c56;
+                --tw-link-color: #58a6ff;
+                --tw-link-hover: #79c0ff;
+                --tw-button-bg: #21262d;
+                --tw-button-border: #444c56;
+                --tw-focus-color: #f78166;
+                --tw-accent-bg: #161b22;
             }
             
             .tw-high-contrast body {
                 background: var(--tw-bg-primary) !important;
                 color: var(--tw-text-primary) !important;
+            }
+            
+            .tw-high-contrast .tw-topbar-cluster {
+                background: rgba(26, 26, 26, 0.95) !important;
+                border-color: var(--tw-border-primary) !important;
+                backdrop-filter: blur(8px) !important;
+            }
+            
+            .tw-high-contrast .tw-shortcut {
+                color: var(--tw-text-secondary) !important;
+                border-color: transparent !important;
+            }
+            
+            .tw-high-contrast .tw-shortcut:hover {
+                background: var(--tw-button-bg) !important;
+                color: var(--tw-link-color) !important;
+                border-color: var(--tw-border-primary) !important;
+            }
+            
+            .tw-high-contrast .tw-shortcut:active,
+            .tw-high-contrast .tw-shortcut[aria-pressed="true"] {
+                background: var(--tw-accent-bg) !important;
+                color: var(--tw-link-hover) !important;
+                border-color: var(--tw-link-color) !important;
+            }
+            
+            .tw-high-contrast #tw-contrast-toggle {
+                color: var(--tw-text-secondary) !important;
+            }
+            
+            .tw-high-contrast #tw-contrast-toggle[aria-pressed="false"] {
+                color: var(--tw-text-secondary) !important;
+                background: transparent !important;
+            }
+            
+            .tw-high-contrast #tw-contrast-toggle[aria-pressed="true"] {
+                background: var(--tw-accent-bg) !important;
+                color: var(--tw-link-hover) !important;
+                border-color: var(--tw-link-color) !important;
+            }
+            
+            .tw-high-contrast #tw-activity-toggle {
+                color: var(--tw-text-secondary) !important;
+            }
+            
+            .tw-high-contrast #tw-activity-toggle[aria-expanded="false"] {
+                color: var(--tw-text-secondary) !important;
+                background: transparent !important;
+            }
+            
+            .tw-high-contrast #tw-activity-toggle[aria-expanded="true"] {
+                background: var(--tw-accent-bg) !important;
+                color: var(--tw-link-hover) !important;
+                border-color: var(--tw-link-color) !important;
+            }
+            
+            .tw-high-contrast #tw-activity-toggle:hover {
+                background: var(--tw-button-bg) !important;
+                color: var(--tw-link-color) !important;
+                border-color: var(--tw-border-primary) !important;
             }
             
             .tw-high-contrast .module,
@@ -443,6 +521,7 @@ document.addEventListener('DOMContentLoaded', function(){
             
             .tw-high-contrast a {
                 color: var(--tw-link-color) !important;
+                text-decoration: none !important;
             }
             
             .tw-high-contrast a:hover {
@@ -452,9 +531,9 @@ document.addEventListener('DOMContentLoaded', function(){
             .tw-high-contrast input,
             .tw-high-contrast select,
             .tw-high-contrast textarea {
-                background: var(--tw-bg-primary) !important;
+                background: var(--tw-accent-bg) !important;
                 color: var(--tw-text-primary) !important;
-                border: 2px solid var(--tw-border-primary) !important;
+                border: 1px solid var(--tw-border-primary) !important;
             }
             
             .tw-high-contrast .button,
@@ -462,12 +541,43 @@ document.addEventListener('DOMContentLoaded', function(){
             .tw-high-contrast input[type="submit"] {
                 background: var(--tw-button-bg) !important;
                 color: var(--tw-text-primary) !important;
-                border: 2px solid var(--tw-button-border) !important;
+                border: 1px solid var(--tw-button-border) !important;
             }
             
             .tw-high-contrast *:focus {
-                outline: 3px solid var(--tw-focus-color) !important;
-                outline-offset: 2px !important;
+                outline: 2px solid var(--tw-focus-color) !important;
+                outline-offset: 1px !important;
+            }
+            
+            .tw-high-contrast .tw-observe {
+                background: var(--tw-accent-bg) !important;
+                border-color: var(--tw-border-primary) !important;
+                color: var(--tw-text-secondary) !important;
+            }
+            
+            .tw-high-contrast .activity-item {
+                background: var(--tw-accent-bg) !important;
+                color: var(--tw-text-primary) !important;
+                border-left-color: var(--tw-link-color) !important;
+            }
+            
+            .tw-high-contrast .tw-activity-panel {
+                background: var(--tw-bg-primary) !important;
+                border-color: var(--tw-border-primary) !important;
+            }
+            
+            .tw-high-contrast .activity-header {
+                background: var(--tw-bg-secondary) !important;
+                border-color: var(--tw-border-primary) !important;
+                color: var(--tw-text-primary) !important;
+            }
+            
+            .tw-high-contrast .activity-close {
+                color: var(--tw-text-secondary) !important;
+            }
+            
+            .tw-high-contrast .activity-close:hover {
+                color: var(--tw-focus-color) !important;
             }
             
             .tw-high-contrast .tw-lang-menu {
@@ -577,13 +687,16 @@ document.addEventListener('DOMContentLoaded', function(){
                         </div>`
                     ).join('') || '<div class="activity-item">No recent CLI activity</div>';
                     document.getElementById('recent-cli').innerHTML = cliHtml;
+                } else {
+                    document.getElementById('recent-cli').innerHTML = '<div class="activity-item">No CLI logs available</div>';
                 }
             } catch(e){
-                document.getElementById('recent-cli').innerHTML = '<div class="activity-item">CLI data unavailable</div>';
+                console.log('CLI logs error:', e);
+                document.getElementById('recent-cli').innerHTML = '<div class="activity-item">CLI logs loading failed</div>';
             }
             
             try {
-                // Fetch recent hotspot events (reuse metrics endpoint structure)
+                // Fetch recent hotspot events
                 const hotspotResp = await fetch('{% url "admin-system-hotspots" %}?format=json&limit=5', {cache:'no-store'});
                 if(hotspotResp.ok){
                     const hotspotData = await hotspotResp.json();
@@ -599,7 +712,8 @@ document.addEventListener('DOMContentLoaded', function(){
                     document.getElementById('recent-hotspots').innerHTML = '<div class="activity-item">Check metrics dashboard for details</div>';
                 }
             } catch(e){
-                document.getElementById('recent-hotspots').innerHTML = '<div class="activity-item">Hotspot data unavailable</div>';
+                console.log('Hotspots error:', e);
+                document.getElementById('recent-hotspots').innerHTML = '<div class="activity-item">Hotspot data loading failed</div>';
             }
         }
         

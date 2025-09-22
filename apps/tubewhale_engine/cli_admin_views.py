@@ -147,6 +147,34 @@ def cli_job_status(request: HttpRequest, job_id: str) -> JsonResponse:
 @staff_member_required
 def cli_logs(request: HttpRequest) -> HttpResponse:
     """CLI执行日志查看"""
+    # Check if JSON format is requested
+    if request.GET.get('format') == 'json':
+        from apps.tubewhale_engine.models import CLICommandLog
+        from django.http import JsonResponse
+        from django.core.paginator import Paginator
+        
+        # Get limit parameter for pagination
+        limit = min(int(request.GET.get('limit', 10)), 100)  # Max 100 items
+        
+        # Fetch recent CLI command logs from database
+        cli_logs_queryset = CLICommandLog.objects.all().order_by('-created_at')[:limit]
+        
+        results = []
+        for log in cli_logs_queryset:
+            results.append({
+                'command': log.command_truncated(),
+                'status': log.status,
+                'created_at': log.created_at.isoformat(),
+                'execution_time': log.execution_time,
+                'success': log.success
+            })
+        
+        return JsonResponse({
+            'results': results,
+            'count': len(results)
+        })
+    
+    # Default HTML response
     logs = _get_cli_logs()
     context = {
         'logs': logs,
