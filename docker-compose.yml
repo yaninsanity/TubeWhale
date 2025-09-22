@@ -129,6 +129,12 @@ services:
       - ./media:/app/media
       - ./logs:/app/logs
     command: celery -A tubewhale_project worker --loglevel=info --concurrency=4
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A tubewhale_project inspect ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     networks:
       - tubewhale_network
 
@@ -156,6 +162,12 @@ services:
       - ./apps:/app/apps
       - ./service:/app/service
     command: celery -A tubewhale_project beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import django; django.setup(); from django_celery_beat.models import PeriodicTask; print('OK')\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     networks:
       - tubewhale_network
 

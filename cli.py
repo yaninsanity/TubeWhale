@@ -11,6 +11,9 @@ import os
 from pathlib import Path
 from typing import Dict, Any, Optional
 
+# Import Django CLI integration
+from utils.cli_logger import logger, get_cli_tracker
+
 # Import lean framework components
 from utils.cli_framework import create_cli_framework, ErrorCategory, ErrorSeverity
 from utils.database_manager import create_database_manager
@@ -44,13 +47,19 @@ class TubeWhaleCLI:
         try:
             from utils.database import Database
             from utils.async_database import AsyncDatabase
-            self.sync_db = Database()
+            
+            # Use default database path and logger
+            db_path = "AZ_b4_covid_homeless.db"
+            self.sync_db = Database(db_path, self.logger.logger)
             self.async_db = AsyncDatabase(self.sync_db)
             self.async_support = True
             self.logger.logger.info("✅ Async database support enabled")
         except ImportError as e:
             self.async_support = False
             self.logger.logger.warning(f"⚠️ Async database support disabled: {e}")
+        except Exception as e:
+            self.async_support = False
+            self.logger.logger.warning(f"⚠️ Database initialization failed: {e}")
         
         # Initialize prompt manager
         self.prompt_manager = YouTubePromptManager()
@@ -373,50 +382,76 @@ Examples:
     return parser
 
 def main():
-    """Main CLI entry point with global exception handling"""
+    """Main CLI entry point with global exception handling and Django logging"""
     
     cli = TubeWhaleCLI()
+    command_args = sys.argv[1:] if len(sys.argv) > 1 else []
     
-    try:
-        with cli.exception_handler:
-            parser = create_parser()
-            args = parser.parse_args()
-            
-            if not args.command:
-                parser.print_help()
-                return
-            
-            # Enable verbose logging if requested
-            if args.verbose:
-                import logging
-                cli.logger.logger.setLevel(logging.DEBUG)
-            
-            # Execute commands
-            if args.command == 'analyze':
-                result = cli.run_analysis(args.video_id, args.type)
-                print(json.dumps(result, indent=2))
+    # Start Django command tracking
+    with get_cli_tracker("tubewhale-cli", command_args) as tracker:
+        try:
+            with cli.exception_handler:
+                parser = create_parser()
+                args = parser.parse_args()
                 
-            elif args.command == 'dashboard':
-                cli.show_dashboard()
+                if not args.command:
+                    parser.print_help()
+                    tracker.add_stdout("Help displayed - no command specified")
+                    return
                 
-            elif args.command == 'performance':
-                cli.show_performance_report()
+                # Enable verbose logging if requested
+                if args.verbose:
+                    import logging
+                    cli.logger.logger.setLevel(logging.DEBUG)
+                    tracker.add_stdout("Verbose logging enabled")
                 
-            elif args.command == 'list':
-                cli.list_recent_videos(args.limit)
+                # Execute commands with tracking
+                command_output = []
+                
+                if args.command == 'analyze':
+                    result = cli.run_analysis(args.video_id, args.type)
+                    output = json.dumps(result, indent=2)
+                    print(output)
+                    tracker.add_stdout(f"Analysis completed for video: {args.video_id}")
+                    command_output.append(f"Analyzed video {args.video_id} with type {args.type}")
+                    
+                elif args.command == 'dashboard':
+                    cli.show_dashboard()
+                    tracker.add_stdout("Dashboard displayed")
+                    command_output.append("Dashboard shown")
+                    
+                elif args.command == 'performance':
+                    cli.show_performance_report()
+                    tracker.add_stdout("Performance report generated")
+                    command_output.append("Performance report shown")
+                    
+                elif args.command == 'list':
+                    cli.list_recent_videos(args.limit)
+                    tracker.add_stdout(f"Listed recent videos (limit: {args.limit})")
+                    command_output.append(f"Listed {args.limit} recent videos")
+                
+                elif args.command == 'prompts':
+                    cli.show_prompts()
+                    tracker.add_stdout("Prompts displayed")
+                    command_output.append("Prompts shown")
+                
+                elif args.command == 'database':
+                    cli.show_database_info()
+                    tracker.add_stdout("Database info displayed")
+                    command_output.append("Database info shown")
+                
+        except KeyboardInterrupt:
+            error_msg = "🛑 Operation cancelled by user"
+            print(f"\n{error_msg}")
+            tracker.add_stderr(error_msg)
             
-            elif args.command == 'prompts':
-                cli.show_prompts()
+        except Exception as e:
+            error_msg = f"❌ Unexpected error: {e}"
+            print(error_msg)
+            tracker.add_stderr(error_msg)
             
-            elif args.command == 'database':
-                cli.show_database_info()
-            
-    except KeyboardInterrupt:
-        print("\n🛑 Operation cancelled by user")
-    except Exception as e:
-        print(f"❌ Unexpected error: {e}")
-    finally:
-        cli.cleanup_and_exit()
+        finally:
+            cli.cleanup_and_exit()
 
 if __name__ == "__main__":
     main()
