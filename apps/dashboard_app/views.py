@@ -1083,8 +1083,56 @@ def handle_smart_wizard_submission(request, available_templates, analysis_paths)
 
 
 def jobs_view(request):
-    """Display user's analysis jobs"""
+    """Display user's analysis jobs and handle wizard submissions"""
     from django.shortcuts import render
+    from django.http import HttpResponseRedirect
+    from django.urls import reverse
+    from django.contrib import messages
+    import uuid
+    import requests
+    
+    if request.method == 'POST':
+        # Handle wizard analysis submission
+        tool = request.POST.get('tool')
+        role = request.POST.get('role')
+        template = request.POST.get('template')
+        input_text = request.POST.get('input')
+        
+        if not all([tool, role, template, input_text]):
+            messages.error(request, 'All fields are required for analysis')
+            return HttpResponseRedirect(reverse('dashboard:wizard'))
+        
+        try:
+            # Extract video ID from YouTube URL if needed
+            video_id = input_text
+            if 'youtube.com/watch?v=' in input_text:
+                video_id = input_text.split('v=')[1].split('&')[0]
+            elif 'youtu.be/' in input_text:
+                video_id = input_text.split('youtu.be/')[1].split('?')[0]
+            
+            # Call the analysis API
+            api_url = request.build_absolute_uri('/api/v1/analysis/video/')
+            api_data = {
+                'video_id': video_id,
+                'expert_role': role.replace('-', '_'),
+                'template': template,
+                'analysis_depth': 'standard'
+            }
+            
+            response = requests.post(api_url, json=api_data, timeout=30)
+            
+            if response.status_code == 200:
+                result = response.json()
+                job_id = result.get('job_id')
+                messages.success(request, f'Analysis started successfully! Job ID: {job_id}')
+            else:
+                messages.error(request, 'Failed to start analysis. Please try again.')
+                
+        except Exception as e:
+            messages.error(request, f'Error starting analysis: {str(e)}')
+        
+        return HttpResponseRedirect(reverse('dashboard:jobs'))
+    
     return render(request, 'dashboard/jobs.html', {
         'user': request.user,
     })
