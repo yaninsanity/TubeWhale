@@ -247,7 +247,7 @@
                         </div>
                         
                         <div class="text-center mt-4">
-                            <button class="btn btn-primary btn-lg" onclick="nextStep()" disabled id="step1NextBtn">
+                            <button class="btn btn-primary btn-lg" disabled id="step1NextBtn">
                                 <i class="fas fa-arrow-right me-2"></i>Continue to Role Selection
                             </button>
                         </div>
@@ -403,6 +403,11 @@
             document.getElementById(`step-${step}`).classList.remove('d-none');
             wizardState.currentStep = step;
             updateStepIndicator(step);
+            
+            // Bind events for current step
+            if (step === 2) {
+                bindStep2Events();
+            }
         }
         
         // Next step function
@@ -433,23 +438,33 @@
             });
         });
         
-        // Step 2: Role and template selection
-        document.querySelectorAll('.role-card').forEach(card => {
-            card.addEventListener('click', function() {
-                // Remove previous selection
-                document.querySelectorAll('.role-card').forEach(c => c.classList.remove('selected'));
-                
-                // Select current role
-                this.classList.add('selected');
-                wizardState.selectedRole = this.dataset.role;
-                
-                // Update template list
-                updateTemplateList();
-                
-                // Update display
-                document.getElementById('selected-role-display').textContent = this.querySelector('h6').textContent.replace(/.*?\s/, '');
+        // Step 2: Role and template selection events
+        function bindStep2Events() {
+            // Bind role selection events
+            document.querySelectorAll('.role-card[data-role]').forEach(card => {
+                card.removeEventListener('click', handleRoleClick); // Remove existing listener
+                card.addEventListener('click', handleRoleClick);
             });
-        });
+        }
+        
+        function handleRoleClick() {
+            // Remove previous selection from role cards only
+            document.querySelectorAll('.role-card[data-role]').forEach(c => c.classList.remove('selected'));
+            
+            // Select current role
+            this.classList.add('selected');
+            wizardState.selectedRole = this.dataset.role;
+            
+            // Update template list
+            updateTemplateList();
+            
+            // Update display
+            const roleText = this.querySelector('h6').textContent.replace(/.*?\s/, '');
+            const displayElement = document.getElementById('selected-role-display');
+            if (displayElement) {
+                displayElement.textContent = roleText;
+            }
+        }
         
         function updateTemplateList() {
             const templateList = document.getElementById('template-list');
@@ -481,7 +496,9 @@
         }
         
         // Navigation buttons
-        document.getElementById('next-to-step-2').addEventListener('click', () => showStep(2));
+        document.getElementById('step1NextBtn').addEventListener('click', () => {
+            if (wizardState.selectedTool) showStep(2);
+        });
         document.getElementById('next-to-step-3').addEventListener('click', () => showStep(3));
         document.getElementById('back-to-step-1').addEventListener('click', () => showStep(1));
         document.getElementById('back-to-step-2').addEventListener('click', () => showStep(2));
