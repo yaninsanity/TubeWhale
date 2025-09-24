@@ -330,7 +330,7 @@ def intelligent_wizard_view(request):
         'max_concurrent_jobs': get_user_max_jobs(user),
     }
     
-    return render(request, 'dashboard/intelligent_wizard_complete.html', context)
+    return render(request, 'dashboard/wizard.html', context)
 
 
 @scientist_login_required
