@@ -1,0 +1,37 @@
+{
+  "job_id": "dcfe4558",
+  "status": "completed",
+  "analysis_type": "single_video",
+  "video_id": "3",
+  "role_id": "music_educator",
+  "template_id": "business_intelligence",
+  "created_at": "2025-09-24T02:12:27.997732+00:00",
+  "completed_at": "2025-09-24T02:12:27.997755+00:00",
+  "results": {
+    "summary": "Video analysis completed using music_educator perspective with business_intelligence template",
+    "expert_insights": {
+      "role": "music_educator",
+      "perspective": "Analysis from Music Educator viewpoint",
+      "key_findings": [
+        "Professional analysis using music_educator expertise",
+        "Template-based insights from business_intelligence",
+        "Customized recommendations based on role perspective",
+        "Industry best practices applied"
+      ]
+    },
+    "template_analysis": {
+      "template": "business_intelligence",
+      "sections_completed": [
+        "Performance",
+        "Insights",
+        "Recommendations"
+      ],
+      "custom_questions_answered": 0
+    },
+    "metrics": {
+      "processing_time": "3.2s",
+      "confidence_score": 0.92,
+      "analysis_depth": "comprehensive"
+    }
+  }
+}

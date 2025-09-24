@@ -28,6 +28,9 @@ django-guardian==2.4.0
 django-redis==5.4.0
 django-celery-beat==2.5.0
 celery[redis]==5.3.4
+channels==4.0.0
+channels-redis==4.2.0
+psycopg2-binary==2.9.9
 drf-spectacular==0.26.5
 drf-spectacular-sidecar==2023.10.1
 whitenoise==6.7.0

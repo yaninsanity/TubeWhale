@@ -1,0 +1,713 @@
+{% extends "client/base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Choose Your Scenario" %} - TubeWhale{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --primary-color: #4f46e5;
+        --primary-dark: #3730a3;
+        --success-color: #10b981;
+        --gray-50: #f9fafb;
+        --gray-100: #f3f4f6;
+        --gray-200: #e5e7eb;
+        --gray-300: #d1d5db;
+        --gray-400: #9ca3af;
+        --gray-500: #6b7280;
+        --gray-600: #4b5563;
+        --gray-700: #374151;
+        --gray-800: #1f2937;
+        --gray-900: #111827;
+        --radius-md: 0.5rem;
+        --radius-lg: 0.75rem;
+        --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    }
+
+    body {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+    }
+
+    .workflow-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 2rem;
+    }
+
+    .workflow-header {
+        text-align: center;
+        margin-bottom: 3rem;
+        color: white;
+    }
+
+    .workflow-title {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 1rem;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .workflow-subtitle {
+        font-size: 1.25rem;
+        opacity: 0.9;
+        max-width: 600px;
+        margin: 0 auto;
+    }
+
+    .step-progress {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-bottom: 3rem;
+        background: white;
+        border-radius: var(--radius-lg);
+        padding: 1.5rem;
+        box-shadow: var(--shadow-lg);
+    }
+
+    .step-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        position: relative;
+        z-index: 2;
+    }
+
+    .step-number {
+        width: 3rem;
+        height: 3rem;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 1.125rem;
+        margin-bottom: 0.5rem;
+        transition: all 0.3s ease;
+    }
+
+    .step-item.current .step-number {
+        background: var(--primary-color);
+        color: white;
+        box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.2);
+    }
+
+    .step-item.upcoming .step-number {
+        background: var(--gray-200);
+        color: var(--gray-500);
+    }
+
+    .step-label {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--gray-600);
+        text-align: center;
+    }
+
+    .step-item.current .step-label {
+        color: var(--primary-color);
+        font-weight: 600;
+    }
+
+    .step-connector {
+        position: absolute;
+        top: 1.5rem;
+        left: 50%;
+        width: 100px;
+        height: 2px;
+        background: var(--gray-200);
+        z-index: 1;
+        transform: translateX(-50%);
+    }
+
+    .main-content {
+        background: white;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-lg);
+        overflow: hidden;
+    }
+
+    .content-header {
+        background: var(--gray-50);
+        border-bottom: 1px solid var(--gray-200);
+        padding: 2rem;
+        text-align: center;
+    }
+
+    .content-title {
+        font-size: 1.875rem;
+        font-weight: 700;
+        color: var(--gray-900);
+        margin-bottom: 0.5rem;
+    }
+
+    .content-subtitle {
+        color: var(--gray-600);
+        font-size: 1.125rem;
+    }
+
+    .scenarios-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+        gap: 2rem;
+        padding: 3rem;
+    }
+
+    .scenario-card {
+        background: white;
+        border: 2px solid var(--gray-200);
+        border-radius: var(--radius-lg);
+        padding: 2rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .scenario-card:hover {
+        border-color: var(--primary-color);
+        transform: translateY(-4px);
+        box-shadow: var(--shadow-lg);
+    }
+
+    .scenario-card.selected {
+        border-color: var(--primary-color);
+        background: #faf5ff;
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    }
+
+    .selected-indicator {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        width: 2rem;
+        height: 2rem;
+        background: var(--success-color);
+        color: white;
+        border-radius: 50%;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.875rem;
+    }
+
+    .scenario-card.selected .selected-indicator {
+        display: flex;
+    }
+
+    .scenario-icon {
+        width: 4rem;
+        height: 4rem;
+        background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+        color: white;
+        border-radius: var(--radius-md);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .scenario-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--gray-900);
+        margin-bottom: 0.75rem;
+    }
+
+    .scenario-description {
+        color: var(--gray-600);
+        line-height: 1.6;
+        margin-bottom: 1.5rem;
+    }
+
+    .scenario-features {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .scenario-features li {
+        display: flex;
+        align-items: center;
+        margin-bottom: 0.5rem;
+        font-size: 0.875rem;
+        color: var(--gray-600);
+    }
+
+    .feature-icon {
+        color: var(--success-color);
+        margin-right: 0.75rem;
+        width: 1rem;
+    }
+
+    .use-cases {
+        background: var(--gray-50);
+        border-radius: var(--radius-md);
+        padding: 1rem;
+        margin-top: 1rem;
+    }
+
+    .use-cases-title {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--gray-700);
+        margin-bottom: 0.5rem;
+    }
+
+    .use-cases-list {
+        font-size: 0.75rem;
+        color: var(--gray-500);
+        line-height: 1.4;
+    }
+
+    .actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 2rem 3rem;
+        background: var(--gray-50);
+        border-top: 1px solid var(--gray-200);
+    }
+
+    .btn-secondary {
+        background: var(--gray-200);
+        color: var(--gray-700);
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: var(--radius-md);
+        font-weight: 500;
+        text-decoration: none;
+        transition: all 0.2s ease;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .btn-secondary:hover {
+        background: var(--gray-300);
+        color: var(--gray-800);
+        text-decoration: none;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+        color: white;
+        border: none;
+        padding: 0.75rem 2rem;
+        border-radius: var(--radius-md);
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: var(--shadow-md);
+    }
+
+    .btn-primary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .tier-badge {
+        position: absolute;
+        top: 1rem;
+        left: 1rem;
+        padding: 0.25rem 0.75rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        border-radius: 9999px;
+        letter-spacing: 0.5px;
+    }
+
+    .tier-free { background: #fef3c7; color: #d97706; }
+    .tier-standard { background: #dbeafe; color: #2563eb; }
+    .tier-premium { background: #f3e8ff; color: #7c3aed; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="workflow-container">
+    <div class="workflow-header">
+        <h1 class="workflow-title">{% trans "Choose Your Analysis Scenario" %}</h1>
+        <p class="workflow-subtitle">
+            {% trans "Select your role and use case to get personalized YouTube analysis templates and configurations." %}
+        </p>
+    </div>
+
+    <!-- Step Progress -->
+    <div class="step-progress">
+        <div class="step-item current">
+            <div class="step-number">0</div>
+            <div class="step-label">{% trans "Scenario" %}</div>
+        </div>
+        
+        <div class="step-connector"></div>
+        
+        <div class="step-item upcoming">
+            <div class="step-number">1</div>
+            <div class="step-label">{% trans "Engine Config" %}</div>
+        </div>
+        
+        <div class="step-connector"></div>
+        
+        <div class="step-item upcoming">
+            <div class="step-number">2</div>
+            <div class="step-label">{% trans "Templates" %}</div>
+        </div>
+        
+        <div class="step-connector"></div>
+        
+        <div class="step-item upcoming">
+            <div class="step-number">3</div>
+            <div class="step-label">{% trans "Execute" %}</div>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="content-header">
+            <h2 class="content-title">{% trans "What's your analysis goal?" %}</h2>
+            <p class="content-subtitle">
+                {% trans "Different scenarios require different analysis approaches. Choose the one that best matches your needs." %}
+            </p>
+        </div>
+
+        <!-- Scenario Selection Form -->
+        <form method="post" id="scenarioForm">
+            {% csrf_token %}
+            <input type="hidden" name="scenario_id" id="selectedScenarioId">
+
+            <div class="scenarios-grid">
+                <!-- Content Creator Scenario -->
+                <div class="scenario-card" data-scenario="content_creator" onclick="selectScenario('content_creator', 'Content Creator')">
+                    <div class="tier-badge tier-free">{% trans "Free" %}</div>
+                    <div class="selected-indicator">
+                        <i class="fas fa-check"></i>
+                    </div>
+                    
+                    <div class="scenario-icon">
+                        <i class="fas fa-video"></i>
+                    </div>
+                    
+                    <h3 class="scenario-title">{% trans "Content Creator" %}</h3>
+                    <p class="scenario-description">
+                        {% trans "Analyze trends, optimize content strategy, and discover viral opportunities for your YouTube channel." %}
+                    </p>
+                    
+                    <ul class="scenario-features">
+                        <li>
+                            <i class="fas fa-check feature-icon"></i>
+                            {% trans "Trend Analysis & Viral Content Detection" %}
+                        </li>
+                        <li>
+                            <i class="fas fa-check feature-icon"></i>
+                            {% trans "Content Performance Optimization" %}
+                        </li>
+                        <li>
+                            <i class="fas fa-check feature-icon"></i>
+                            {% trans "Audience Sentiment Analysis" %}
+                        </li>
+                        <li>
+                            <i class="fas fa-check feature-icon"></i>
+                            {% trans "Competitor Analysis" %}
+                        </li>
+                    </ul>
+                    
+                    <div class="use-cases">
+                        <div class="use-cases-title">{% trans "Best for:" %}</div>
+                        <div class="use-cases-list">
+                            {% trans "YouTubers, vloggers, content teams looking to grow their channel and increase engagement" %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Academic Researcher Scenario -->
+                <div class="scenario-card" data-scenario="researcher" onclick="selectScenario('researcher', 'Academic Researcher')">
+                    <div class="tier-badge tier-standard">{% trans "Standard" %}</div>
+                    <div class="selected-indicator">
+                        <i class="fas fa-check"></i>
+                    </div>
+                    
+                    <div class="scenario-icon">
+                        <i class="fas fa-graduation-cap"></i>
+                    </div>
+                    
+                    <h3 class="scenario-title">{% trans "Academic Researcher" %}</h3>
+                    <p class="scenario-description">
+                        {% trans "Conduct rigorous research analysis with academic-grade data collection and statistical insights." %}
+                    </p>
+                    
+                    <ul class="scenario-features">
+                        <li>
+                            <i class="fas fa-check feature-icon"></i>
+                            {% trans "Comprehensive Data Collection" %}
+                        </li>
+                        <li>
+                            <i class="fas fa-check feature-icon"></i>
+                            {% trans "Statistical Analysis & Reporting" %}
+                        </li>
+                        <li>
+                            <i class="fas fa-check feature-icon"></i>
+                            {% trans "Citation-Ready Data Export" %}
+                        </li>
+                        <li>
+                            <i class="fas fa-check feature-icon"></i>
+                            {% trans "Longitudinal Study Support" %}
+                        </li>
+                    </ul>
+                    
+                    <div class="use-cases">
+                        <div class="use-cases-title">{% trans "Best for:" %}</div>
+                        <div class="use-cases-list">
+                            {% trans "Academic researchers, PhD students, social media studies, digital humanities projects" %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Digital Marketer Scenario -->
+                <div class="scenario-card" data-scenario="marketer" onclick="selectScenario('marketer', 'Digital Marketer')">
+                    <div class="tier-badge tier-premium">{% trans "Premium" %}</div>
+                    <div class="selected-indicator">
+                        <i class="fas fa-check"></i>
+                    </div>
+                    
+                    <div class="scenario-icon">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    
+                    <h3 class="scenario-title">{% trans "Digital Marketer" %}</h3>
+                    <p class="scenario-description">
+                        {% trans "Advanced marketing intelligence with brand monitoring, influencer analysis, and campaign optimization." %}
+                    </p>
+                    
+                    <ul class="scenario-features">
+                        <li>
+                            <i class="fas fa-check feature-icon"></i>
+                            {% trans "Brand Sentiment Monitoring" %}
+                        </li>
+                        <li>
+                            <i class="fas fa-check feature-icon"></i>
+                            {% trans "Influencer Discovery & Analysis" %}
+                        </li>
+                        <li>
+                            <i class="fas fa-check feature-icon"></i>
+                            {% trans "Campaign Performance Tracking" %}
+                        </li>
+                        <li>
+                            <i class="fas fa-check feature-icon"></i>
+                            {% trans "Competitive Intelligence" %}
+                        </li>
+                    </ul>
+                    
+                    <div class="use-cases">
+                        <div class="use-cases-title">{% trans "Best for:" %}</div>
+                        <div class="use-cases-list">
+                            {% trans "Marketing agencies, brand managers, social media strategists, advertising professionals" %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Business Intelligence Scenario -->
+                <div class="scenario-card" data-scenario="business_intelligence" onclick="selectScenario('business_intelligence', 'Business Intelligence')">
+                    <div class="tier-badge tier-premium">{% trans "Premium" %}</div>
+                    <div class="selected-indicator">
+                        <i class="fas fa-check"></i>
+                    </div>
+                    
+                    <div class="scenario-icon">
+                        <i class="fas fa-building"></i>
+                    </div>
+                    
+                    <h3 class="scenario-title">{% trans "Business Intelligence" %}</h3>
+                    <p class="scenario-description">
+                        {% trans "Enterprise-grade analysis with market research, industry insights, and strategic intelligence." %}
+                    </p>
+                    
+                    <ul class="scenario-features">
+                        <li>
+                            <i class="fas fa-check feature-icon"></i>
+                            {% trans "Market Research & Analysis" %}
+                        </li>
+                        <li>
+                            <i class="fas fa-check feature-icon"></i>
+                            {% trans "Industry Trend Monitoring" %}
+                        </li>
+                        <li>
+                            <i class="fas fa-check feature-icon"></i>
+                            {% trans "Strategic Decision Support" %}
+                        </li>
+                        <li>
+                            <i class="fas fa-check feature-icon"></i>
+                            {% trans "Custom Analytics Dashboards" %}
+                        </li>
+                    </ul>
+                    
+                    <div class="use-cases">
+                        <div class="use-cases-title">{% trans "Best for:" %}</div>
+                        <div class="use-cases-list">
+                            {% trans "Enterprises, consultants, investment firms, strategic planners, business analysts" %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Data Scientist Scenario -->
+                <div class="scenario-card" data-scenario="data_scientist" onclick="selectScenario('data_scientist', 'Data Scientist')">
+                    <div class="tier-badge tier-premium">{% trans "Premium" %}</div>
+                    <div class="selected-indicator">
+                        <i class="fas fa-check"></i>
+                    </div>
+                    
+                    <div class="scenario-icon">
+                        <i class="fas fa-brain"></i>
+                    </div>
+                    
+                    <h3 class="scenario-title">{% trans "Data Scientist" %}</h3>
+                    <p class="scenario-description">
+                        {% trans "Advanced machine learning analysis with custom models, API access, and raw data exports." %}
+                    </p>
+                    
+                    <ul class="scenario-features">
+                        <li>
+                            <i class="fas fa-check feature-icon"></i>
+                            {% trans "Custom ML Model Integration" %}
+                        </li>
+                        <li>
+                            <i class="fas fa-check feature-icon"></i>
+                            {% trans "API Access & Raw Data Export" %}
+                        </li>
+                        <li>
+                            <i class="fas fa-check feature-icon"></i>
+                            {% trans "Advanced Statistical Analysis" %}
+                        </li>
+                        <li>
+                            <i class="fas fa-check feature-icon"></i>
+                            {% trans "Custom Prompt Engineering" %}
+                        </li>
+                    </ul>
+                    
+                    <div class="use-cases">
+                        <div class="use-cases-title">{% trans "Best for:" %}</div>
+                        <div class="use-cases-list">
+                            {% trans "Data scientists, ML engineers, AI researchers, tech companies building analytics products" %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Custom Analysis Scenario -->
+                <div class="scenario-card" data-scenario="custom" onclick="selectScenario('custom', 'Custom Analysis')">
+                    <div class="tier-badge tier-premium">{% trans "Premium" %}</div>
+                    <div class="selected-indicator">
+                        <i class="fas fa-check"></i>
+                    </div>
+                    
+                    <div class="scenario-icon">
+                        <i class="fas fa-cog"></i>
+                    </div>
+                    
+                    <h3 class="scenario-title">{% trans "Custom Analysis" %}</h3>
+                    <p class="scenario-description">
+                        {% trans "Fully customizable analysis with complete control over prompts, parameters, and output formats." %}
+                    </p>
+                    
+                    <ul class="scenario-features">
+                        <li>
+                            <i class="fas fa-check feature-icon"></i>
+                            {% trans "Complete Prompt Customization" %}
+                        </li>
+                        <li>
+                            <i class="fas fa-check feature-icon"></i>
+                            {% trans "Advanced Parameter Control" %}
+                        </li>
+                        <li>
+                            <i class="fas fa-check feature-icon"></i>
+                            {% trans "Custom Output Formats" %}
+                        </li>
+                        <li>
+                            <i class="fas fa-check feature-icon"></i>
+                            {% trans "Unlimited Analysis Flexibility" %}
+                        </li>
+                    </ul>
+                    
+                    <div class="use-cases">
+                        <div class="use-cases-title">{% trans "Best for:" %}</div>
+                        <div class="use-cases-list">
+                            {% trans "Power users, specialized research projects, unique use cases requiring maximum flexibility" %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="actions">
+                <a href="{% url 'dashboard:main' %}" class="btn-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>
+                    {% trans "Back to Dashboard" %}
+                </a>
+                
+                <button type="submit" class="btn-primary" id="nextButton" disabled>
+                    {% trans "Next: Engine Configuration" %}
+                    <i class="fas fa-arrow-right ms-2"></i>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+let selectedScenarioId = null;
+
+function selectScenario(scenarioId, scenarioTitle) {
+    // Remove previous selection
+    document.querySelectorAll('.scenario-card').forEach(card => {
+        card.classList.remove('selected');
+    });
+    
+    // Add selection to clicked card
+    const clickedCard = document.querySelector(`[data-scenario="${scenarioId}"]`);
+    clickedCard.classList.add('selected');
+    
+    // Update form data
+    selectedScenarioId = scenarioId;
+    document.getElementById('selectedScenarioId').value = scenarioId;
+    
+    // Enable next button
+    const nextButton = document.getElementById('nextButton');
+    nextButton.disabled = false;
+    nextButton.innerHTML = `{% trans "Next: Engine Configuration" %} (${scenarioTitle}) <i class="fas fa-arrow-right ms-2"></i>`;
+}
+
+// Form submission
+document.getElementById('scenarioForm').addEventListener('submit', function(e) {
+    if (!selectedScenarioId) {
+        e.preventDefault();
+        alert('{% trans "Please select a scenario first." %}');
+    }
+});
+
+// Add smooth hover effects
+document.addEventListener('DOMContentLoaded', () => {
+    const cards = document.querySelectorAll('.scenario-card');
+    
+    cards.forEach(card => {
+        card.addEventListener('mouseenter', () => {
+            if (!card.classList.contains('selected')) {
+                card.style.transform = 'translateY(-4px)';
+            }
+        });
+        
+        card.addEventListener('mouseleave', () => {
+            if (!card.classList.contains('selected')) {
+                card.style.transform = 'translateY(0)';
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,528 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TubeWhale - Video Processing Platform</title>
+    <link rel="stylesheet" href="{% static 'css/base.css' %}">
+    <style>
+        /* Clean, Professional Dashboard Styles */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+        }
+
+        .dashboard-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        .dashboard-header {
+            text-align: center;
+            margin-bottom: 48px;
+        }
+
+        .dashboard-title {
+            font-size: 36px;
+            font-weight: 700;
+            margin: 0 0 12px 0;
+            background: linear-gradient(45deg, #fff, #f0f8ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .dashboard-subtitle {
+            font-size: 18px;
+            opacity: 0.9;
+            margin: 0;
+        }
+
+        .workflow-steps {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 24px;
+            margin-bottom: 48px;
+        }
+
+        .step-card {
+            background: rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 24px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .step-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 30px rgba(0,0,0,0.2);
+        }
+
+        .step-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .step-number {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #00ff88, #00d4ff);
+            color: #1a1a1a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .step-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .step-description {
+            margin-bottom: 20px;
+            opacity: 0.9;
+            line-height: 1.5;
+        }
+
+        .step-action {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 20px;
+            background: linear-gradient(135deg, #00ff88, #00d4ff);
+            color: #1a1a1a;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .step-action:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,255,136,0.3);
+        }
+
+        .step-action.disabled {
+            background: rgba(255,255,255,0.2);
+            color: rgba(255,255,255,0.6);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .current-jobs {
+            background: rgba(255,255,255,0.05);
+            border-radius: 16px;
+            padding: 24px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .jobs-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .jobs-title {
+            font-size: 22px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .jobs-count {
+            background: rgba(0,255,136,0.2);
+            color: #00ff88;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .job-list {
+            display: grid;
+            gap: 12px;
+        }
+
+        .job-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            border-left: 4px solid #00ff88;
+        }
+
+        .job-info {
+            flex: 1;
+        }
+
+        .job-name {
+            font-weight: 600;
+            margin: 0 0 4px 0;
+        }
+
+        .job-status {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        .job-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .job-action-btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.1);
+            color: white;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .job-action-btn:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            opacity: 0.7;
+        }
+
+        .empty-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .nav-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+            padding: 16px 0;
+        }
+
+        .nav-logo {
+            font-size: 24px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .nav-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .nav-btn {
+            padding: 8px 16px;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 6px;
+            background: rgba(255,255,255,0.1);
+            color: white;
+            text-decoration: none;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+
+        .nav-btn:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        @media (max-width: 768px) {
+            .dashboard-container {
+                padding: 16px;
+            }
+            
+            .workflow-steps {
+                grid-template-columns: 1fr;
+            }
+            
+            .nav-header {
+                flex-direction: column;
+                gap: 16px;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Navigation Header -->
+        <nav class="nav-header">
+            <div class="nav-logo">
+                🐋 TubeWhale
+            </div>
+            <div class="nav-actions">
+                <a href="/admin/" class="nav-btn">Admin Panel</a>
+                <a href="/api/docs/" class="nav-btn">API Docs</a>
+                <a href="#" class="nav-btn" onclick="showHelp()">Help</a>
+            </div>
+        </nav>
+
+        <!-- Dashboard Header -->
+        <div class="dashboard-header">
+            <h1 class="dashboard-title">Video Processing Platform</h1>
+            <p class="dashboard-subtitle">
+                Professional video analysis and content extraction platform
+            </p>
+        </div>
+
+        <!-- Workflow Steps -->
+        <div class="workflow-steps">
+            <div class="step-card">
+                <div class="step-header">
+                    <div class="step-number">1</div>
+                    <h3 class="step-title">Configure Job</h3>
+                </div>
+                <p class="step-description">
+                    Set up your video processing job with keywords, topics, and analysis parameters. 
+                    Choose what type of content you want to analyze and configure processing options.
+                </p>
+                <a href="#config" class="step-action" onclick="showConfiguration()">
+                    ⚙️ Start Configuration
+                </a>
+            </div>
+
+            <div class="step-card">
+                <div class="step-header">
+                    <div class="step-number">2</div>
+                    <h3 class="step-title">Execute Processing</h3>
+                </div>
+                <p class="step-description">
+                    Launch your configured job to start video discovery, download, and analysis. 
+                    Our AI agents will work together to process your content automatically.
+                </p>
+                <a href="#execute" class="step-action disabled" id="execute-btn">
+                    🚀 Execute Job
+                </a>
+            </div>
+
+            <div class="step-card">
+                <div class="step-header">
+                    <div class="step-number">3</div>
+                    <h3 class="step-title">Monitor Progress</h3>
+                </div>
+                <p class="step-description">
+                    Track real-time progress of your video processing jobs. View detailed logs, 
+                    monitor agent status, and access results as they become available.
+                </p>
+                <a href="#monitor" class="step-action disabled" id="monitor-btn">
+                    📊 View Monitor
+                </a>
+            </div>
+        </div>
+
+        <!-- Current Jobs Section -->
+        <div class="current-jobs">
+            <div class="jobs-header">
+                <h3 class="jobs-title">Active Jobs</h3>
+                <span class="jobs-count" id="jobs-count">0 running</span>
+            </div>
+            <div class="job-list" id="job-list">
+                <div class="empty-state">
+                    <div class="empty-icon">📱</div>
+                    <h4>No Active Jobs</h4>
+                    <p>Configure and start your first video processing job to get started</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Configuration Panel (Hidden by default) -->
+        <div id="configuration-panel" style="display: none; margin-top: 32px;">
+            {% include 'components/job_configuration.html' %}
+        </div>
+
+        <!-- Monitor Panel (Hidden by default) -->
+        <div id="monitor-panel" style="display: none; margin-top: 32px;">
+            {% include 'components/video_processing_monitor.html' %}
+        </div>
+    </div>
+
+    <script>
+        // Dashboard Management
+        class TubeWhaleDashboard {
+            constructor() {
+                this.currentView = 'overview';
+                this.activeJobs = [];
+                this.init();
+            }
+
+            init() {
+                this.loadActiveJobs();
+                this.setupPeriodicUpdates();
+                console.log('TubeWhale Dashboard initialized');
+            }
+
+            async loadActiveJobs() {
+                try {
+                    // Simulated job data - in real implementation, this would be an API call
+                    const jobs = [
+                        // Example: { id: 1, name: 'AI Technology Analysis', status: 'processing', progress: 45 }
+                    ];
+                    
+                    this.activeJobs = jobs;
+                    this.renderJobs();
+                    this.updateUI();
+                } catch (error) {
+                    console.error('Failed to load jobs:', error);
+                }
+            }
+
+            renderJobs() {
+                const jobList = document.getElementById('job-list');
+                const jobsCount = document.getElementById('jobs-count');
+                
+                if (this.activeJobs.length === 0) {
+                    jobList.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-icon">📱</div>
+                            <h4>No Active Jobs</h4>
+                            <p>Configure and start your first video processing job to get started</p>
+                        </div>
+                    `;
+                    jobsCount.textContent = '0 running';
+                    return;
+                }
+
+                jobList.innerHTML = this.activeJobs.map(job => `
+                    <div class="job-item">
+                        <div class="job-info">
+                            <div class="job-name">${job.name}</div>
+                            <div class="job-status">${job.status} - ${job.progress}% complete</div>
+                        </div>
+                        <div class="job-actions">
+                            <button class="job-action-btn" onclick="dashboard.viewJobDetails('${job.id}')">
+                                View
+                            </button>
+                            <button class="job-action-btn" onclick="dashboard.pauseJob('${job.id}')">
+                                Pause
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+
+                jobsCount.textContent = `${this.activeJobs.length} running`;
+            }
+
+            updateUI() {
+                const executeBtn = document.getElementById('execute-btn');
+                const monitorBtn = document.getElementById('monitor-btn');
+                
+                // Enable execute button if no configuration panel is shown or if ready
+                if (this.currentView === 'config') {
+                    executeBtn.classList.remove('disabled');
+                }
+                
+                // Enable monitor button if there are active jobs
+                if (this.activeJobs.length > 0) {
+                    monitorBtn.classList.remove('disabled');
+                }
+            }
+
+            showConfiguration() {
+                this.currentView = 'config';
+                document.getElementById('configuration-panel').style.display = 'block';
+                document.getElementById('monitor-panel').style.display = 'none';
+                
+                // Scroll to configuration
+                document.getElementById('configuration-panel').scrollIntoView({ 
+                    behavior: 'smooth', 
+                    block: 'start' 
+                });
+                
+                this.updateUI();
+            }
+
+            showMonitor() {
+                if (this.activeJobs.length === 0) {
+                    alert('No active jobs to monitor. Please start a job first.');
+                    return;
+                }
+                
+                this.currentView = 'monitor';
+                document.getElementById('configuration-panel').style.display = 'none';
+                document.getElementById('monitor-panel').style.display = 'block';
+                
+                // Scroll to monitor
+                document.getElementById('monitor-panel').scrollIntoView({ 
+                    behavior: 'smooth', 
+                    block: 'start' 
+                });
+            }
+
+            async viewJobDetails(jobId) {
+                // In real implementation, this would show detailed job information
+                alert(`Viewing details for job ${jobId}`);
+            }
+
+            async pauseJob(jobId) {
+                try {
+                    // API call to pause job
+                    console.log(`Pausing job ${jobId}`);
+                    // Refresh job list
+                    await this.loadActiveJobs();
+                } catch (error) {
+                    console.error('Failed to pause job:', error);
+                }
+            }
+
+            setupPeriodicUpdates() {
+                // Update job status every 30 seconds
+                setInterval(() => {
+                    this.loadActiveJobs();
+                }, 30000);
+            }
+        }
+
+        // Global functions for navigation
+        function showConfiguration() {
+            window.dashboard.showConfiguration();
+        }
+
+        function showMonitor() {
+            window.dashboard.showMonitor();
+        }
+
+        function showHelp() {
+            const helpContent = `
+                TubeWhale Video Processing Platform Help:
+                
+                1. Configure Job: Set up keywords, topics, and processing parameters
+                2. Execute Job: Start the video processing pipeline
+                3. Monitor Progress: Track real-time status and view results
+                
+                For detailed documentation, visit the API docs or contact support.
+            `;
+            alert(helpContent);
+        }
+
+        // Initialize dashboard when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            window.dashboard = new TubeWhaleDashboard();
+        });
+    </script>
+</body>
+</html>

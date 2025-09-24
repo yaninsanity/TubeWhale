@@ -1,0 +1,430 @@
+{% extends "dashboard/base_simple.html" %}
+{% load i18n %}
+
+{% block title %}{{ title }} - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        --success-color: #10b981;
+        --warning-color: #f59e0b;
+        --danger-color: #ef4444;
+        --info-color: #3b82f6;
+        --gray-50: #f9fafb;
+        --gray-100: #f3f4f6;
+        --gray-200: #e5e7eb;
+        --gray-300: #d1d5db;
+        --gray-500: #6b7280;
+        --gray-700: #374151;
+        --gray-800: #1f2937;
+        --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        --radius-md: 0.5rem;
+        --radius-lg: 0.75rem;
+    }
+
+    .workflow-container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 2rem;
+    }
+
+    .workflow-header {
+        text-align: center;
+        margin-bottom: 3rem;
+    }
+
+    .workflow-steps {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 3rem;
+        position: relative;
+    }
+
+    .step {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        position: relative;
+        z-index: 2;
+    }
+
+    .step:not(:last-child) {
+        margin-right: 3rem;
+    }
+
+    .step-circle {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        color: white;
+        margin-bottom: 0.5rem;
+        position: relative;
+    }
+
+    .step-circle.active {
+        background: var(--primary-gradient);
+        box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.2);
+    }
+
+    .step-circle.completed {
+        background: var(--success-color);
+    }
+
+    .step-circle.pending {
+        background: var(--gray-300);
+        color: var(--gray-500);
+    }
+
+    .step-label {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--gray-700);
+        text-align: center;
+    }
+
+    .step-connector {
+        position: absolute;
+        top: 25px;
+        left: 80px;
+        width: calc(100% - 160px);
+        height: 2px;
+        background: var(--gray-200);
+        z-index: 1;
+    }
+
+    .config-form {
+        background: white;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-md);
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+
+    .config-section {
+        margin-bottom: 2rem;
+    }
+
+    .config-section h3 {
+        color: var(--gray-800);
+        font-size: 1.125rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+    }
+
+    .config-section h3 i {
+        margin-right: 0.5rem;
+        color: var(--info-color);
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1.5rem;
+    }
+
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+
+    .form-label {
+        display: block;
+        font-weight: 500;
+        color: var(--gray-700);
+        margin-bottom: 0.5rem;
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        border: 1px solid var(--gray-300);
+        border-radius: var(--radius-md);
+        font-size: 0.875rem;
+        transition: all 0.2s;
+    }
+
+    .form-control:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .form-help {
+        font-size: 0.75rem;
+        color: var(--gray-500);
+        margin-top: 0.25rem;
+    }
+
+    .form-check {
+        display: flex;
+        align-items: center;
+        margin-bottom: 0.75rem;
+    }
+
+    .form-check-input {
+        margin-right: 0.5rem;
+    }
+
+    .form-check-label {
+        font-size: 0.875rem;
+        color: var(--gray-700);
+    }
+
+    .btn-primary {
+        background: var(--primary-gradient);
+        border: none;
+        color: white;
+        padding: 0.875rem 2rem;
+        border-radius: var(--radius-md);
+        font-weight: 500;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        transition: all 0.2s;
+        cursor: pointer;
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-lg);
+        color: white;
+        text-decoration: none;
+    }
+
+    .btn-secondary {
+        background: var(--gray-100);
+        border: 1px solid var(--gray-300);
+        color: var(--gray-700);
+        padding: 0.875rem 2rem;
+        border-radius: var(--radius-md);
+        font-weight: 500;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        transition: all 0.2s;
+        cursor: pointer;
+        margin-right: 1rem;
+    }
+
+    .btn-secondary:hover {
+        background: var(--gray-200);
+        color: var(--gray-800);
+        text-decoration: none;
+    }
+
+    .actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 2rem;
+        padding-top: 2rem;
+        border-top: 1px solid var(--gray-200);
+    }
+
+    .tier-badge {
+        background: var(--primary-gradient);
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 1rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+        text-transform: uppercase;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="workflow-container">
+    <!-- Workflow Header -->
+    <div class="workflow-header">
+        <h1 class="h2 mb-2">{{ title }}</h1>
+        <p class="text-muted">{{ subtitle }}</p>
+        <span class="tier-badge">{{ user_tier|title }} Tier</span>
+    </div>
+
+    <!-- Workflow Steps -->
+    <div class="workflow-steps">
+        <div class="step-connector"></div>
+        
+        <div class="step">
+            <div class="step-circle active">
+                <i class="fas fa-cog"></i>
+            </div>
+            <div class="step-label">{% trans "Engine Config" %}</div>
+        </div>
+        
+        <div class="step">
+            <div class="step-circle pending">
+                <i class="fas fa-layer-group"></i>
+            </div>
+            <div class="step-label">{% trans "Template Selection" %}</div>
+        </div>
+        
+        <div class="step">
+            <div class="step-circle pending">
+                <i class="fas fa-play"></i>
+            </div>
+            <div class="step-label">{% trans "Search & Execute" %}</div>
+        </div>
+    </div>
+
+    <!-- Configuration Form -->
+    <form method="post" class="config-form">
+        {% csrf_token %}
+        
+        <!-- Search Configuration -->
+        <div class="config-section">
+            <h3>
+                <i class="fas fa-search"></i>
+                {% trans "Search Configuration" %}
+            </h3>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label" for="keyword">{% trans "Default Search Keyword" %}</label>
+                    <input type="text" 
+                           class="form-control" 
+                           id="keyword" 
+                           name="keyword" 
+                           value="{{ engine_config.keyword }}"
+                           placeholder="{% trans 'e.g., Arizona homeless before covid19' %}">
+                    <div class="form-help">{% trans "You can change this in the final step" %}</div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="max_n">{% trans "Max Videos to Analyze" %}</label>
+                    <input type="number" 
+                           class="form-control" 
+                           id="max_n" 
+                           name="max_n" 
+                           value="{{ engine_config.max_n }}"
+                           min="1" 
+                           max="50">
+                    <div class="form-help">{% trans "Maximum number of videos to process" %}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analysis Configuration -->
+        <div class="config-section">
+            <h3>
+                <i class="fas fa-chart-line"></i>
+                {% trans "Analysis Configuration" %}
+            </h3>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label" for="top_k">{% trans "Top Results" %}</label>
+                    <input type="number" 
+                           class="form-control" 
+                           id="top_k" 
+                           name="top_k" 
+                           value="{{ engine_config.top_k }}"
+                           min="1" 
+                           max="100">
+                    <div class="form-help">{% trans "Number of top results to retrieve" %}</div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="filter_type">{% trans "Filter Type" %}</label>
+                    <select class="form-control" id="filter_type" name="filter_type">
+                        <option value="view_count" {% if engine_config.filter_type == 'view_count' %}selected{% endif %}>
+                            {% trans "View Count" %}
+                        </option>
+                        <option value="upload_date" {% if engine_config.filter_type == 'upload_date' %}selected{% endif %}>
+                            {% trans "Upload Date" %}
+                        </option>
+                        <option value="relevance" {% if engine_config.filter_type == 'relevance' %}selected{% endif %}>
+                            {% trans "Relevance" %}
+                        </option>
+                    </select>
+                    <div class="form-help">{% trans "How to sort and filter search results" %}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Advanced Configuration -->
+        <div class="config-section">
+            <h3>
+                <i class="fas fa-sliders-h"></i>
+                {% trans "Advanced Options" %}
+            </h3>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label" for="concurrency">{% trans "Concurrency Level" %}</label>
+                    <input type="number" 
+                           class="form-control" 
+                           id="concurrency" 
+                           name="concurrency" 
+                           value="{{ engine_config.concurrency }}"
+                           min="1" 
+                           max="10">
+                    <div class="form-help">{% trans "Number of parallel processing threads" %}</div>
+                </div>
+                
+                <div class="form-group">
+                    <div class="form-check">
+                        <input type="checkbox" 
+                               class="form-check-input" 
+                               id="full_audio_analysis" 
+                               name="full_audio_analysis"
+                               {% if engine_config.full_audio_analysis %}checked{% endif %}>
+                        <label class="form-check-label" for="full_audio_analysis">
+                            {% trans "Full Audio Analysis" %}
+                        </label>
+                    </div>
+                    <div class="form-help">{% trans "Enable comprehensive audio transcript analysis" %}</div>
+                </div>
+                
+                <div class="form-group">
+                    <div class="form-check">
+                        <input type="checkbox" 
+                               class="form-check-input" 
+                               id="persist_summaries" 
+                               name="persist_summaries"
+                               {% if engine_config.persist_summaries %}checked{% endif %}>
+                        <label class="form-check-label" for="persist_summaries">
+                            {% trans "Persist Agent Summaries" %}
+                        </label>
+                    </div>
+                    <div class="form-help">{% trans "Save analysis summaries for future reference" %}</div>
+                </div>
+                
+                <div class="form-group">
+                    <div class="form-check">
+                        <input type="checkbox" 
+                               class="form-check-input" 
+                               id="dry_run" 
+                               name="dry_run"
+                               {% if engine_config.dry_run %}checked{% endif %}>
+                        <label class="form-check-label" for="dry_run">
+                            {% trans "Dry Run Mode" %}
+                        </label>
+                    </div>
+                    <div class="form-help">{% trans "Test configuration without actual execution" %}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="actions">
+            <div>
+                <a href="{% url 'client:login' %}" class="btn-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>
+                    {% trans "Back to Login" %}
+                </a>
+            </div>
+            <button type="submit" class="btn-primary">
+                {% trans "Next: Select Template" %}
+                <i class="fas fa-arrow-right ms-2"></i>
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

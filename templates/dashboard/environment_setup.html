@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Environment Setup - TubeWhale</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .config-container {
+            max-width: 700px;
+            margin: 0 auto;
+        }
+        .config-card {
+            border: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .step-indicator {
+            font-size: 0.9rem;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+        }
+        .api-key-input {
+            font-family: 'Courier New', monospace;
+        }
+        .help-text {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <!-- Header -->
+    <nav class="navbar navbar-dark bg-primary">
+        <div class="container">
+            <a href="{% url 'dashboard:main' %}" class="navbar-brand">
+                <i class="fas fa-arrow-left me-2"></i>🐋 TubeWhale
+            </a>
+            <span class="step-indicator bg-light text-dark">
+                Step 1 of 3: Environment Setup
+            </span>
+        </div>
+    </nav>
+
+    <div class="container mt-4 mb-5">
+        <div class="config-container">
+            <!-- Header -->
+            <div class="text-center mb-4">
+                <h1 class="display-6 fw-bold text-primary">Configure Your Environment</h1>
+                <p class="lead">Set up your API keys and workspace to start analyzing videos</p>
+            </div>
+
+            <!-- Configuration Form -->
+            <div class="card config-card">
+                <div class="card-body p-4">
+                    <form method="post" id="configForm">
+                        {% csrf_token %}
+                        
+                        <!-- YouTube API Key -->
+                        <div class="mb-4">
+                            <label for="youtube_api_key" class="form-label">
+                                <i class="fab fa-youtube text-danger me-2"></i>
+                                <strong>YouTube API Key</strong>
+                                <span class="text-danger">*</span>
+                            </label>
+                            <input type="password" class="form-control api-key-input" id="youtube_api_key" 
+                                   name="youtube_api_key" placeholder="Enter your YouTube Data API v3 key"
+                                   value="{{ current_config.youtube_api_key }}" required>
+                            <div class="help-text mt-2">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Required for accessing YouTube video metadata and captions. 
+                                <a href="https://developers.google.com/youtube/v3/getting-started" target="_blank">
+                                    Get your API key here <i class="fas fa-external-link-alt"></i>
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- OpenAI API Key -->
+                        <div class="mb-4">
+                            <label for="openai_api_key" class="form-label">
+                                <i class="fas fa-robot text-success me-2"></i>
+                                <strong>OpenAI API Key</strong>
+                                <span class="text-danger">*</span>
+                            </label>
+                            <input type="password" class="form-control api-key-input" id="openai_api_key" 
+                                   name="openai_api_key" placeholder="Enter your OpenAI API key"
+                                   value="{{ current_config.openai_api_key }}" required>
+                            <div class="help-text mt-2">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Required for AI-powered analysis and content generation. 
+                                <a href="https://platform.openai.com/api-keys" target="_blank">
+                                    Get your API key here <i class="fas fa-external-link-alt"></i>
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Workspace Folder -->
+                        <div class="mb-4">
+                            <label for="workspace_folder" class="form-label">
+                                <i class="fas fa-folder text-warning me-2"></i>
+                                <strong>Workspace Folder</strong>
+                                <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control" id="workspace_folder" 
+                                   name="workspace_folder" placeholder="/path/to/your/workspace"
+                                   value="{{ current_config.workspace_folder }}" required>
+                            <div class="help-text mt-2">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Local directory where analysis results will be saved. Make sure you have write permissions.
+                            </div>
+                        </div>
+
+                        <!-- Additional Settings -->
+                        <div class="mb-4">
+                            <h6 class="fw-bold mb-3">
+                                <i class="fas fa-cogs me-2"></i>Additional Settings
+                            </h6>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label for="default_language" class="form-label">Default Language</label>
+                                    <select class="form-select" id="default_language" name="default_language">
+                                        <option value="en">English</option>
+                                        <option value="zh">Chinese</option>
+                                        <option value="ja">Japanese</option>
+                                        <option value="ko">Korean</option>
+                                        <option value="es">Spanish</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <label for="output_format" class="form-label">Output Format</label>
+                                    <select class="form-select" id="output_format" name="output_format">
+                                        <option value="json">JSON</option>
+                                        <option value="csv">CSV</option>
+                                        <option value="txt">Text</option>
+                                        <option value="pdf">PDF</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Security Notice -->
+                        <div class="alert alert-info">
+                            <i class="fas fa-shield-alt me-2"></i>
+                            <strong>Security Notice:</strong> Your API keys are encrypted and stored securely. 
+                            We never log or share your credentials with third parties.
+                        </div>
+
+                        <!-- Submit Button -->
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{% url 'dashboard:main' %}" class="btn btn-outline-secondary me-md-2">
+                                <i class="fas fa-arrow-left me-2"></i>Back
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i>Save Configuration
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Help Section -->
+            <div class="mt-4">
+                <div class="card border-primary">
+                    <div class="card-header bg-primary text-white">
+                        <i class="fas fa-question-circle me-2"></i>Need Help?
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6><i class="fab fa-youtube text-danger me-2"></i>YouTube API</h6>
+                                <p class="small">
+                                    1. Go to <a href="https://console.developers.google.com" target="_blank">Google Console</a><br>
+                                    2. Create a new project or select existing<br>
+                                    3. Enable YouTube Data API v3<br>
+                                    4. Create credentials (API Key)
+                                </p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6><i class="fas fa-robot text-success me-2"></i>OpenAI API</h6>
+                                <p class="small">
+                                    1. Sign up at <a href="https://platform.openai.com" target="_blank">OpenAI Platform</a><br>
+                                    2. Go to API Keys section<br>
+                                    3. Create a new secret key<br>
+                                    4. Copy and paste it here
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Form validation and UI enhancements
+        document.getElementById('configForm').addEventListener('submit', function(e) {
+            const form = this;
+            const submitBtn = form.querySelector('button[type="submit"]');
+            
+            // Show loading state
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
+            submitBtn.disabled = true;
+            
+            // Basic validation
+            const apiKeys = form.querySelectorAll('input[type="password"]');
+            let valid = true;
+            
+            apiKeys.forEach(input => {
+                if (input.value.length < 10) {
+                    input.classList.add('is-invalid');
+                    valid = false;
+                } else {
+                    input.classList.remove('is-invalid');
+                }
+            });
+            
+            if (!valid) {
+                e.preventDefault();
+                submitBtn.innerHTML = '<i class="fas fa-save me-2"></i>Save Configuration';
+                submitBtn.disabled = false;
+                alert('Please check your API keys. They seem too short.');
+            }
+        });
+
+        // Show/hide API keys
+        document.querySelectorAll('input[type="password"]').forEach(input => {
+            const toggleBtn = document.createElement('button');
+            toggleBtn.type = 'button';
+            toggleBtn.className = 'btn btn-outline-secondary btn-sm position-absolute end-0 top-50 translate-middle-y me-2';
+            toggleBtn.innerHTML = '<i class="fas fa-eye"></i>';
+            
+            input.parentElement.style.position = 'relative';
+            input.parentElement.appendChild(toggleBtn);
+            
+            toggleBtn.addEventListener('click', function() {
+                if (input.type === 'password') {
+                    input.type = 'text';
+                    this.innerHTML = '<i class="fas fa-eye-slash"></i>';
+                } else {
+                    input.type = 'password';
+                    this.innerHTML = '<i class="fas fa-eye"></i>';
+                }
+            });
+        });
+    </script>
+</body>
+</html>

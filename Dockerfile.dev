@@ -1,0 +1,147 @@
+# Development Dockerfile with hot reloading and debugging support
+FROM python:3.11-slim AS development
+
+# Set environment variables for development
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    DJANGO_SETTINGS_MODULE=tubewhale_project.settings.development \
+    PATH="/opt/venv/bin:$PATH" \
+    PYTHONPATH="/app:$PYTHONPATH"
+
+# Install system dependencies for development
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    pkg-config \
+    default-libmysqlclient-dev \
+    libpq-dev \
+    libpq5 \
+    default-mysql-client \
+    gettext \
+    curl \
+    ffmpeg \
+    git \
+    procps \
+    vim \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Upgrade pip and install wheel
+RUN pip install --upgrade pip setuptools wheel
+
+# Create app user for development
+RUN groupadd -r tubewhale && useradd -r -g tubewhale tubewhale
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements first for better caching
+COPY requirements.txt django_requirements.txt ./
+
+# Install Python dependencies
+RUN pip install -r requirements.txt -r django_requirements.txt
+
+# Install development-specific packages
+RUN pip install \
+    django-extensions \
+    django-debug-toolbar \
+    watchdog \
+    ipython \
+    ipdb \
+    pytest \
+    pytest-django \
+    factory-boy \
+    daphne
+
+# Create necessary directories
+RUN mkdir -p /app/logs /app/media /app/staticfiles && \
+    chown -R tubewhale:tubewhale /app
+
+# Copy wait_for_db management command
+COPY --chown=tubewhale:tubewhale ./management/ /app/management/
+
+# Create wait_for_db management command if it doesn't exist
+RUN mkdir -p /app/tubewhale_project/management/commands && \
+    echo '"""Wait for database to be available""" \n\
+import time \n\
+import sys \n\
+from django.core.management.base import BaseCommand \n\
+from django.db import connection \n\
+from django.db.utils import OperationalError \n\
+\n\
+class Command(BaseCommand): \n\
+    """Django command to wait for database""" \n\
+    \n\
+    def handle(self, *args, **options): \n\
+        """Handle the command""" \n\
+        self.stdout.write("Waiting for database...") \n\
+        db_conn = None \n\
+        while not db_conn: \n\
+            try: \n\
+                db_conn = connection.ensure_connection() \n\
+                self.stdout.write(self.style.SUCCESS("Database available!")) \n\
+            except OperationalError: \n\
+                self.stdout.write("Database unavailable, waiting 1 second...") \n\
+                time.sleep(1) \n\
+' > /app/tubewhale_project/management/commands/wait_for_db.py && \
+    touch /app/tubewhale_project/management/__init__.py && \
+    touch /app/tubewhale_project/management/commands/__init__.py
+
+# Copy application code
+COPY --chown=tubewhale:tubewhale . .
+
+# Create development entrypoint script
+RUN echo '#!/bin/bash \n\
+set -e \n\
+\n\
+echo "🚀 TubeWhale Development Environment Starting..." \n\
+\n\
+# Wait for database \n\
+echo "⏳ Waiting for database..." \n\
+python manage.py wait_for_db \n\
+\n\
+# Run migrations \n\
+echo "📊 Running database migrations..." \n\
+python manage.py migrate --noinput \n\
+\n\
+# Create superuser if not exists \n\
+echo "👤 Ensuring admin user exists..." \n\
+python manage.py shell -c " \n\
+from django.contrib.auth import get_user_model; \n\
+User = get_user_model(); \n\
+if not User.objects.filter(username='\''admin'\'').exists(): \n\
+    User.objects.create_superuser('\''admin'\'', '\''admin@tubewhale.com'\'', '\''admin123'\''); \n\
+    print('\''✅ Admin user created: admin/admin123'\'') \n\
+else: \n\
+    print('\''✅ Admin user already exists: admin/admin123'\'') \n\
+" \n\
+\n\
+# Collect static files \n\
+echo "📁 Collecting static files..." \n\
+python manage.py collectstatic --noinput \n\
+\n\
+echo "✅ Development environment ready!" \n\
+echo "🌐 Backend will be available at: http://localhost:8001" \n\
+echo "👤 Admin login: admin / admin123" \n\
+echo "📊 Admin panel: http://localhost:8001/admin/" \n\
+echo "📋 Dashboard: http://localhost/dashboard/" \n\
+\n\
+# Execute the main command \n\
+exec "$@" \n\
+' > /docker-entrypoint-dev.sh && \
+    chmod +x /docker-entrypoint-dev.sh
+
+# Switch to app user
+USER tubewhale
+
+# Expose ports
+EXPOSE 8000 8001
+
+# Development entrypoint
+ENTRYPOINT ["/docker-entrypoint-dev.sh"]
+
+# Default command for development server with auto-reload
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]

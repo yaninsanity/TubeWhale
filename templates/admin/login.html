@@ -1,0 +1,350 @@
+{% extends "admin/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "TubeWhale Intelligence Login" %}{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+:root {
+    --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --secondary-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    --success-color: #48bb78;
+    --error-color: #f56565;
+    --text-primary: #2d3748;
+    --text-secondary: #718096;
+    --border-color: #e2e8f0;
+    --input-focus: #667eea;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.login-container {
+    width: 100%;
+    max-width: 420px;
+    padding: 2rem;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+    position: relative;
+    overflow: hidden;
+}
+
+.login-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: var(--primary-gradient);
+}
+
+.logo-section {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.logo {
+    font-size: 3rem;
+    margin-bottom: 0.5rem;
+}
+
+.brand-title {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+    background: var(--primary-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.brand-subtitle {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin: 0.5rem 0 0;
+}
+
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-label {
+    display: block;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.form-input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    box-sizing: border-box;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: var(--input-focus);
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.form-input:invalid {
+    border-color: var(--error-color);
+}
+
+.login-button {
+    width: 100%;
+    padding: 0.875rem;
+    background: var(--primary-gradient);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.login-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+}
+
+.login-button:active {
+    transform: translateY(0);
+}
+
+.login-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.error-message {
+    background: #fed7d7;
+    color: #c53030;
+    padding: 0.75rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+    border-left: 4px solid var(--error-color);
+}
+
+.features {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.features-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 1rem;
+    text-align: center;
+}
+
+.features-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.feature-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.feature-icon {
+    font-size: 1rem;
+}
+
+.mobile-hint {
+    text-align: center;
+    margin-top: 1.5rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+@media (max-width: 480px) {
+    .login-container {
+        margin: 1rem;
+        padding: 1.5rem;
+        max-width: none;
+    }
+    
+    .brand-title {
+        font-size: 1.5rem;
+    }
+    
+    .features-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Loading state */
+.loading {
+    position: relative;
+    overflow: hidden;
+}
+
+.loading::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+    animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+    0% { left: -100%; }
+    100% { left: 100%; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="login-container">
+    <div class="logo-section">
+        <div class="logo">🐋</div>
+        <h1 class="brand-title">TubeWhale</h1>
+        <p class="brand-subtitle">Intelligence Platform</p>
+    </div>
+
+    {% if form.errors %}
+        <div class="error-message">
+            {% for error in form.non_field_errors %}
+                {{ error }}
+            {% endfor %}
+            {% if form.username.errors %}
+                {% trans "Please check your username." %}
+            {% endif %}
+            {% if form.password.errors %}
+                {% trans "Please check your password." %}
+            {% endif %}
+        </div>
+    {% endif %}
+
+    <form method="post" action="{{ app_path }}" id="login-form">
+        {% csrf_token %}
+        
+        <div class="form-group">
+            <label for="{{ form.username.id_for_label }}" class="form-label">
+                {% trans "Username" %}
+            </label>
+            <input 
+                type="text" 
+                name="{{ form.username.html_name }}" 
+                id="{{ form.username.id_for_label }}"
+                class="form-input"
+                placeholder="{% trans 'Enter your username' %}"
+                required
+                autocomplete="username"
+                {% if form.username.value %}value="{{ form.username.value }}"{% endif %}
+            >
+        </div>
+
+        <div class="form-group">
+            <label for="{{ form.password.id_for_label }}" class="form-label">
+                {% trans "Password" %}
+            </label>
+            <input 
+                type="password" 
+                name="{{ form.password.html_name }}" 
+                id="{{ form.password.id_for_label }}"
+                class="form-input"
+                placeholder="{% trans 'Enter your password' %}"
+                required
+                autocomplete="current-password"
+            >
+        </div>
+
+        <button type="submit" class="login-button" id="login-btn">
+            {% trans "Access Intelligence Hub" %}
+        </button>
+
+        <input type="hidden" name="next" value="{{ next }}">
+    </form>
+
+    <div class="features">
+        <div class="features-title">{% trans "Platform Features" %}</div>
+        <div class="features-grid">
+            <div class="feature-item">
+                <span class="feature-icon">🤖</span>
+                <span>{% trans "AI Agents" %}</span>
+            </div>
+            <div class="feature-item">
+                <span class="feature-icon">📊</span>
+                <span>{% trans "Real-time Analytics" %}</span>
+            </div>
+            <div class="feature-item">
+                <span class="feature-icon">🔍</span>
+                <span>{% trans "Smart Search" %}</span>
+            </div>
+            <div class="feature-item">
+                <span class="feature-icon">📱</span>
+                <span>{% trans "Mobile Ready" %}</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="mobile-hint">
+        {% trans "Optimized for mobile and desktop use" %}
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('login-form');
+    const button = document.getElementById('login-btn');
+    
+    form.addEventListener('submit', function() {
+        button.disabled = true;
+        button.textContent = '{% trans "Authenticating..." %}';
+        button.classList.add('loading');
+        
+        // Add some visual feedback
+        setTimeout(() => {
+            if (button.disabled) {
+                button.textContent = '{% trans "Connecting to Intelligence Hub..." %}';
+            }
+        }, 1000);
+    });
+    
+    // Add focus states for better mobile experience
+    const inputs = document.querySelectorAll('.form-input');
+    inputs.forEach(input => {
+        input.addEventListener('focus', function() {
+            this.parentElement.style.transform = 'scale(1.02)';
+        });
+        
+        input.addEventListener('blur', function() {
+            this.parentElement.style.transform = 'scale(1)';
+        });
+    });
+});
+</script>
+{% endblock %}

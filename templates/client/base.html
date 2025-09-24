@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ title|default:"TubeWhale - Intelligent Video Analysis Platform" }}{% endblock %}</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="{{ MEDIA_URL }}logo.png">
+    
+    <!-- Modern CSS Framework -->
+    <style>
+        /* CSS Variables Definition                    {% if user.is_authenticated %}
+                        <li><a href="{% url 'client_app:jobs_dashboard' %}" class="nav-link">Dashboard</a></li>
+                        <li><a href="{% url 'client_app:scenario_selection' %}" class="nav-link">Analysis</a></li>
+                        <li><a href="{% url 'client_app:jobs_dashboard' %}" class="nav-link">Jobs</a></li>
+                        <li><a href="{% url 'client_app:logout' %}" class="nav-link">Logout</a></li>
+                    {% else %}
+                        <li><a href="{% url 'client_app:login' %}" class="nav-link">Login</a></li>
+                    {% endif %}n Design System */
+        :root {
+            /* Primary Colors */
+            --primary-color: #3b82f6;
+            --primary-dark: #1d4ed8;
+            --primary-light: #60a5fa;
+            
+            /* Gradient Backgrounds */
+            --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --gradient-secondary: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            --gradient-success: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            
+            /* Grayscale Colors */
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-300: #d1d5db;
+            --gray-400: #9ca3af;
+            --gray-500: #6b7280;
+            --gray-600: #4b5563;
+            --gray-700: #374151;
+            --gray-800: #1f2937;
+            --gray-900: #111827;
+            
+            /* Semantic Colors */
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --error-color: #ef4444;
+            --info-color: #3b82f6;
+            
+            /* Shadows and Radius */
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            
+            --radius-sm: 0.375rem;
+            --radius-md: 0.5rem;
+            --radius-lg: 0.75rem;
+            --radius-xl: 1rem;
+            
+            /* Spacing system */
+            --space-1: 0.25rem;
+            --space-2: 0.5rem;
+            --space-3: 0.75rem;
+            --space-4: 1rem;
+            --space-6: 1.5rem;
+            --space-8: 2rem;
+            --space-12: 3rem;
+            --space-16: 4rem;
+            
+            /* Font system */
+            --font-sans: 'Inter', 'Helvetica Neue', sans-serif;
+            --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+        }
+        
+        /* Reset and Base Styles */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        html {
+            scroll-behavior: smooth;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: var(--gray-900);
+            background: var(--gray-50);
+            min-height: 100vh;
+        }
+        
+        /* Layout Containers */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+        
+        .container-fluid {
+            width: 100%;
+            padding: 0 1rem;
+        }
+        
+        /* Grid System */
+        .grid {
+            display: grid;
+            gap: 1rem;
+        }
+        
+        .grid-cols-1 { grid-template-columns: repeat(1, 1fr); }
+        .grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
+        .grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
+        .grid-cols-4 { grid-template-columns: repeat(4, 1fr); }
+        
+        /* Responsive Grid */
+        @media (max-width: 768px) {
+            .grid-cols-2 { grid-template-columns: 1fr; }
+            .grid-cols-3 { grid-template-columns: 1fr; }
+            .grid-cols-4 { grid-template-columns: repeat(2, 1fr); }
+        }
+        
+        @media (min-width: 769px) and (max-width: 1024px) {
+            .grid-cols-3 { grid-template-columns: repeat(2, 1fr); }
+            .grid-cols-4 { grid-template-columns: repeat(3, 1fr); }
+        }
+        
+        /* Flexbox Layout */
+        .flex {
+            display: flex;
+        }
+        
+        .flex-col {
+            flex-direction: column;
+        }
+        
+        .justify-center {
+            justify-content: center;
+        }
+        
+        .justify-between {
+            justify-content: space-between;
+        }
+        
+        .items-center {
+            align-items: center;
+        }
+        
+        .items-start {
+            align-items: flex-start;
+        }
+        
+        /* Card Component */
+        .card {
+            background: white;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-md);
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .card:hover {
+            box-shadow: var(--shadow-xl);
+            transform: translateY(-2px);
+        }
+        
+        .card-header {
+            padding: var(--space-6);
+            border-bottom: 1px solid var(--gray-200);
+        }
+        
+        .card-body {
+            padding: var(--space-6);
+        }
+        
+        .card-footer {
+            padding: var(--space-6);
+            border-top: 1px solid var(--gray-200);
+            background: var(--gray-50);
+        }
+        
+        /* Button components */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--space-3) var(--space-6);
+            border: none;
+            border-radius: var(--radius-md);
+            font-weight: 500;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.875rem;
+        }
+        
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+        }
+        
+        .btn-gradient {
+            background: var(--gradient-primary);
+            color: white;
+            border: none;
+        }
+        
+        .btn-gradient:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .btn-outline {
+            background: transparent;
+            color: var(--primary-color);
+            border: 2px solid var(--primary-color);
+        }
+        
+        .btn-outline:hover {
+            background: var(--primary-color);
+            color: white;
+        }
+        
+        /* Badge components */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: var(--space-1) var(--space-3);
+            font-size: 0.75rem;
+            font-weight: 500;
+            border-radius: var(--radius-xl);
+        }
+        
+        .badge-success {
+            background: var(--success-color);
+            color: white;
+        }
+        
+        .badge-warning {
+            background: var(--warning-color);
+            color: white;
+        }
+        
+        .badge-info {
+            background: var(--info-color);
+            color: white;
+        }
+        
+        .badge-gradient {
+            background: var(--gradient-success);
+            color: white;
+        }
+        
+        /* Progress bars */
+        .progress {
+            background: var(--gray-200);
+            border-radius: var(--radius-xl);
+            overflow: hidden;
+            height: 8px;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            background: var(--gradient-primary);
+            transition: width 0.5s ease;
+        }
+        
+        /* Navigation bar */
+        .navbar {
+            background: white;
+            box-shadow: var(--shadow-sm);
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+        
+        .navbar-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--space-4) 0;
+        }
+        
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        
+        .navbar-brand:hover {
+            color: var(--primary-dark);
+            transform: translateY(-1px);
+        }
+        
+        .navbar-nav {
+            display: flex;
+            gap: var(--space-6);
+            list-style: none;
+        }
+        
+        .nav-link {
+            color: var(--gray-600);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.2s ease;
+        }
+        
+        .nav-link:hover,
+        .nav-link.active {
+            color: var(--primary-color);
+        }
+        
+        /* Statistics cards */
+        .stat-card {
+            background: white;
+            border-radius: var(--radius-lg);
+            padding: var(--space-6);
+            box-shadow: var(--shadow-md);
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--gradient-primary);
+        }
+        
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin-bottom: var(--space-2);
+        }
+        
+        .stat-label {
+            color: var(--gray-600);
+            font-weight: 500;
+        }
+        
+        /* Animation effects */
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+        
+        .slide-in {
+            animation: slideIn 0.5s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateY(20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        /* Responsive utility classes */
+        .hidden {
+            display: none;
+        }
+        
+        @media (max-width: 768px) {
+            .mobile-hidden {
+                display: none;
+            }
+            
+            .mobile-full {
+                width: 100%;
+            }
+            
+            .navbar-nav {
+                display: none;
+            }
+        }
+        
+        /* Text utility classes */
+        .text-center { text-align: center; }
+        .text-left { text-align: left; }
+        .text-right { text-align: right; }
+        
+        .text-sm { font-size: 0.875rem; }
+        .text-lg { font-size: 1.125rem; }
+        .text-xl { font-size: 1.25rem; }
+        .text-2xl { font-size: 1.5rem; }
+        .text-3xl { font-size: 1.875rem; }
+        .text-4xl { font-size: 2.25rem; }
+        
+        .font-bold { font-weight: 700; }
+        .font-semibold { font-weight: 600; }
+        .font-medium { font-weight: 500; }
+        
+        /* Spacing utility classes */
+        .mb-2 { margin-bottom: var(--space-2); }
+        .mb-4 { margin-bottom: var(--space-4); }
+        .mb-6 { margin-bottom: var(--space-6); }
+        .mb-8 { margin-bottom: var(--space-8); }
+        
+        .mt-2 { margin-top: var(--space-2); }
+        .mt-4 { margin-top: var(--space-4); }
+        .mt-6 { margin-top: var(--space-6); }
+        .mt-8 { margin-top: var(--space-8); }
+        
+        .p-4 { padding: var(--space-4); }
+        .p-6 { padding: var(--space-6); }
+        .p-8 { padding: var(--space-8); }
+        
+        /* Loading animations */
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--gray-300);
+            border-radius: 50%;
+            border-top-color: var(--primary-color);
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Navigation bar -->
+    {% block navbar %}
+    <nav class="navbar">
+        <div class="container">
+            <div class="navbar-content">
+                <a href="{% url 'client_app:scenario_selection' %}" class="navbar-brand">
+                    <img src="{{ MEDIA_URL }}logo.png" alt="TubeWhale Logo" style="height: 32px; width: 32px; margin-right: 8px; border-radius: 6px;">
+                    <span>TubeWhale</span>
+                </a>
+                
+                <ul class="navbar-nav">
+                    <li><a href="{% url 'client_app:scenario_selection' %}" class="nav-link">Home</a></li>
+                    {% if user.is_authenticated %}
+                        <li><a href="{% url 'tubewhale_engine:client_dashboard' %}" class="nav-link">Dashboard</a></li>
+                        <li><a href="{% url 'tubewhale_engine:client_agents' %}" class="nav-link">Agent Collaboration</a></li>
+                        <li><a href="{% url 'tubewhale_engine:client_data_viz' %}" class="nav-link">Data Insights</a></li>
+                        <li><a href="/logout/" class="nav-link">Logout</a></li>
+                    {% else %}
+                        <li><a href="{% url 'tubewhale_engine:client_login' %}" class="nav-link">Login</a></li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+    {% endblock %}
+    
+    <!-- Main content -->
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+    
+    <!-- Footer -->
+    {% block footer %}
+    <footer style="background: var(--gray-800); color: white; padding: var(--space-8) 0; margin-top: var(--space-16);">
+        <div class="container">
+            <div class="grid grid-cols-3">
+                <div>
+                    <h3 class="font-bold mb-4">TubeWhale</h3>
+                    <p class="text-sm" style="color: var(--gray-300);">
+                        Intelligent video analysis platform providing AI-driven insights for your content creation.
+                    </p>
+                </div>
+                <div>
+                    <h4 class="font-semibold mb-4">Features</h4>
+                    <ul class="text-sm" style="color: var(--gray-300);">
+                        <li class="mb-2">Intelligent Agent Collaboration</li>
+                        <li class="mb-2">Real-time Data Analysis</li>
+                        <li class="mb-2">Mobile Optimization</li>
+                        <li class="mb-2">AI Insights Generation</li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="font-semibold mb-4">Contact Us</h4>
+                    <p class="text-sm" style="color: var(--gray-300);">
+                        support@tubewhale.com<br>
+                        Technical Support 24/7 Online
+                    </p>
+                </div>
+            </div>
+            <div class="text-center mt-8" style="border-top: 1px solid var(--gray-700); padding-top: var(--space-4);">
+                <p class="text-sm" style="color: var(--gray-400);">
+                    &copy; 2025 TubeWhale. Intelligent Video Analysis Platform.
+                </p>
+            </div>
+        </div>
+    </footer>
+    {% endblock %}
+    
+    <!-- JavaScript -->
+    <script>
+        // Utility functions
+        function formatNumber(num) {
+            if (num >= 1000000) {
+                return (num / 1000000).toFixed(1) + 'M';
+            } else if (num >= 1000) {
+                return (num / 1000).toFixed(1) + 'K';
+            }
+            return num.toString();
+        }
+        
+        // Dynamic loading effects
+        document.addEventListener('DOMContentLoaded', function() {
+            // 添加slide-in动画到卡片
+            const cards = document.querySelectorAll('.card');
+            cards.forEach((card, index) => {
+                setTimeout(() => {
+                    card.classList.add('slide-in');
+                }, index * 100);
+            });
+            
+            // 初始化进度条动画
+            const progressBars = document.querySelectorAll('.progress-bar');
+            progressBars.forEach(bar => {
+                const width = bar.dataset.progress || '0';
+                setTimeout(() => {
+                    bar.style.width = width + '%';
+                }, 500);
+            });
+        });
+        
+        // 实时数据更新
+        function updateRealTimeData() {
+            fetch('/api/agent-status/')
+                .then(response => response.json())
+                .then(data => {
+                    // 更新代理状态
+                    updateAgentStatus(data);
+                })
+                .catch(error => console.log('更新数据时出错:', error));
+        }
+        
+        function updateAgentStatus(data) {
+            Object.keys(data.agents || {}).forEach(agentId => {
+                const agent = data.agents[agentId];
+                const statusElement = document.getElementById(`${agentId}-status`);
+                const progressElement = document.getElementById(`${agentId}-progress`);
+                
+                if (statusElement) {
+                    statusElement.textContent = agent.status;
+                    statusElement.className = `badge ${getStatusClass(agent.status)}`;
+                }
+                
+                if (progressElement) {
+                    progressElement.style.width = agent.progress + '%';
+                }
+            });
+        }
+        
+        function getStatusClass(status) {
+            switch(status) {
+                case 'ACTIVE': return 'badge-success';
+                case 'PROCESSING': return 'badge-info';
+                case 'WAITING': return 'badge-warning';
+                case 'COMPLETED': return 'badge-success';
+                default: return 'badge-info';
+            }
+        }
+        
+        // 定期更新数据
+        setInterval(updateRealTimeData, 30000); // 每30秒更新一次
+    </script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

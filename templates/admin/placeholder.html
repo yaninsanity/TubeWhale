@@ -1,0 +1,20 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}{{ title }} - {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block content %}
+<div class="module">
+    <h2>{{ title }}</h2>
+    <div class="placeholder-content" style="padding: 2rem; text-align: center;">
+        <div style="font-size: 4rem; color: #ccc; margin-bottom: 1rem;">
+            <i class="fas fa-tools"></i>
+        </div>
+        <h3>{{ message }}</h3>
+        <p style="color: #666; margin: 2rem 0;">
+            We're working on bringing you this feature. Please check back later.
+        </p>
+        <a href="{{ back_url }}" class="button default">{{ back_text }}</a>
+    </div>
+</div>
+{% endblock %}

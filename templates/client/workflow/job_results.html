@@ -1,0 +1,353 @@
+{% extends "dashboard/base_simple.html" %}
+{% load i18n %}
+
+{% block title %}{{ title }} - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        --success-color: #10b981;
+        --warning-color: #f59e0b;
+        --danger-color: #ef4444;
+        --info-color: #3b82f6;
+        --gray-50: #f9fafb;
+        --gray-100: #f3f4f6;
+        --gray-200: #e5e7eb;
+        --gray-300: #d1d5db;
+        --gray-500: #6b7280;
+        --gray-700: #374151;
+        --gray-800: #1f2937;
+        --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        --radius-md: 0.5rem;
+        --radius-lg: 0.75rem;
+    }
+
+    .results-container {
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 2rem;
+    }
+
+    .results-header {
+        text-align: center;
+        margin-bottom: 3rem;
+    }
+
+    .job-status {
+        background: white;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-md);
+        padding: 2rem;
+        margin-bottom: 2rem;
+        text-align: center;
+    }
+
+    .status-icon {
+        width: 80px;
+        height: 80px;
+        background: var(--primary-gradient);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1rem;
+        color: white;
+        font-size: 2rem;
+    }
+
+    .status-icon.processing {
+        animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+        0% {
+            box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.7);
+        }
+        70% {
+            box-shadow: 0 0 0 20px rgba(102, 126, 234, 0);
+        }
+        100% {
+            box-shadow: 0 0 0 0 rgba(102, 126, 234, 0);
+        }
+    }
+
+    .job-id {
+        font-family: 'Courier New', monospace;
+        background: var(--gray-100);
+        padding: 0.5rem 1rem;
+        border-radius: var(--radius-md);
+        font-size: 0.875rem;
+        color: var(--gray-700);
+        border: 1px solid var(--gray-300);
+    }
+
+    .progress-section {
+        background: white;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-md);
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+
+    .progress-steps {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .progress-step {
+        display: flex;
+        align-items: center;
+        padding: 1rem 0;
+        border-bottom: 1px solid var(--gray-200);
+        position: relative;
+    }
+
+    .progress-step:last-child {
+        border-bottom: none;
+    }
+
+    .step-indicator {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 1rem;
+        font-weight: bold;
+        font-size: 0.875rem;
+    }
+
+    .step-indicator.completed {
+        background: var(--success-color);
+        color: white;
+    }
+
+    .step-indicator.active {
+        background: var(--primary-gradient);
+        color: white;
+        animation: pulse 2s infinite;
+    }
+
+    .step-indicator.pending {
+        background: var(--gray-200);
+        color: var(--gray-500);
+    }
+
+    .step-content {
+        flex: 1;
+    }
+
+    .step-title {
+        font-weight: 600;
+        color: var(--gray-800);
+        margin-bottom: 0.25rem;
+    }
+
+    .step-description {
+        font-size: 0.875rem;
+        color: var(--gray-600);
+    }
+
+    .step-timestamp {
+        font-size: 0.75rem;
+        color: var(--gray-500);
+        margin-left: auto;
+    }
+
+    .actions {
+        background: white;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-md);
+        padding: 2rem;
+        text-align: center;
+    }
+
+    .btn-primary {
+        background: var(--primary-gradient);
+        border: none;
+        color: white;
+        padding: 0.875rem 2rem;
+        border-radius: var(--radius-md);
+        font-weight: 500;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        transition: all 0.2s;
+        cursor: pointer;
+        margin: 0.5rem;
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-lg);
+        color: white;
+        text-decoration: none;
+    }
+
+    .btn-secondary {
+        background: var(--gray-100);
+        border: 1px solid var(--gray-300);
+        color: var(--gray-700);
+        padding: 0.875rem 2rem;
+        border-radius: var(--radius-md);
+        font-weight: 500;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        transition: all 0.2s;
+        cursor: pointer;
+        margin: 0.5rem;
+    }
+
+    .btn-secondary:hover {
+        background: var(--gray-200);
+        color: var(--gray-800);
+        text-decoration: none;
+    }
+
+    .tier-badge {
+        background: var(--primary-gradient);
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 1rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+        text-transform: uppercase;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="results-container">
+    <!-- Results Header -->
+    <div class="results-header">
+        <h1 class="h2 mb-2">{{ title }}</h1>
+        <p class="text-muted">{% trans "Your analysis is in progress" %}</p>
+        <span class="tier-badge">{{ user_tier|title }} Tier</span>
+    </div>
+
+    <!-- Job Status -->
+    <div class="job-status">
+        <div class="status-icon processing">
+            <i class="fas fa-cog"></i>
+        </div>
+        <h3 class="mb-3">{% trans "Analysis Running" %}</h3>
+        <p class="text-muted mb-3">
+            {% trans "Your TubeWhale analysis has been started. The system is processing your request using advanced AI agents." %}
+        </p>
+        <div class="job-id">
+            {% trans "Job ID:" %} {{ job_id }}
+        </div>
+    </div>
+
+    <!-- Progress Steps -->
+    <div class="progress-section">
+        <h4 class="mb-3">{% trans "Analysis Progress" %}</h4>
+        <ul class="progress-steps">
+            <li class="progress-step">
+                <div class="step-indicator completed">
+                    <i class="fas fa-check"></i>
+                </div>
+                <div class="step-content">
+                    <div class="step-title">{% trans "Configuration Validated" %}</div>
+                    <div class="step-description">{% trans "Engine parameters and template selection confirmed" %}</div>
+                </div>
+                <div class="step-timestamp">{% trans "Just now" %}</div>
+            </li>
+            
+            <li class="progress-step">
+                <div class="step-indicator active">
+                    <i class="fas fa-search"></i>
+                </div>
+                <div class="step-content">
+                    <div class="step-title">{% trans "YouTube Search" %}</div>
+                    <div class="step-description">{% trans "Searching for relevant videos using your keywords" %}</div>
+                </div>
+                <div class="step-timestamp">{% trans "In progress..." %}</div>
+            </li>
+            
+            <li class="progress-step">
+                <div class="step-indicator pending">
+                    <span>3</span>
+                </div>
+                <div class="step-content">
+                    <div class="step-title">{% trans "Content Download" %}</div>
+                    <div class="step-description">{% trans "Downloading video metadata and audio transcripts" %}</div>
+                </div>
+                <div class="step-timestamp">{% trans "Pending" %}</div>
+            </li>
+            
+            <li class="progress-step">
+                <div class="step-indicator pending">
+                    <span>4</span>
+                </div>
+                <div class="step-content">
+                    <div class="step-title">{% trans "AI Analysis" %}</div>
+                    <div class="step-description">{% trans "Running intelligent analysis using selected template" %}</div>
+                </div>
+                <div class="step-timestamp">{% trans "Pending" %}</div>
+            </li>
+            
+            <li class="progress-step">
+                <div class="step-indicator pending">
+                    <span>5</span>
+                </div>
+                <div class="step-content">
+                    <div class="step-title">{% trans "Results Generation" %}</div>
+                    <div class="step-description">{% trans "Compiling final analysis report and insights" %}</div>
+                </div>
+                <div class="step-timestamp">{% trans "Pending" %}</div>
+            </li>
+        </ul>
+    </div>
+
+    <!-- Actions -->
+    <div class="actions">
+        <h4 class="mb-3">{% trans "What's Next?" %}</h4>
+        <p class="text-muted mb-4">
+            {% trans "This analysis typically takes 5-15 minutes depending on the number of videos and complexity. You can:" %}
+        </p>
+        
+        <div>
+            <a href="#" onclick="location.reload()" class="btn-secondary">
+                <i class="fas fa-sync-alt me-2"></i>
+                {% trans "Refresh Status" %}
+            </a>
+            
+            <a href="{% url 'client:workflow_start' %}" class="btn-primary">
+                <i class="fas fa-plus me-2"></i>
+                {% trans "Start New Analysis" %}
+            </a>
+            
+            <a href="{% url 'client:profile' %}" class="btn-secondary">
+                <i class="fas fa-user me-2"></i>
+                {% trans "View Profile" %}
+            </a>
+        </div>
+        
+        <div class="mt-4">
+            <small class="text-muted">
+                {% trans "You will receive an email notification when your analysis is complete." %}
+            </small>
+        </div>
+    </div>
+</div>
+
+<script>
+// Auto-refresh every 30 seconds
+setTimeout(function() {
+    location.reload();
+}, 30000);
+
+// Simulate progress updates (in real implementation, this would come from backend)
+setTimeout(function() {
+    // This is where you'd poll the backend for real progress updates
+    console.log('Checking analysis status...');
+}, 5000);
+</script>
+{% endblock %}

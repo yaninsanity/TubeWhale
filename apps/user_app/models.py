@@ -36,9 +36,9 @@ class User(AbstractUser):
         default='en', 
         choices=[
             ('en', 'English'),
-            ('zh-hans', '简体中文'),
-            ('zh-hant', '繁體中文'),
-            ('ja', '日本語'),
+            ('zh-hans', 'Simplified Chinese'),
+            ('zh-hant', 'Traditional Chinese'),
+            ('ja', 'Japanese'),
             ('ko', '한국어'),
             ('es', 'Español'),
             ('fr', 'Français'),
@@ -48,6 +48,22 @@ class User(AbstractUser):
         ],
         verbose_name=_("Language"),
         help_text=_("User interface language")
+    )
+    
+    # User tier system for template access
+    USER_TIERS = [
+        ('basic', _('Basic Tier - Default templates only')),
+        ('standard', _('Standard Tier - Template switching')),
+        ('premium', _('Premium Tier - Custom AI interactions')),
+        ('enterprise', _('Enterprise Tier - Full system access')),
+    ]
+    
+    tier = models.CharField(
+        max_length=20,
+        choices=USER_TIERS,
+        default='basic',
+        verbose_name=_("User Tier"),
+        help_text=_("Determines template access level")
     )
     
     # Account status and statistics
@@ -99,10 +115,35 @@ class User(AbstractUser):
         
     def get_active_api_keys(self):
         """Get user's active API keys"""
+        from django.db.models import Q
         return self.api_keys.filter(
-            is_active=True,
-            expires_at__gt=timezone.now()
+            Q(is_active=True) & 
+            (Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()))
         )
+    
+    def can_switch_templates(self):
+        """Check if user can switch between templates"""
+        return self.tier in ['standard', 'premium', 'enterprise']
+    
+    def can_customize_templates(self):
+        """Check if user can customize AI interactions"""
+        return self.tier in ['premium', 'enterprise']
+    
+    def is_enterprise_user(self):
+        """Check if user has enterprise access"""
+        return self.tier == 'enterprise' or self.is_superuser
+    
+    def get_tier_display_name(self):
+        """Get human-readable tier name"""
+        if self.is_superuser:
+            return _('Enterprise')
+        tier_names = {
+            'basic': _('Basic'),
+            'standard': _('Standard'), 
+            'premium': _('Premium'),
+            'enterprise': _('Enterprise')
+        }
+        return tier_names.get(self.tier, self.tier)
 
 
 class APIKey(models.Model):
@@ -115,10 +156,48 @@ class APIKey(models.Model):
     # API Key basic information
     name = models.CharField(max_length=100, verbose_name=_("Name"), 
                           help_text=_("API Key name"))
-    key = models.CharField(max_length=64, unique=True, verbose_name=_("Key"),
+    key = models.CharField(max_length=128, verbose_name=_("Key"),
                          help_text=_("API key string"))
     prefix = models.CharField(max_length=8, verbose_name=_("Prefix"),
                             help_text=_("Key prefix"))
+    
+    # Reference to original admin key for shared keys
+    original_key_hash = models.CharField(
+        max_length=64, 
+        blank=True, 
+        null=True,
+        verbose_name=_("Original Key Hash"),
+        help_text=_("Hash of original admin key for reference")
+    )
+    
+    # API Key type and service information
+    SERVICE_TYPES = [
+        ('openai', _('OpenAI API')),
+        ('youtube', _('YouTube API')),
+        ('other', _('Other Service')),
+    ]
+    
+    KEY_TYPES = [
+        ('user_generated', _('User Generated')),
+        ('admin_configured', _('Admin Configured')),
+        ('system_default', _('System Default')),
+    ]
+    
+    service_type = models.CharField(
+        max_length=20,
+        choices=SERVICE_TYPES,
+        default='other',
+        verbose_name=_("Service Type"),
+        help_text=_("Type of service this API key is for")
+    )
+    
+    key_type = models.CharField(
+        max_length=20,
+        choices=KEY_TYPES,
+        default='user_generated',
+        verbose_name=_("Key Type"),
+        help_text=_("How this API key was created")
+    )
     
     # Permissions and restrictions
     is_active = models.BooleanField(default=True, verbose_name=_("Active"),
@@ -321,3 +400,58 @@ class InvitationCode(models.Model):
     def __str__(self):
         status = _("Used") if self.is_used else _("Active")
         return f"{self.code} ({status})"
+
+
+class UserAnalysisHistory(models.Model):
+    """User Analysis History Model"""
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='analysis_history')
+    
+    # Analysis basic information
+    scenario_type = models.CharField(max_length=50, verbose_name=_("Analysis Scenario"))
+    youtube_url = models.URLField(verbose_name=_("YouTube URL"))
+    video_title = models.CharField(max_length=500, blank=True, null=True)
+    
+    # Analysis status
+    STATUS_CHOICES = [
+        ('pending', _('Pending')),
+        ('processing', _('Processing')),
+        ('completed', _('Completed')),
+        ('failed', _('Failed')),
+        ('cancelled', _('Cancelled')),
+    ]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    completed_at = models.DateTimeField(blank=True, null=True)
+    
+    # Analysis results
+    analysis_result = models.JSONField(blank=True, null=True, verbose_name=_("Analysis Result"))
+    error_message = models.TextField(blank=True, null=True, verbose_name=_("Error Message"))
+    
+    # Metadata
+    processing_time_seconds = models.PositiveIntegerField(blank=True, null=True)
+    tokens_used = models.PositiveIntegerField(blank=True, null=True)
+    cost_usd = models.DecimalField(max_digits=10, decimal_places=4, blank=True, null=True)
+    
+    class Meta:
+        verbose_name = _("User Analysis History")
+        verbose_name_plural = _("User Analysis Histories")
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', '-created_at']),
+            models.Index(fields=['status', '-created_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.scenario_type} - {self.status}"
+    
+    @property
+    def duration_minutes(self):
+        """Calculate analysis duration in minutes"""
+        if self.processing_time_seconds:
+            return round(self.processing_time_seconds / 60, 1)
+        return None

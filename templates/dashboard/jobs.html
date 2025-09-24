@@ -1,0 +1,294 @@
+{% load i18n %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% trans "Analysis Jobs" %} - TubeWhale</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .job-card {
+            transition: all 0.3s ease;
+            border-left: 4px solid #007bff;
+        }
+        
+        .job-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .status-badge {
+            font-size: 0.8rem;
+            padding: 0.4rem 0.8rem;
+        }
+        
+        .execution-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+        }
+        
+        .progress-animation {
+            animation: progress-pulse 2s infinite;
+        }
+        
+        @keyframes progress-pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.6; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-4">
+        <!-- Header -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h1><i class="fas fa-tasks me-2"></i>{% trans "Analysis Jobs" %}</h1>
+                        <p class="text-muted mb-0">{% trans "Manage your analysis history and execute new jobs" %}</p>
+                    </div>
+                    <div>
+                        <a href="/dashboard/" class="btn btn-outline-primary">
+                            <i class="fas fa-arrow-left me-2"></i>{% trans "Back to Dashboard" %}
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if start_job and job_config %}
+        <!-- Job Execution Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card execution-card">
+                    <div class="card-body text-center p-5">
+                        <h3 class="mb-4">
+                            <i class="fas fa-rocket me-2"></i>
+                            {% trans "Executing Analysis" %}
+                        </h3>
+                        
+                        <div class="mb-4">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="bg-white bg-opacity-20 p-3 rounded mb-2">
+                                        <i class="fas fa-tools fs-4 mb-2"></i>
+                                        <div>{{ job_config.tool_type|title }} Analysis</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="bg-white bg-opacity-20 p-3 rounded mb-2">
+                                        <i class="fas fa-user-tie fs-4 mb-2"></i>
+                                        <div>{{ job_config.template_name }}</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="bg-white bg-opacity-20 p-3 rounded mb-2">
+                                        <i class="fas fa-chart-line fs-4 mb-2"></i>
+                                        <div>{{ job_config.analysis_type|title }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Progress Bar -->
+                        <div class="progress mb-4 progress-animation" style="height: 8px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                 role="progressbar" style="width: 75%"></div>
+                        </div>
+                        
+                        <p class="mb-4">
+                            <i class="fas fa-brain me-2"></i>
+                            {% trans "AI is analyzing your content with professional expertise..." %}
+                        </p>
+                        
+                        <!-- Mock Analysis Steps -->
+                        <div class="row text-start">
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center mb-2">
+                                    <i class="fas fa-check-circle text-success me-2"></i>
+                                    <span>{% trans "Content extraction completed" %}</span>
+                                </div>
+                                <div class="d-flex align-items-center mb-2">
+                                    <i class="fas fa-check-circle text-success me-2"></i>
+                                    <span>{% trans "Professional template applied" %}</span>
+                                </div>
+                                <div class="d-flex align-items-center mb-2">
+                                    <i class="fas fa-spinner fa-spin text-warning me-2"></i>
+                                    <span>{% trans "AI analysis in progress..." %}</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center mb-2">
+                                    <i class="fas fa-clock text-secondary me-2"></i>
+                                    <span>{% trans "Generating insights..." %}</span>
+                                </div>
+                                <div class="d-flex align-items-center mb-2">
+                                    <i class="fas fa-clock text-secondary me-2"></i>
+                                    <span>{% trans "Preparing final report..." %}</span>
+                                </div>
+                                <div class="d-flex align-items-center mb-2">
+                                    <i class="fas fa-clock text-secondary me-2"></i>
+                                    <span>{% trans "Quality assurance check..." %}</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Mock completion -->
+                        <div class="mt-4" id="completionSection" style="display: none;">
+                            <div class="alert alert-success">
+                                <h5><i class="fas fa-check-circle me-2"></i>{% trans "Analysis Complete!" %}</h5>
+                                <p class="mb-3">{% trans "Your professional analysis report is ready for download." %}</p>
+                                <button class="btn btn-light btn-lg" onclick="downloadReport()">
+                                    <i class="fas fa-download me-2"></i>{% trans "Download Report" %}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Job History Section -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">
+                            <i class="fas fa-history me-2"></i>{% trans "Analysis History" %}
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        {% if mock_jobs %}
+                        <div class="row g-3">
+                            {% for job in mock_jobs %}
+                            <div class="col-md-6 col-lg-4">
+                                <div class="card job-card h-100">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <h6 class="card-title">{{ job.template_name }}</h6>
+                                            <span class="badge bg-success status-badge">{{ job.status }}</span>
+                                        </div>
+                                        <p class="card-text small text-muted">
+                                            <i class="fas fa-{{ job.tool_icon }} me-1"></i>
+                                            {{ job.tool_type }} • {{ job.created_at }}
+                                        </p>
+                                        <p class="card-text small">{{ job.input_preview }}</p>
+                                        
+                                        <div class="mt-auto">
+                                            <button class="btn btn-sm btn-outline-primary" onclick="downloadMockReport('{{ job.id }}')">
+                                                <i class="fas fa-download me-1"></i>{% trans "Download" %}
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-secondary" onclick="viewMockJob('{{ job.id }}')">
+                                                <i class="fas fa-eye me-1"></i>{% trans "View" %}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-inbox fs-1 text-muted mb-3"></i>
+                            <h5 class="text-muted">{% trans "No analysis history yet" %}</h5>
+                            <p class="text-muted">{% trans "Start your first analysis to see results here" %}</p>
+                            <a href="/dashboard/templates/wizard/" class="btn btn-primary">
+                                <i class="fas fa-magic me-2"></i>{% trans "Start Analysis" %}
+                            </a>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Mock analysis completion
+        {% if start_job and job_config %}
+        setTimeout(function() {
+            // Update progress steps
+            document.querySelectorAll('.fa-spinner').forEach(el => {
+                el.classList.remove('fa-spinner', 'fa-spin', 'text-warning');
+                el.classList.add('fa-check-circle', 'text-success');
+            });
+            document.querySelectorAll('.fa-clock').forEach(el => {
+                el.classList.remove('fa-clock', 'text-secondary');
+                el.classList.add('fa-check-circle', 'text-success');
+            });
+            
+            // Update progress bar
+            document.querySelector('.progress-bar').style.width = '100%';
+            document.querySelector('.progress-bar').classList.remove('progress-bar-animated');
+            
+            // Show completion
+            document.getElementById('completionSection').style.display = 'block';
+        }, 5000); // 5 seconds mock processing
+        {% endif %}
+        
+        function downloadReport() {
+            // Generate mock report download
+            const reportContent = `
+TUBEWHALE PROFESSIONAL ANALYSIS REPORT
+====================================
+
+Analysis Type: {{ job_config.tool_type|default:"Professional" }}
+Template: {{ job_config.template_name|default:"Professional Analysis" }}
+Generated: ${new Date().toLocaleString()}
+
+EXECUTIVE SUMMARY
+================
+This professional analysis provides comprehensive insights into the analyzed content using advanced AI techniques and industry expertise.
+
+KEY FINDINGS
+============
+1. Content Quality: High-quality analysis completed
+2. Professional Insights: Expert-level evaluation provided
+3. Actionable Recommendations: Strategic guidance included
+
+DETAILED ANALYSIS
+================
+[Professional analysis content would appear here based on the selected template and analysis type]
+
+RECOMMENDATIONS
+==============
+1. Continue leveraging high-quality content strategies
+2. Implement suggested improvements for enhanced performance
+3. Monitor progress using provided metrics and KPIs
+
+---
+Generated by TubeWhale Intelligence Platform
+© ${new Date().getFullYear()} TubeWhale
+            `;
+            
+            const blob = new Blob([reportContent], { type: 'text/plain' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'tubewhale-analysis-report.txt';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            
+            // Show success message
+            alert('{% trans "Report downloaded successfully!" %}');
+        }
+        
+        function downloadMockReport(jobId) {
+            // Generate mock historical report
+            downloadReport();
+        }
+        
+        function viewMockJob(jobId) {
+            alert('{% trans "Job details view would open here in a full implementation" %}');
+        }
+    </script>
+</body>
+</html>

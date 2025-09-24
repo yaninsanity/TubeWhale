@@ -1,0 +1,359 @@
+{% extends 'client/base.html' %}
+{% load static %}
+
+{% block content %}
+<!-- Hero Section -->
+<section style="background: var(--gradient-primary); color: white; padding: var(--space-16) 0; text-align: center;">
+    <div class="container">
+        <div class="slide-in">
+            <div style="margin-bottom: var(--space-6);">
+                <img src="{{ MEDIA_URL }}logo.png" alt="TubeWhale Logo" style="height: 80px; width: 80px; margin: 0 auto var(--space-4); border-radius: 20px; box-shadow: 0 12px 48px rgba(0,0,0,0.3); display: block;">
+            </div>
+            <h1 class="text-4xl font-bold mb-6">{{ hero_title|default:"TubeWhale - Intelligent Video Analysis Platform" }}</h1>
+            <p class="text-xl mb-8" style="color: rgba(255, 255, 255, 0.9);">{{ hero_subtitle|default:"AI-Driven Video Content Intelligence & Insights" }}</p>
+            
+            <div class="flex justify-center gap-4">
+                {% if user.is_authenticated %}
+                    <a href="{% url 'tubewhale_engine:client_dashboard' %}" class="btn btn-gradient">
+                        Enter Dashboard →
+                    </a>
+                    <a href="{% url 'tubewhale_engine:client_agents' %}" class="btn btn-outline" style="border-color: white; color: white;">
+                        View Agent Collaboration
+                    </a>
+                {% else %}
+                    <a href="{% url 'tubewhale_engine:client_login' %}" class="btn btn-gradient">
+                        Get Started →
+                    </a>
+                    <a href="#features" class="btn btn-outline" style="border-color: white; color: white;">
+                        Learn More
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Real-time Status Indicator -->
+<section style="background: white; padding: var(--space-8) 0; box-shadow: var(--shadow-md);">
+    <div class="container">
+        <div class="grid grid-cols-4">
+            <div class="stat-card">
+                <div class="stat-number" id="live-videos">{{ stats.total_videos|default:0 }}</div>
+                <div class="stat-label">Videos Processed</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number pulse" id="live-users">{{ stats.active_users|default:0 }}</div>
+                <div class="stat-label">Active Users</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="live-analyses">{{ stats.analyses_today|default:0 }}</div>
+                <div class="stat-label">Today's Analysis</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" style="color: var(--success-color);">{{ stats.system_status|default:"System Ready" }}</div>
+                <div class="stat-label">System Status</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Intelligent Assistant Collaboration -->
+<section id="features" style="padding: var(--space-16) 0;">
+    <div class="container">
+        <div class="text-center mb-12">
+            <h2 class="text-3xl font-bold mb-4">Intelligent Assistant Collaboration Platform</h2>
+            <p class="text-lg" style="color: var(--gray-600);">
+                Multiple professional AI assistants work together automatically to provide comprehensive video content analysis services
+            </p>
+        </div>
+        
+        <!-- Intelligent Agent Workflow -->
+        <div class="grid grid-cols-4 mb-12">
+            <div class="card text-center">
+                <div class="card-body">
+                    <div style="font-size: 3rem; margin-bottom: var(--space-4);">🔍</div>
+                    <h3 class="font-bold mb-2">Search Agent</h3>
+                    <p class="text-sm" style="color: var(--gray-600);">
+                        Intelligent content discovery & search optimization
+                    </p>
+                    <div class="badge badge-success mt-4">
+                        <span class="loading-spinner" style="width: 12px; height: 12px; margin-right: var(--space-2);"></span>
+                        Real-time Running
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card text-center">
+                <div class="card-body">
+                    <div style="font-size: 3rem; margin-bottom: var(--space-4);">🎙️</div>
+                    <h3 class="font-bold mb-2">Audio Agent</h3>
+                    <p class="text-sm" style="color: var(--gray-600);">
+                        Professional audio processing & speech recognition
+                    </p>
+                    <div class="badge badge-success mt-4">
+                        <span class="loading-spinner" style="width: 12px; height: 12px; margin-right: var(--space-2);"></span>
+                        Active Processing
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card text-center">
+                <div class="card-body">
+                    <div style="font-size: 3rem; margin-bottom: var(--space-4);">🔊</div>
+                    <h3 class="font-bold mb-2">Audio Features Agent</h3>
+                    <p class="text-sm" style="color: var(--gray-600);">
+                        Audio Feature Extraction & Processing
+                    </p>
+                    <div class="badge badge-info mt-4">Collaborative Processing</div>
+                </div>
+            </div>
+            
+            <div class="card text-center">
+                <div class="card-body">
+                    <div style="font-size: 3rem; margin-bottom: var(--space-4);">📝</div>
+                    <h3 class="font-bold mb-2">Transcript Agent</h3>
+                    <p class="text-sm" style="color: var(--gray-600);">
+                        High-precision speech-to-text conversion
+                    </p>
+                    <div class="badge badge-gradient mt-4">AI-Powered</div>
+                </div>
+            </div>
+            
+            <div class="card text-center">
+                <div class="card-body">
+                    <div style="font-size: 3rem; margin-bottom: var(--space-4);">🧠</div>
+                    <h3 class="font-bold mb-2">Analysis Agent</h3>
+                    <p class="text-sm" style="color: var(--gray-600);">
+                        Intelligent content analysis & summarization
+                    </p>
+                    <div class="badge badge-success mt-4">Deep Learning</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Collaboration Process Visualization -->
+        <div class="card mb-12">
+            <div class="card-header">
+                <h3 class="font-bold">Real-time Collaboration Workflow</h3>
+            </div>
+            <div class="card-body">
+                <div class="grid grid-cols-4">
+                    <div class="text-center">
+                        <div class="badge badge-info mb-2">Step 1</div>
+                        <h4 class="font-semibold mb-2">Content Discovery</h4>
+                        <div class="progress mb-2">
+                            <div class="progress-bar" data-progress="100"></div>
+                        </div>
+                        <p class="text-sm" style="color: var(--gray-600);">Search Agent Completed</p>
+                    </div>
+                    
+                    <div class="text-center">
+                        <div class="badge badge-warning mb-2">Step 2</div>
+                        <h4 class="font-semibold mb-2">Audio Processing</h4>
+                        <div class="progress mb-2">
+                            <div class="progress-bar" data-progress="78"></div>
+                        </div>
+                        <p class="text-sm" style="color: var(--gray-600);">Audio Agent Processing</p>
+                    </div>
+                    
+                    <div class="text-center">
+                        <div class="badge badge-info mb-2">Step 3</div>
+                        <h4 class="font-semibold mb-2">Transcript Generation</h4>
+                        <div class="progress mb-2">
+                            <div class="progress-bar" data-progress="92"></div>
+                        </div>
+                        <p class="text-sm" style="color: var(--gray-600);">Transcript Agent In Progress</p>
+                    </div>
+                    
+                    <div class="text-center">
+                        <div class="badge badge-gradient mb-2">Step 4</div>
+                        <h4 class="font-semibold mb-2">Intelligent Summary</h4>
+                        <div class="progress mb-2">
+                            <div class="progress-bar" data-progress="45"></div>
+                        </div>
+                        <p class="text-sm" style="color: var(--gray-600);">Summarizer Agent Analyzing</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Core Features -->
+<section style="background: var(--gray-100); padding: var(--space-16) 0;">
+    <div class="container">
+        <div class="text-center mb-12">
+            <h2 class="text-3xl font-bold mb-4">Intelligent Core Features</h2>
+            <p class="text-lg" style="color: var(--gray-600);">
+                Industrial-grade best practices providing deep insights for your video content
+            </p>
+        </div>
+        
+        <div class="grid grid-cols-2">
+            {% for feature in features %}
+            <div class="card mb-6">
+                <div class="card-body">
+                    <div class="flex items-start">
+                        <div style="font-size: 2rem; margin-right: var(--space-4);">{{ feature.icon }}</div>
+                        <div>
+                            <h3 class="font-bold mb-2">{{ feature.title }}</h3>
+                            <p style="color: var(--gray-600);">{{ feature.description }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+<!-- Recent Activity -->
+<section style="padding: var(--space-16) 0;">
+    <div class="container">
+        <div class="grid grid-cols-2">
+            <div>
+                <h2 class="text-2xl font-bold mb-6">Real-time Platform Activity</h2>
+                <div class="space-y-4">
+                    {% for activity in recent_activity %}
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <h4 class="font-semibold">{{ activity.action }}</h4>
+                                    <p class="text-sm" style="color: var(--gray-600);">{{ activity.details }}</p>
+                                </div>
+                                <span class="text-sm" style="color: var(--gray-400);">{{ activity.time }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <div>
+                <h2 class="text-2xl font-bold mb-6">System Performance Monitoring</h2>
+                <div class="card">
+                    <div class="card-body">
+                        <div class="mb-6">
+                            <div class="flex justify-between mb-2">
+                                <span>Service Status</span>
+                                <span class="font-bold" style="color: var(--success-color);">Running</span>
+                            </div>
+                            <div class="status-indicator" style="height: 4px; background: rgba(0,255,0,0.3); border-radius: 2px;">
+                                <div style="width: 100%; height: 100%; background: var(--success-color); border-radius: 2px;"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-6">
+                            <div class="flex justify-between mb-2">
+                                <span>Database Connection</span>
+                                <span class="font-bold" style="color: var(--success-color);">Normal</span>
+                            </div>
+                            <div class="status-indicator" style="height: 4px; background: rgba(0,255,0,0.3); border-radius: 2px;">
+                                <div style="width: 100%; height: 100%; background: var(--success-color); border-radius: 2px;"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-6">
+                            <div class="flex justify-between mb-2">
+                                <span>AI Agents</span>
+                                <span class="font-bold" style="color: var(--success-color);">Loaded</span>
+                            </div>
+                            <div class="status-indicator" style="height: 4px; background: rgba(0,255,0,0.3); border-radius: 2px;">
+                                <div style="width: 100%; height: 100%; background: var(--success-color); border-radius: 2px;"></div>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <div class="flex justify-between mb-2">
+                                <span>System Health</span>
+                                <span class="font-bold" style="color: var(--success-color);">Good</span>
+                            </div>
+                            <div class="status-indicator" style="height: 4px; background: rgba(0,255,0,0.3); border-radius: 2px;">
+                                <div style="width: 100%; height: 100%; background: var(--success-color); border-radius: 2px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- CTA Section -->
+{% if not user.is_authenticated %}
+<section style="background: var(--gradient-secondary); color: white; padding: var(--space-16) 0; text-align: center;">
+    <div class="container">
+        <h2 class="text-3xl font-bold mb-4">Start Your Intelligent Video Analysis Journey</h2>
+        <p class="text-lg mb-8" style="color: rgba(255, 255, 255, 0.9);">
+            Experience efficient video content processing through AI agent collaboration
+        </p>
+        <a href="{% url 'tubewhale_engine:client_login' %}" class="btn btn-gradient" style="font-size: 1.125rem; padding: var(--space-4) var(--space-8);">
+            Sign Up Now →
+        </a>
+    </div>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Real-time data updates
+    function updateLiveStats() {
+        // Simulate real-time data updates
+        const elements = {
+            'live-videos': document.getElementById('live-videos'),
+            'live-users': document.getElementById('live-users'),
+            'live-analyses': document.getElementById('live-analyses')
+        };
+        
+        // Randomly increase numbers to simulate real-time growth
+        Object.keys(elements).forEach(id => {
+            const element = elements[id];
+            if (element && Math.random() > 0.7) { // 30% probability update
+                const currentValue = parseInt(element.textContent.replace(/,/g, ''));
+                const newValue = currentValue + Math.floor(Math.random() * 3) + 1;
+                element.textContent = formatNumber(newValue);
+                
+                // Add pulse effect
+                element.parentElement.classList.add('pulse');
+                setTimeout(() => {
+                    element.parentElement.classList.remove('pulse');
+                }, 1000);
+            }
+        });
+    }
+    
+    // Progress bar random updates
+    function updateProgress() {
+        const progressBars = document.querySelectorAll('.progress-bar[data-progress]');
+        progressBars.forEach(bar => {
+            const current = parseInt(bar.style.width) || 0;
+            if (current < 100 && Math.random() > 0.8) {
+                const newProgress = Math.min(current + Math.floor(Math.random() * 5) + 1, 100);
+                bar.style.width = newProgress + '%';
+            }
+        });
+    }
+    
+    // Regular updates
+    setInterval(updateLiveStats, 15000); // Update stats every 15 seconds
+    setInterval(updateProgress, 8000);   // Update progress every 8 seconds
+    
+    // Page loading animation
+    document.addEventListener('DOMContentLoaded', function() {
+        // Delayed card display to create smooth loading effect
+        const cards = document.querySelectorAll('.card');
+        cards.forEach((card, index) => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(20px)';
+            
+            setTimeout(() => {
+                card.style.transition = 'all 0.5s ease';
+                card.style.opacity = '1';
+                card.style.transform = 'translateY(0)';
+            }, index * 100);
+        });
+    });
+</script>
+{% endblock %}

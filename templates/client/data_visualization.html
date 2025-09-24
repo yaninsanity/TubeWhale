@@ -1,0 +1,582 @@
+{% extends 'client/base.html' %}
+
+{% block content %}
+<!-- Data Insights Header -->
+<section style="background: var(--gradient-primary); color: white; padding: var(--space-8) 0;">
+    <div class="container">
+        <div class="flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-bold mb-2">Intelligent Data Insights Center</h1>
+                <p class="text-lg" style="color: rgba(255, 255, 255, 0.9);">
+                    AI-driven data analysis and visualization platform
+                </p>
+            </div>
+            <div class="flex gap-4">
+                <button class="btn btn-outline" style="border-color: white; color: white;" onclick="exportReport()">
+                    📊 Export Report
+                </button>
+                <button class="btn btn-outline" style="border-color: white; color: white;" onclick="refreshData()">
+                    🔄 Refresh Data
+                </button>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- AI Generated Insights -->
+<section style="padding: var(--space-8) 0; background: white;">
+    <div class="container">
+        <h2 class="text-2xl font-bold mb-6">AI Intelligent Insights</h2>
+        
+        <div class="grid grid-cols-3">
+            {% for insight in insights %}
+            <div class="card">
+                <div class="card-body">
+                    <div class="flex justify-between items-start mb-4">
+                        <h3 class="font-bold">{{ insight.title }}</h3>
+                        <div class="badge {% if insight.category == 'trend' %}badge-success{% elif insight.category == 'optimization' %}badge-info{% else %}badge-warning{% endif %}">
+                            {{ insight.confidence }}% Confidence
+                        </div>
+                    </div>
+                    <p class="text-sm mb-4" style="color: var(--gray-600);">{{ insight.insight }}</p>
+                    
+                    <!-- Insight Type Icons -->
+                    <div class="flex items-center">
+                        {% if insight.category == 'trend' %}
+                            <div style="color: var(--success-color); margin-right: var(--space-2);">📈</div>
+                            <span class="text-sm" style="color: var(--success-color);">Trend Analysis</span>
+                        {% elif insight.category == 'optimization' %}
+                            <div style="color: var(--info-color); margin-right: var(--space-2);">⚡</div>
+                            <span class="text-sm" style="color: var(--info-color);">Optimization Suggestion</span>
+                        {% else %}
+                            <div style="color: var(--warning-color); margin-right: var(--space-2);">👥</div>
+                            <span class="text-sm" style="color: var(--warning-color);">User Behavior</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+<!-- Processing Trend Charts -->
+<section style="background: var(--gray-100); padding: var(--space-8) 0;">
+    <div class="container">
+        <div class="grid grid-cols-2">
+            <!-- Processing Volume Trends -->
+            <div class="card mr-4">
+                <div class="card-header">
+                    <div class="flex justify-between items-center">
+                        <h3 class="font-bold">Video Processing Volume Trends</h3>
+                        <div class="flex gap-2">
+                            <button class="btn btn-sm" onclick="changeChartPeriod('week')">Week</button>
+                            <button class="btn btn-sm btn-primary" onclick="changeChartPeriod('month')">Month</button>
+                            <button class="btn btn-sm" onclick="changeChartPeriod('quarter')">Quarter</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <canvas id="processingTrendsChart" width="400" height="200"></canvas>
+                </div>
+            </div>
+            
+            <!-- Accuracy Analysis -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="font-bold">AI Agent Accuracy Analysis</h3>
+                </div>
+                <div class="card-body">
+                    <div class="grid grid-cols-2">
+                        {% for agent, accuracy in charts_data.accuracy_metrics.items %}
+                        <div class="text-center mb-6">
+                            <div class="relative" style="width: 120px; height: 120px; margin: 0 auto;">
+                                <!-- 简化的环形进度图 -->
+                                <svg width="120" height="120" style="transform: rotate(-90deg);">
+                                    <circle cx="60" cy="60" r="50" fill="none" stroke="var(--gray-200)" stroke-width="8"/>
+                                    <circle cx="60" cy="60" r="50" fill="none" stroke="var(--primary-color)" stroke-width="8" 
+                                            stroke-dasharray="{{ accuracy|floatformat:1|mul:3.14 }} 314" 
+                                            stroke-linecap="round"/>
+                                </svg>
+                                <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
+                                    <div class="text-xl font-bold" style="color: var(--primary-color);">{{ accuracy }}%</div>
+                                </div>
+                            </div>
+                            <h4 class="font-semibold mt-2">{{ agent|title|cut:"_" }} Agent</h4>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Content Type Distribution and Trends -->
+<section style="padding: var(--space-8) 0;">
+    <div class="container">
+        <div class="grid grid-cols-3">
+            <!-- Content Type Distribution -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="font-bold">Content Type Distribution</h3>
+                </div>
+                <div class="card-body">
+                    {% for content_type, percentage in trends.content_types.items %}
+                    <div class="mb-4">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="font-medium">{{ content_type|title }}</span>
+                            <span class="font-bold">{{ percentage }}%</span>
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar {% cycle 'bg-primary' 'bg-success' 'bg-info' 'bg-warning' %}" data-progress="{{ percentage }}"></div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <!-- Performance Improvement Trends -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="font-bold">Performance Improvement Trends</h3>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-6">
+                        <div class="text-4xl font-bold" style="color: var(--success-color);">
+                            +{{ trends.processing_efficiency.quarter_over_quarter }}%
+                        </div>
+                        <div class="text-sm" style="color: var(--gray-600);">Quarter-over-Quarter Growth</div>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm">Week-over-Week</span>
+                            <div class="flex items-center">
+                                <span class="text-sm font-bold" style="color: var(--success-color);">
+                                    +{{ trends.processing_efficiency.week_over_week }}%
+                                </span>
+                                <span style="color: var(--success-color); margin-left: var(--space-1);">↗</span>
+                            </div>
+                        </div>
+                        
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm">Month-over-Month</span>
+                            <div class="flex items-center">
+                                <span class="text-sm font-bold" style="color: var(--success-color);">
+                                    +{{ trends.processing_efficiency.month_over_month }}%
+                                </span>
+                                <span style="color: var(--success-color); margin-left: var(--space-1);">↗</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Real-time System Status -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="font-bold">Real-time System Status</h3>
+                </div>
+                <div class="card-body">
+                    <div class="space-y-4">
+                        <div class="text-center">
+                            <div class="loading-spinner pulse mx-auto mb-2"></div>
+                            <div class="text-sm" style="color: var(--gray-600);">System Running</div>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 text-center">
+                            <div>
+                                <div class="text-lg font-bold" style="color: var(--primary-color);">{{ system_metrics.processing_speed }}</div>
+                                <div class="text-sm" style="color: var(--gray-600);">Processing/min</div>
+                            </div>
+                            <div>
+                                <div class="text-lg font-bold" style="color: var(--success-color);">{{ system_metrics.accuracy_rate }}%</div>
+                                <div class="text-sm" style="color: var(--gray-600);">Accuracy Rate</div>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 text-center">
+                            <div>
+                                <div class="text-lg font-bold" style="color: var(--info-color);">{{ system_metrics.active_connections }}</div>
+                                <div class="text-sm" style="color: var(--gray-600);">Active Connections</div>
+                            </div>
+                            <div>
+                                <div class="text-lg font-bold" style="color: var(--warning-color);">{{ system_metrics.data_throughput }}</div>
+                                <div class="text-sm" style="color: var(--gray-600);">Data Throughput</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Detailed Data Table -->
+<section style="background: var(--gray-100); padding: var(--space-8) 0;">
+    <div class="container">
+        <div class="card">
+            <div class="card-header">
+                <div class="flex justify-between items-center">
+                    <h3 class="font-bold">Detailed Processing Records</h3>
+                    <div class="flex gap-2">
+                        <input type="text" placeholder="Search..." style="padding: var(--space-2); border: 1px solid var(--gray-300); border-radius: var(--radius-md);">
+                        <button class="btn btn-outline">Filter</button>
+                        <button class="btn btn-primary">Export CSV</button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="border-bottom: 2px solid var(--gray-200);">
+                                <th style="padding: var(--space-3); text-align: left; font-weight: 600;">Time</th>
+                                <th style="padding: var(--space-3); text-align: left; font-weight: 600;">Content Type</th>
+                                <th style="padding: var(--space-3); text-align: left; font-weight: 600;">Processing Agent</th>
+                                <th style="padding: var(--space-3); text-align: left; font-weight: 600;">Status</th>
+                                <th style="padding: var(--space-3); text-align: left; font-weight: 600;">Accuracy</th>
+                                <th style="padding: var(--space-3); text-align: left; font-weight: 600;">Duration</th>
+                                <th style="padding: var(--space-3); text-align: left; font-weight: 600;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dataTable">
+                            <!-- Dynamically generated data rows -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Pagination -->
+                <div class="flex justify-between items-center mt-6">
+                    <div class="text-sm" style="color: var(--gray-600);">
+                        Showing 1-10 of 245 records
+                    </div>
+                    <div class="flex gap-2">
+                        <button class="btn btn-sm">Previous</button>
+                        <button class="btn btn-sm btn-primary">1</button>
+                        <button class="btn btn-sm">2</button>
+                        <button class="btn btn-sm">3</button>
+                        <button class="btn btn-sm">Next</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Mobile-optimized Quick Insights Cards -->
+<section style="padding: var(--space-8) 0; display: none;" class="mobile-insights">
+    <div class="container">
+        <h2 class="text-xl font-bold mb-4">Quick Insights</h2>
+        <div class="grid grid-cols-1">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h3 class="font-bold mb-2">📊 Today's Processing Overview</h3>
+                    <div class="grid grid-cols-2">
+                        <div class="text-center">
+                            <div class="text-2xl font-bold" style="color: var(--primary-color);">156</div>
+                            <div class="text-sm">Videos Processed</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-bold" style="color: var(--success-color);">{{ total_videos|default:"0" }}</div>
+                            <div class="text-sm">Total Processed</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h3 class="font-bold mb-2">🤖 Agent Collaboration Status</h3>
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm">Search Agent</span>
+                            <div class="badge badge-success">Active</div>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm">Transcript Agent</span>
+                            <div class="badge badge-info">Processing</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Data visualization page functionality
+    let chartInstances = {};
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeDataVisualization();
+        populateDataTable();
+        checkMobileView();
+    });
+    
+    function initializeDataVisualization() {
+        // Initialize processing trends chart
+        initializeTrendsChart();
+        
+        // Initialize all progress bars
+        const progressBars = document.querySelectorAll('.progress-bar[data-progress]');
+        progressBars.forEach((bar, index) => {
+            const progress = bar.dataset.progress;
+            setTimeout(() => {
+                bar.style.width = progress + '%';
+            }, index * 100);
+        });
+        
+        // Start real-time data updates
+        startDataUpdates();
+    }
+    
+    function initializeTrendsChart() {
+        const canvas = document.getElementById('processingTrendsChart');
+        const ctx = canvas.getContext('2d');
+        
+        // Draw trends chart
+        setTimeout(() => {
+            drawTrendsChart(ctx, canvas.width, canvas.height);
+        }, 500);
+    }
+    
+    function drawTrendsChart(ctx, width, height) {
+        const padding = 40;
+        const chartWidth = width - 2 * padding;
+        const chartHeight = height - 2 * padding;
+        
+        // Clear canvas
+        ctx.clearRect(0, 0, width, height);
+        
+        // Draw grid background
+        drawGrid(ctx, width, height, padding);
+        
+        // Draw data line
+        const monthlyData = [245, 387, 512, 698, 823, 956]; // 6 months of data
+        drawDataLine(ctx, monthlyData, chartWidth, chartHeight, padding);
+        
+        // Add data points
+        drawDataPoints(ctx, monthlyData, chartWidth, chartHeight, padding);
+        
+        // Add labels
+        drawLabels(ctx, width, height, padding);
+    }
+    
+    function drawGrid(ctx, width, height, padding) {
+        ctx.strokeStyle = '#e5e7eb';
+        ctx.lineWidth = 1;
+        
+        // Vertical grid lines
+        for (let i = 0; i <= 6; i++) {
+            const x = padding + (i * (width - 2 * padding) / 6);
+            ctx.beginPath();
+            ctx.moveTo(x, padding);
+            ctx.lineTo(x, height - padding);
+            ctx.stroke();
+        }
+        
+        // Horizontal grid lines
+        for (let i = 0; i <= 5; i++) {
+            const y = padding + (i * (height - 2 * padding) / 5);
+            ctx.beginPath();
+            ctx.moveTo(padding, y);
+            ctx.lineTo(width - padding, y);
+            ctx.stroke();
+        }
+    }
+    
+    function drawDataLine(ctx, data, chartWidth, chartHeight, padding) {
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        
+        const maxValue = Math.max(...data);
+        data.forEach((value, index) => {
+            const x = padding + (index * chartWidth / (data.length - 1));
+            const y = padding + chartHeight - (value / maxValue * chartHeight);
+            
+            if (index === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        });
+        
+        ctx.stroke();
+    }
+    
+    function drawDataPoints(ctx, data, chartWidth, chartHeight, padding) {
+        ctx.fillStyle = '#3b82f6';
+        const maxValue = Math.max(...data);
+        
+        data.forEach((value, index) => {
+            const x = padding + (index * chartWidth / (data.length - 1));
+            const y = padding + chartHeight - (value / maxValue * chartHeight);
+            
+            ctx.beginPath();
+            ctx.arc(x, y, 4, 0, 2 * Math.PI);
+            ctx.fill();
+        });
+    }
+    
+    function drawLabels(ctx, width, height, padding) {
+        ctx.fillStyle = '#6b7280';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'center';
+        
+        const labels = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'];
+        labels.forEach((label, index) => {
+            const x = padding + (index * (width - 2 * padding) / (labels.length - 1));
+            ctx.fillText(label, x, height - 10);
+        });
+    }
+    
+    function populateDataTable() {
+        const tableBody = document.getElementById('dataTable');
+        const sampleData = [
+            {
+                time: '2025-09-21 14:32',
+                type: 'Educational Video',
+                agent: 'Transcript Agent',
+                status: 'Completed',
+                accuracy: 'Normal',
+                duration: '2.3s',
+                statusClass: 'badge-success'
+            },
+            {
+                time: '2025-09-21 14:28',
+                type: 'News Content',
+                agent: 'Summarizer Agent',
+                status: 'Processing',
+                accuracy: 'Running',
+                duration: '1.8s',
+                statusClass: 'badge-info'
+            },
+            {
+                time: '2025-09-21 14:25',
+                type: 'Podcast Episode',
+                agent: 'Audio Agent',
+                status: 'Completed',
+                accuracy: 'Normal',
+                duration: '3.1s',
+                statusClass: 'badge-success'
+            },
+            {
+                time: '2025-09-21 14:20',
+                type: 'Business Presentation',
+                agent: 'Search Agent',
+                status: 'Completed',
+                accuracy: 'Normal',
+                duration: '1.5s',
+                statusClass: 'badge-success'
+            }
+        ];
+        
+        sampleData.forEach(row => {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid var(--gray-200)';
+            tr.innerHTML = `
+                <td style="padding: var(--space-3);">${row.time}</td>
+                <td style="padding: var(--space-3);">${row.type}</td>
+                <td style="padding: var(--space-3);">${row.agent}</td>
+                <td style="padding: var(--space-3);">
+                    <div class="badge ${row.statusClass}">${row.status}</div>
+                </td>
+                <td style="padding: var(--space-3);">${row.accuracy}</td>
+                <td style="padding: var(--space-3);">${row.duration}</td>
+                <td style="padding: var(--space-3);">
+                    <button class="btn btn-sm btn-outline">Details</button>
+                </td>
+            `;
+            tableBody.appendChild(tr);
+        });
+    }
+    
+    function startDataUpdates() {
+        // Update real-time data every 30 seconds
+        setInterval(() => {
+            updateRealTimeMetrics();
+        }, 30000);
+    }
+    
+    function updateRealTimeMetrics() {
+        // Update real-time metrics
+        const metrics = document.querySelectorAll('.text-lg.font-bold');
+        metrics.forEach(metric => {
+            if (Math.random() > 0.8) { // 20% chance of update
+                const currentValue = parseInt(metric.textContent);
+                if (!isNaN(currentValue)) {
+                    const change = Math.floor(Math.random() * 10) + 1;
+                    metric.textContent = currentValue + change;
+                    
+                    // Add update animation
+                    metric.classList.add('pulse');
+                    setTimeout(() => {
+                        metric.classList.remove('pulse');
+                    }, 1000);
+                }
+            }
+        });
+    }
+    
+    function checkMobileView() {
+        // Check if mobile view, show optimized quick insights
+        if (window.innerWidth <= 768) {
+            document.querySelector('.mobile-insights').style.display = 'block';
+        }
+        
+        // Listen for window size changes
+        window.addEventListener('resize', () => {
+            if (window.innerWidth <= 768) {
+                document.querySelector('.mobile-insights').style.display = 'block';
+            } else {
+                document.querySelector('.mobile-insights').style.display = 'none';
+            }
+        });
+    }
+    
+    // Utility functions
+    function changeChartPeriod(period) {
+        console.log(`Switching to ${period} view`);
+        // Redraw chart data
+        initializeTrendsChart();
+    }
+    
+    function exportReport() {
+        alert('Preparing data report export...\nSupports PDF, Excel and JSON formats');
+    }
+    
+    function refreshData() {
+        // Show loading state
+        const refreshBtn = event.target;
+        const originalText = refreshBtn.textContent;
+        refreshBtn.textContent = '🔄 Refreshing...';
+        refreshBtn.disabled = true;
+        
+        // Simulate data refresh
+        setTimeout(() => {
+            updateRealTimeMetrics();
+            refreshBtn.textContent = originalText;
+            refreshBtn.disabled = false;
+        }, 2000);
+    }
+    
+    // Mobile touch optimization
+    if ('ontouchstart' in window) {
+        // Add touch feedback for mobile
+        document.querySelectorAll('.btn').forEach(btn => {
+            btn.addEventListener('touchstart', function() {
+                this.style.transform = 'scale(0.95)';
+            });
+            
+            btn.addEventListener('touchend', function() {
+                this.style.transform = 'scale(1)';
+            });
+        });
+    }
+</script>
+{% endblock %}

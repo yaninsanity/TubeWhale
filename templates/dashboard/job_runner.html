@@ -1,0 +1,571 @@
+{% extends "dashboard/base_simple.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Job Management" %} - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        --success-color: #10b981;
+        --warning-color: #f59e0b;
+        --danger-color: #ef4444;
+        --info-color: #3b82f6;
+        --gray-50: #f9fafb;
+        --gray-100: #f3f4f6;
+        --gray-800: #1f2937;
+        --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        --radius-md: 0.5rem;
+        --radius-lg: 0.75rem;
+    }
+    
+    .job-dashboard-header {
+        background: var(--primary-gradient);
+        color: white;
+        border-radius: var(--radius-lg);
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+    
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1.5rem;
+        margin: 2rem 0;
+    }
+    
+    .stat-card {
+        background: white;
+        border: 1px solid var(--gray-100);
+        border-radius: var(--radius-lg);
+        padding: 1.5rem;
+        text-align: center;
+        box-shadow: var(--shadow-sm);
+        transition: all 0.3s ease;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+    }
+    
+    .stat-icon {
+        width: 3rem;
+        height: 3rem;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1rem;
+        font-size: 1.25rem;
+    }
+    
+    .stat-icon.pending { background: rgba(251, 146, 60, 0.1); color: var(--warning-color); }
+    .stat-icon.running { background: rgba(59, 130, 246, 0.1); color: var(--info-color); }
+    .stat-icon.completed { background: rgba(16, 185, 129, 0.1); color: var(--success-color); }
+    .stat-icon.failed { background: rgba(239, 68, 68, 0.1); color: var(--danger-color); }
+    
+    .job-section {
+        background: white;
+        border: 1px solid var(--gray-100);
+        border-radius: var(--radius-lg);
+        margin-bottom: 2rem;
+        overflow: hidden;
+    }
+    
+    .job-section-header {
+        background: var(--gray-50);
+        padding: 1.5rem;
+        border-bottom: 1px solid var(--gray-100);
+    }
+    
+    .job-section-body {
+        padding: 1.5rem;
+    }
+    
+    .job-item {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem;
+        border: 1px solid var(--gray-100);
+        border-radius: var(--radius-md);
+        margin-bottom: 1rem;
+        transition: all 0.2s ease;
+    }
+    
+    .job-item:hover {
+        border-color: #667eea;
+        background: var(--gray-50);
+    }
+    
+    .job-icon {
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: var(--radius-md);
+        background: var(--primary-gradient);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        flex-shrink: 0;
+    }
+    
+    .job-details {
+        flex-grow: 1;
+        min-width: 0;
+    }
+    
+    .job-title {
+        font-weight: 600;
+        margin-bottom: 0.25rem;
+        color: var(--gray-800);
+    }
+    
+    .job-meta {
+        font-size: 0.875rem;
+        color: #6b7280;
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    
+    .job-actions {
+        display: flex;
+        gap: 0.5rem;
+        flex-shrink: 0;
+    }
+    
+    .btn-job {
+        padding: 0.5rem 1rem;
+        border-radius: var(--radius-md);
+        border: 1px solid transparent;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    .btn-view { background: var(--info-color); color: white; }
+    .btn-view:hover { background: #2563eb; }
+    
+    .btn-download { background: var(--success-color); color: white; }
+    .btn-download:hover { background: #059669; }
+    
+    .btn-pause { background: var(--warning-color); color: white; }
+    .btn-pause:hover { background: #d97706; }
+    
+    .btn-cancel { background: var(--danger-color); color: white; }
+    .btn-cancel:hover { background: #dc2626; }
+    
+    .btn-retry { background: var(--gray-100); color: var(--gray-800); }
+    .btn-retry:hover { background: var(--gray-800); color: white; }
+    
+    .empty-state {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: #6b7280;
+    }
+    
+    .empty-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }
+    
+    .progress-ring {
+        transform: rotate(-90deg);
+    }
+    
+    .progress-ring-circle {
+        stroke-dasharray: 125.6;
+        stroke-dashoffset: 125.6;
+        transition: stroke-dashoffset 0.35s;
+    }
+    
+    .status-indicator {
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .status-pending { background: rgba(251, 146, 60, 0.1); color: var(--warning-color); }
+    .status-running { background: rgba(59, 130, 246, 0.1); color: var(--info-color); }
+    .status-completed { background: rgba(16, 185, 129, 0.1); color: var(--success-color); }
+    .status-failed { background: rgba(239, 68, 68, 0.1); color: var(--danger-color); }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Job Dashboard Header -->
+<div class="job-dashboard-header">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h2 mb-0">
+            <i class="fas fa-tasks me-2"></i>
+            {% trans "Job Management" %}
+        </h1>
+        <div class="d-flex gap-2">
+            <a href="{% url 'dashboard:template_selection' %}" class="btn btn-light">
+                <i class="fas fa-plus me-2"></i>
+                {% trans "New Analysis" %}
+            </a>
+            <button class="btn btn-outline-light" onclick="refreshJobs()">
+                <i class="fas fa-sync-alt me-2"></i>
+                {% trans "Refresh" %}
+            </button>
+        </div>
+    </div>
+    <p class="mb-0 opacity-90">{% trans "Monitor your analysis jobs, view results, and manage processing queue" %}</p>
+</div>
+
+<!-- Django Messages -->
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
+            <i class="fas fa-{% if message.tags == 'success' %}check-circle{% elif message.tags == 'error' %}exclamation-triangle{% elif message.tags == 'warning' %}exclamation-circle{% else %}info-circle{% endif %} me-2"></i>
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="{% trans 'Close' %}"></button>
+        </div>
+    {% endfor %}
+{% endif %}
+
+<!-- Job Statistics -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon pending">
+            <i class="fas fa-clock"></i>
+        </div>
+        <h3 class="h4 mb-1">{{ job_stats.pending|default:0 }}</h3>
+        <p class="text-muted mb-0">{% trans "Pending" %}</p>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon running">
+            <i class="fas fa-play"></i>
+        </div>
+        <h3 class="h4 mb-1">{{ job_stats.running|default:0 }}</h3>
+        <p class="text-muted mb-0">{% trans "Running" %}</p>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon completed">
+            <i class="fas fa-check"></i>
+        </div>
+        <h3 class="h4 mb-1">{{ job_stats.completed|default:0 }}</h3>
+        <p class="text-muted mb-0">{% trans "Completed" %}</p>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon failed">
+            <i class="fas fa-times"></i>
+        </div>
+        <h3 class="h4 mb-1">{{ job_stats.failed|default:0 }}</h3>
+        <p class="text-muted mb-0">{% trans "Failed" %}</p>
+    </div>
+</div>
+
+<!-- Active Jobs Section -->
+<div class="job-section">
+    <div class="job-section-header">
+        <h2 class="h5 mb-0">
+            <i class="fas fa-play-circle me-2"></i>
+            {% trans "Active Jobs" %}
+        </h2>
+    </div>
+    <div class="job-section-body">
+        {% if active_jobs %}
+            {% for job in active_jobs %}
+            <div class="job-item">
+                <div class="job-icon">
+                    <i class="fab fa-youtube"></i>
+                </div>
+                <div class="job-details">
+                    <div class="job-title">{{ job.video_id|default:"Video Analysis Job" }}</div>
+                    <div class="job-meta">
+                        <span><i class="fas fa-tag me-1"></i>{{ job.task_type|default:"General Analysis" }}</span>
+                        <span><i class="fas fa-clock me-1"></i>{% trans "Started" %}: {{ job.created_at|timesince }} {% trans "ago" %}</span>
+                        <span class="status-indicator status-{{ job.status|default:'pending' }}">{{ job.status|title }}</span>
+                    </div>
+                </div>
+                <div class="job-actions">
+                    {% if job.status == 'running' %}
+                        <button class="btn-job btn-pause" onclick="pauseJob('{{ job.id }}')">
+                            <i class="fas fa-pause me-1"></i>{% trans "Pause" %}
+                        </button>
+                        <button class="btn-job btn-cancel" onclick="cancelJob('{{ job.id }}')">
+                            <i class="fas fa-stop me-1"></i>{% trans "Cancel" %}
+                        </button>
+                    {% else %}
+                        <button class="btn-job btn-retry" onclick="retryJob('{{ job.id }}')">
+                            <i class="fas fa-redo me-1"></i>{% trans "Retry" %}
+                        </button>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">
+                <div class="empty-icon">
+                    <i class="fas fa-tasks"></i>
+                </div>
+                <h3 class="h5">{% trans "No Active Jobs" %}</h3>
+                <p class="text-muted mb-3">{% trans "You don't have any jobs currently running" %}</p>
+                <a href="{% url 'dashboard:template_selection' %}" class="btn btn-primary">
+                    <i class="fas fa-plus me-2"></i>{% trans "Start New Analysis" %}
+                </a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Recent Jobs Section -->
+<div class="job-section">
+    <div class="job-section-header">
+        <h2 class="h5 mb-0">
+            <i class="fas fa-history me-2"></i>
+            {% trans "Recent Jobs" %}
+        </h2>
+    </div>
+    <div class="job-section-body">
+        {% if recent_jobs %}
+            {% for job in recent_jobs %}
+            <div class="job-item">
+                <div class="job-icon">
+                    <i class="fab fa-youtube"></i>
+                </div>
+                <div class="job-details">
+                    <div class="job-title">{{ job.video_id|default:"Video Analysis Job" }}</div>
+                    <div class="job-meta">
+                        <span><i class="fas fa-tag me-1"></i>{{ job.task_type|default:"General Analysis" }}</span>
+                        <span><i class="fas fa-calendar me-1"></i>{{ job.created_at|date:"M d, H:i" }}</span>
+                        <span class="status-indicator status-{{ job.status|default:'pending' }}">{{ job.status|title }}</span>
+                    </div>
+                </div>
+                <div class="job-actions">
+                    {% if job.status == 'completed' %}
+                        <button class="btn-job btn-view" onclick="viewResults('{{ job.id }}')">
+                            <i class="fas fa-eye me-1"></i>{% trans "View" %}
+                        </button>
+                        <button class="btn-job btn-download" onclick="downloadResults('{{ job.id }}')">
+                            <i class="fas fa-download me-1"></i>{% trans "Download" %}
+                        </button>
+                    {% elif job.status == 'failed' %}
+                        <button class="btn-job btn-retry" onclick="retryJob('{{ job.id }}')">
+                            <i class="fas fa-redo me-1"></i>{% trans "Retry" %}
+                        </button>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">
+                <div class="empty-icon">
+                    <i class="fas fa-history"></i>
+                </div>
+                <h3 class="h5">{% trans "No Recent Jobs" %}</h3>
+                <p class="text-muted">{% trans "Your completed jobs will appear here" %}</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Professional Job Management System
+class JobManager {
+    constructor() {
+        this.refreshInterval = null;
+        this.init();
+    }
+    
+    init() {
+        this.startAutoRefresh();
+        this.bindEvents();
+        this.initializeAnimations();
+    }
+    
+    startAutoRefresh() {
+        // Refresh every 30 seconds for active jobs
+        this.refreshInterval = setInterval(() => {
+            this.refreshJobStatus();
+        }, 30000);
+    }
+    
+    stopAutoRefresh() {
+        if (this.refreshInterval) {
+            clearInterval(this.refreshInterval);
+        }
+    }
+    
+    bindEvents() {
+        // Handle page visibility changes to optimize polling
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                this.stopAutoRefresh();
+            } else {
+                this.startAutoRefresh();
+            }
+        });
+    }
+    
+    initializeAnimations() {
+        // Animate job items on load
+        const jobItems = document.querySelectorAll('.job-item');
+        jobItems.forEach((item, index) => {
+            item.style.opacity = '0';
+            item.style.transform = 'translateX(-20px)';
+            
+            setTimeout(() => {
+                item.style.transition = 'all 0.4s ease';
+                item.style.opacity = '1';
+                item.style.transform = 'translateX(0)';
+            }, index * 100);
+        });
+    }
+    
+    refreshJobStatus() {
+        // Only refresh if there are active jobs
+        const activeJobs = document.querySelectorAll('.status-running').length;
+        if (activeJobs > 0) {
+            fetch('/api/jobs/status/', {
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => this.updateJobStatus(data))
+            .catch(error => console.warn('Job status refresh failed:', error));
+        }
+    }
+    
+    updateJobStatus(jobData) {
+        // Update job status indicators without full page reload
+        jobData.forEach(job => {
+            const jobElement = document.querySelector(`[data-job-id="${job.id}"]`);
+            if (jobElement) {
+                const statusElement = jobElement.querySelector('.status-indicator');
+                if (statusElement) {
+                    statusElement.className = `status-indicator status-${job.status}`;
+                    statusElement.textContent = job.status.charAt(0).toUpperCase() + job.status.slice(1);
+                }
+            }
+        });
+    }
+}
+
+// Job Actions
+function refreshJobs() {
+    const button = event.target.closest('button');
+    const icon = button.querySelector('i');
+    
+    // Visual feedback
+    icon.classList.add('fa-spin');
+    button.disabled = true;
+    
+    // Simulate refresh (replace with actual refresh logic)
+    setTimeout(() => {
+        window.location.reload();
+    }, 1000);
+}
+
+function viewResults(jobId) {
+    // Open results in new tab
+    window.open(`/dashboard/jobs/${jobId}/results/`, '_blank');
+}
+
+function downloadResults(jobId) {
+    // Trigger download
+    window.location.href = `/dashboard/jobs/${jobId}/download/`;
+}
+
+function pauseJob(jobId) {
+    if (confirm('{% trans "Are you sure you want to pause this job?" %}')) {
+        executeJobAction(jobId, 'pause');
+    }
+}
+
+function cancelJob(jobId) {
+    if (confirm('{% trans "Are you sure you want to cancel this job?" %}')) {
+        executeJobAction(jobId, 'cancel');
+    }
+}
+
+function retryJob(jobId) {
+    if (confirm('{% trans "Are you sure you want to retry this job?" %}')) {
+        executeJobAction(jobId, 'retry');
+    }
+}
+
+function executeJobAction(jobId, action) {
+    fetch(`/dashboard/jobs/${jobId}/${action}/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => {
+        if (response.ok) {
+            showNotification(`Job ${action} successful`, 'success');
+            setTimeout(() => refreshJobs(), 1000);
+        } else {
+            showNotification(`Job ${action} failed`, 'error');
+        }
+    })
+    .catch(error => {
+        showNotification('Network error occurred', 'error');
+        console.error('Job action error:', error);
+    });
+}
+
+function showNotification(message, type) {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    notification.innerHTML = `
+        <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-triangle'} me-2"></i>
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Auto remove
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 5000);
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Initialize Job Manager
+let jobManager;
+document.addEventListener('DOMContentLoaded', () => {
+    jobManager = new JobManager();
+});
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+    if (jobManager) {
+        jobManager.stopAutoRefresh();
+    }
+});
+</script>
+{% endblock %}

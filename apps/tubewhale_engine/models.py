@@ -197,3 +197,164 @@ class CLICommandLog(models.Model):
 
     def __str__(self):  # pragma: no cover
         return f"{self.command} ({'ok' if self.success else 'fail'}) @ {self.created_at:%Y-%m-%d %H:%M:%S}"
+
+
+# ============================================================================
+# ENHANCED ANALYSIS RESULTS STORAGE MODELS
+# ============================================================================
+
+class AnalysisJob(models.Model):
+    """Store analysis job information and execution results"""
+    
+    STATUS_CHOICES = [
+        ('queued', 'Queued'),
+        ('processing', 'Processing'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+        ('cancelled', 'Cancelled'),
+    ]
+    
+    ANALYSIS_TYPES = [
+        ('video', 'Video Analysis'),
+        ('playlist', 'Playlist Analysis'),
+        ('batch', 'Batch Analysis'),
+        ('custom', 'Custom Analysis'),
+    ]
+    
+    # Job identification
+    job_id = models.CharField(max_length=32, unique=True, primary_key=True, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    
+    # Job configuration
+    analysis_type = models.CharField(max_length=20, choices=ANALYSIS_TYPES, default='video')
+    expert_role = models.CharField(max_length=50)
+    template_id = models.CharField(max_length=50)
+    
+    # Content information
+    content_id = models.CharField(max_length=100)  # Video ID, Playlist ID, etc.
+    content_url = models.URLField(max_length=500, blank=True)
+    content_title = models.TextField(blank=True)
+    content_description = models.TextField(blank=True)
+    
+    # Job status and timing
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='queued')
+    progress = models.IntegerField(default=0)  # 0-100
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    
+    # Execution details
+    processing_time_seconds = models.FloatField(null=True, blank=True)
+    error_message = models.TextField(blank=True)
+    
+    # Analysis configuration
+    custom_questions = models.JSONField(default=list, blank=True)
+    analysis_options = models.JSONField(default=dict, blank=True)
+    
+    # Client information
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    api_version = models.CharField(max_length=20, default='v1')
+    
+    class Meta:
+        db_table = 'tubewhale_analysis_jobs'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status', 'created_at']),
+            models.Index(fields=['analysis_type', 'expert_role']),
+            models.Index(fields=['content_id']),
+        ]
+    
+    def save(self, *args, **kwargs):
+        if not self.job_id:
+            self.job_id = uuid.uuid4().hex[:8]
+        super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return f"{self.job_id} - {self.analysis_type} ({self.status})"
+
+
+class AnalysisResult(models.Model):
+    """Store detailed analysis results with downloadable content"""
+    
+    # Link to analysis job
+    job = models.OneToOneField(AnalysisJob, on_delete=models.CASCADE, related_name='result')
+    
+    # Analysis results
+    raw_data = models.JSONField(default=dict, help_text="Raw analysis data")
+    insights = models.JSONField(default=dict, help_text="Processed insights and recommendations")
+    metrics = models.JSONField(default=dict, help_text="Performance metrics and scores")
+    
+    # Report content
+    summary = models.TextField(blank=True, help_text="Executive summary")
+    detailed_analysis = models.TextField(blank=True, help_text="Detailed analysis content")
+    recommendations = models.TextField(blank=True, help_text="Actionable recommendations")
+    
+    # Media and attachments
+    charts_data = models.JSONField(default=dict, blank=True, help_text="Chart and visualization data")
+    screenshots = models.JSONField(default=list, blank=True, help_text="Screenshot URLs")
+    
+    # Quality scores
+    confidence_score = models.FloatField(default=0.0, help_text="Analysis confidence (0-1)")
+    completeness_score = models.FloatField(default=0.0, help_text="Data completeness (0-1)")
+    
+    # Export and download tracking
+    download_count = models.IntegerField(default=0)
+    last_downloaded_at = models.DateTimeField(null=True, blank=True)
+    available_formats = models.JSONField(default=list, blank=True)
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'tubewhale_analysis_results'
+        
+    def get_formatted_result(self, format_type='json'):
+        """Get analysis result in specified format"""
+        
+        if format_type == 'json':
+            return {
+                'job_id': self.job.job_id,
+                'analysis_type': self.job.analysis_type,
+                'expert_role': self.job.expert_role,
+                'template_id': self.job.template_id,
+                'content_info': {
+                    'id': self.job.content_id,
+                    'title': self.job.content_title,
+                    'url': self.job.content_url,
+                },
+                'results': {
+                    'summary': self.summary,
+                    'raw_data': self.raw_data,
+                    'insights': self.insights,
+                    'metrics': self.metrics,
+                    'recommendations': self.recommendations,
+                },
+                'metadata': {
+                    'confidence_score': self.confidence_score,
+                    'completeness_score': self.completeness_score,
+                    'processing_time': self.job.processing_time_seconds,
+                    'created_at': self.created_at.isoformat(),
+                    'completed_at': self.job.completed_at.isoformat() if self.job.completed_at else None,
+                }
+            }
+        
+        elif format_type == 'markdown':
+            return self._generate_markdown_report()
+            
+        elif format_type == 'html':
+            return self._generate_html_report()
+            
+        return self.raw_data
+    
+    def increment_download_count(self):
+        """Increment download counter and update timestamp"""
+        from django.utils import timezone
+        self.download_count += 1
+        self.last_downloaded_at = timezone.now()
+        self.save(update_fields=['download_count', 'last_downloaded_at'])
+    
+    def __str__(self):
+        return f"Result for {self.job.job_id}"

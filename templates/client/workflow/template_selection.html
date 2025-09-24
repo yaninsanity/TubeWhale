@@ -1,0 +1,890 @@
+{% extends "dashboard/base_simple.html" %}
+{% load i18n %}
+
+{% block title %}{{ title }} - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        --success-color: #10b981;
+        --warning-color: #f59e0b;
+        --danger-color: #ef4444;
+        --info-color: #3b82f6;
+        --gray-50: #f9fafb;
+        --gray-100: #f3f4f6;
+        --gray-200: #e5e7eb;
+        --gray-300: #d1d5db;
+        --gray-500: #6b7280;
+        --gray-700: #374151;
+        --gray-800: #1f2937;
+        --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        --radius-md: 0.5rem;
+        --radius-lg: 0.75rem;
+    }
+
+    .workflow-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 2rem;
+    }
+
+    .workflow-header {
+        text-align: center;
+        margin-bottom: 3rem;
+    }
+
+    .workflow-steps {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 3rem;
+        position: relative;
+    }
+
+    .step {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        position: relative;
+        z-index: 2;
+    }
+
+    .step:not(:last-child) {
+        margin-right: 3rem;
+    }
+
+    .step-circle {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        color: white;
+        margin-bottom: 0.5rem;
+        position: relative;
+    }
+
+    .step-circle.active {
+        background: var(--primary-gradient);
+        box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.2);
+    }
+
+    .step-circle.completed {
+        background: var(--success-color);
+    }
+
+    .step-circle.pending {
+        background: var(--gray-300);
+        color: var(--gray-500);
+    }
+
+    .step-label {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--gray-700);
+        text-align: center;
+    }
+
+    .step-connector {
+        position: absolute;
+        top: 25px;
+        left: 80px;
+        width: calc(100% - 160px);
+        height: 2px;
+        background: var(--gray-200);
+        z-index: 1;
+    }
+
+    .config-summary {
+        background: var(--gray-50);
+        border: 1px solid var(--gray-200);
+        border-radius: var(--radius-md);
+        padding: 1rem;
+        margin-bottom: 2rem;
+        font-size: 0.875rem;
+    }
+
+    .template-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+        gap: 1.5rem;
+        margin: 2rem 0;
+    }
+
+    .template-card {
+        background: white;
+        border: 2px solid var(--gray-200);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-sm);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        overflow: hidden;
+        cursor: pointer;
+        position: relative;
+    }
+
+    .template-card:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--shadow-lg);
+        border-color: #667eea;
+    }
+
+    .template-card.selected {
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .template-header {
+        padding: 1.5rem;
+        border-bottom: 1px solid var(--gray-100);
+    }
+
+    .template-title {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: var(--gray-800);
+        margin-bottom: 0.5rem;
+    }
+
+    .template-description {
+        color: var(--gray-600);
+        font-size: 0.875rem;
+        line-height: 1.5;
+    }
+
+    .template-meta {
+        padding: 1rem 1.5rem;
+        background: var(--gray-50);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.75rem;
+    }
+
+    .template-tier {
+        background: var(--primary-gradient);
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-weight: 500;
+        text-transform: uppercase;
+    }
+
+    .template-category {
+        color: var(--gray-500);
+        font-weight: 500;
+    }
+
+    .category-section {
+        margin-bottom: 3rem;
+    }
+
+    .category-header {
+        border-bottom: 2px solid var(--gray-200);
+        padding-bottom: 0.75rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .category-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--gray-800);
+        margin: 0;
+    }
+
+    .actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 3rem;
+        padding-top: 2rem;
+        border-top: 1px solid var(--gray-200);
+    }
+
+    .btn-primary {
+        background: var(--primary-gradient);
+        border: none;
+        color: white;
+        padding: 0.875rem 2rem;
+        border-radius: var(--radius-md);
+        font-weight: 500;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        transition: all 0.2s;
+        cursor: pointer;
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-lg);
+        color: white;
+        text-decoration: none;
+    }
+
+    .btn-primary:disabled {
+        background: var(--gray-300);
+        color: var(--gray-500);
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+
+    .btn-secondary {
+        background: var(--gray-100);
+        border: 1px solid var(--gray-300);
+        color: var(--gray-700);
+        padding: 0.875rem 2rem;
+        border-radius: var(--radius-md);
+        font-weight: 500;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        transition: all 0.2s;
+        cursor: pointer;
+        margin-right: 1rem;
+    }
+
+    .btn-secondary:hover {
+        background: var(--gray-200);
+        color: var(--gray-800);
+        text-decoration: none;
+    }
+
+    .tier-badge {
+        background: var(--primary-gradient);
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 1rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+        text-transform: uppercase;
+    }
+
+    .selected-indicator {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        width: 24px;
+        height: 24px;
+        background: var(--success-color);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        opacity: 0;
+        transition: opacity 0.2s;
+    }
+
+    .template-card.selected .selected-indicator {
+        opacity: 1;
+    }
+
+    .customizable-badge {
+        position: absolute;
+        top: 0.75rem;
+        left: 0.75rem;
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .tier-free { 
+        background: #fef3c7; 
+        color: #d97706; 
+    }
+    
+    .tier-standard { 
+        background: #dbeafe; 
+        color: #2563eb; 
+    }
+    
+    .tier-premium { 
+        background: #f3e8ff; 
+        color: #7c3aed; 
+    }
+
+    .template-tier {
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-weight: 500;
+        text-transform: uppercase;
+    }
+
+    /* Custom Configuration Modal */
+    .custom-config-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .custom-config-modal.active {
+        display: flex;
+    }
+
+    .modal-content {
+        background: white;
+        border-radius: var(--radius-lg);
+        padding: 2rem;
+        max-width: 800px;
+        width: 90%;
+        max-height: 80vh;
+        overflow-y: auto;
+        box-shadow: var(--shadow-lg);
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid var(--gray-200);
+    }
+
+    .modal-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: var(--gray-800);
+        margin: 0;
+    }
+
+    .modal-close {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: var(--gray-500);
+        transition: color 0.2s;
+    }
+
+    .modal-close:hover {
+        color: var(--gray-700);
+    }
+
+    .config-section {
+        margin-bottom: 2rem;
+    }
+
+    .config-section-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--gray-800);
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .prompt-editor {
+        border: 2px solid var(--gray-200);
+        border-radius: var(--radius-md);
+        overflow: hidden;
+    }
+
+    .prompt-header {
+        background: var(--gray-50);
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid var(--gray-200);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .prompt-label {
+        font-weight: 500;
+        color: var(--gray-700);
+    }
+
+    .prompt-example-btn {
+        background: var(--primary-color);
+        color: white;
+        border: none;
+        padding: 0.25rem 0.5rem;
+        border-radius: var(--radius-sm);
+        font-size: 0.8rem;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+
+    .prompt-example-btn:hover {
+        background: var(--primary-hover);
+    }
+
+    .prompt-textarea {
+        width: 100%;
+        min-height: 120px;
+        border: none;
+        padding: 1rem;
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 0.9rem;
+        line-height: 1.5;
+        resize: vertical;
+        background: #fafafa;
+    }
+
+    .prompt-textarea:focus {
+        outline: none;
+        background: white;
+    }
+
+    .example-popup {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        background: white;
+        border: 2px solid var(--gray-200);
+        border-radius: var(--radius-md);
+        padding: 1rem;
+        width: 300px;
+        box-shadow: var(--shadow-lg);
+        z-index: 1001;
+        display: none;
+    }
+
+    .example-popup.active {
+        display: block;
+    }
+
+    .example-title {
+        font-weight: 600;
+        color: var(--gray-800);
+        margin-bottom: 0.5rem;
+    }
+
+    .example-text {
+        font-size: 0.85rem;
+        color: var(--gray-600);
+        font-style: italic;
+        background: var(--gray-50);
+        padding: 0.5rem;
+        border-radius: var(--radius-sm);
+    }
+
+    .modal-actions {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 2rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--gray-200);
+    }
+
+    .btn-outline {
+        background: transparent;
+        border: 2px solid var(--gray-300);
+        color: var(--gray-700);
+        padding: 0.75rem 1.5rem;
+        border-radius: var(--radius-md);
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .btn-outline:hover {
+        border-color: var(--gray-400);
+        background: var(--gray-50);
+    }
+
+    .customize-btn {
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: var(--radius-md);
+        font-size: 0.9rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        margin-top: 1rem;
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+    }
+
+    .customize-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="workflow-container">
+    <!-- Workflow Header -->
+    <div class="workflow-header">
+        <h1 class="h2 mb-2">{{ title }}</h1>
+        <p class="text-muted">{{ subtitle }}</p>
+        <span class="tier-badge">{{ user_tier|title }} Tier</span>
+    </div>
+
+    <!-- Workflow Steps -->
+    <div class="workflow-steps">
+        <div class="step-connector"></div>
+        
+        <div class="step">
+            <div class="step-circle completed">
+                <i class="fas fa-check"></i>
+            </div>
+            <div class="step-label">{% trans "Engine Config" %}</div>
+        </div>
+        
+        <div class="step">
+            <div class="step-circle active">
+                <i class="fas fa-layer-group"></i>
+            </div>
+            <div class="step-label">{% trans "Template Selection" %}</div>
+        </div>
+        
+        <div class="step">
+            <div class="step-circle pending">
+                <i class="fas fa-play"></i>
+            </div>
+            <div class="step-label">{% trans "Search & Execute" %}</div>
+        </div>
+    </div>
+
+    <!-- Configuration Summary -->
+    <div class="config-summary">
+        <strong>{% trans "Engine Configuration:" %}</strong>
+        {% trans "Keyword" %}: <code>{{ engine_config.keyword }}</code> | 
+        {% trans "Max Videos" %}: <code>{{ engine_config.max_n }}</code> | 
+        {% trans "Top Results" %}: <code>{{ engine_config.top_k }}</code> | 
+        {% trans "Filter" %}: <code>{{ engine_config.filter_type }}</code>
+    </div>
+
+    <!-- Template Selection Form -->
+    <form method="post" id="templateForm">
+        {% csrf_token %}
+        <input type="hidden" name="template_id" id="selectedTemplateId">
+
+        <!-- Templates by Category -->
+        {% for category_name, category_data in categorized_templates.items %}
+        <div class="category-section">
+            <div class="category-header">
+                <h2 class="category-title">{{ category_name }}</h2>
+            </div>
+            
+            <div class="template-grid">
+                {% for template in category_data.templates %}
+                <div class="template-card" 
+                     data-template-id="{{ template.template_id }}"
+                     onclick="selectTemplate('{{ template.template_id }}', '{{ template.name|escapejs }}')">
+                    
+                    <div class="selected-indicator">
+                        <i class="fas fa-check"></i>
+                    </div>
+                    
+                    <div class="template-header">
+                        <h3 class="template-title">{{ template.name }}</h3>
+                        <p class="template-description">{{ template.description|truncatewords:20 }}</p>
+                    </div>
+                    
+                    <div class="template-meta">
+                        <span class="template-category">{{ template.category }}</span>
+                        <span class="template-tier tier-{{ template.tier }}">{{ template.tier|title }}</span>
+                    </div>
+                    
+                    {% if template.config.customizable %}
+                    <div class="customizable-badge">
+                        <i class="fas fa-cog"></i> {% trans "Customizable" %}
+                    </div>
+                    {% endif %}
+                    
+                    {% if user_tier == 'premium' or user_tier == 'standard' %}
+                    <button type="button" class="customize-btn" 
+                            onclick="event.stopPropagation(); openCustomModal('{{ template.template_id }}', '{{ template.name|escapejs }}')">
+                        <i class="fas fa-edit"></i>
+                        {% trans "Customize Prompts" %}
+                    </button>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% empty %}
+        <div class="text-center py-5">
+            <i class="fas fa-exclamation-triangle fa-3x text-muted mb-3"></i>
+            <h3 class="text-muted">{% trans "No templates available" %}</h3>
+            <p class="text-muted">{% trans "No analysis templates are available for your tier level." %}</p>
+        </div>
+        {% endfor %}
+
+        <!-- Actions -->
+        <div class="actions">
+            <div>
+                <a href="{{ prev_step_url }}" class="btn-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>
+                    {% trans "Back: Engine Config" %}
+                </a>
+            </div>
+            <button type="submit" class="btn-primary" id="nextButton" disabled>
+                {% trans "Next: Search & Execute" %}
+                <i class="fas fa-arrow-right ms-2"></i>
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Custom Configuration Modal -->
+<div class="custom-config-modal" id="customConfigModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="modal-title">
+                <i class="fas fa-edit me-2"></i>
+                {% trans "Customize Template:" %} <span id="modalTemplateName"></span>
+            </h3>
+            <button type="button" class="modal-close" onclick="closeCustomModal()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <form id="customConfigForm">
+            {% csrf_token %}
+            <input type="hidden" name="template_id" id="customTemplateId">
+
+            <div class="config-section">
+                <div class="config-section-title">
+                    <i class="fas fa-key"></i>
+                    {% trans "Keyword Generation Prompt" %}
+                </div>
+                <div class="prompt-editor">
+                    <div class="prompt-header">
+                        <span class="prompt-label">{% trans "System Prompt" %}</span>
+                        <button type="button" class="prompt-example-btn" onclick="showExample('keyword')">
+                            {% trans "Show Example" %}
+                        </button>
+                        <div class="example-popup" id="keywordExample">
+                            <div class="example-title">{% trans "Example Keyword Generation Prompt:" %}</div>
+                            <div class="example-text">
+                                {% trans "You are a digital marketing expert. Generate keyword variations that capture viral potential, trending topics, and audience engagement opportunities. Focus on SEO optimization and content discovery." %}
+                            </div>
+                        </div>
+                    </div>
+                    <textarea class="prompt-textarea" 
+                              name="keyword_generation_prompt" 
+                              id="keywordPrompt"
+                              placeholder="{% trans 'Enter your custom keyword generation prompt...' %}"></textarea>
+                </div>
+            </div>
+
+            <div class="config-section">
+                <div class="config-section-title">
+                    <i class="fas fa-chart-line"></i>
+                    {% trans "Content Analysis Prompt" %}
+                </div>
+                <div class="prompt-editor">
+                    <div class="prompt-header">
+                        <span class="prompt-label">{% trans "System Prompt" %}</span>
+                        <button type="button" class="prompt-example-btn" onclick="showExample('analysis')">
+                            {% trans "Show Example" %}
+                        </button>
+                        <div class="example-popup" id="analysisExample">
+                            <div class="example-title">{% trans "Example Analysis Prompt:" %}</div>
+                            <div class="example-text">
+                                {% trans "You are a content strategist and data analyst. Provide actionable insights focused on engagement patterns, audience behavior, and content optimization opportunities. Include specific recommendations for improvement." %}
+                            </div>
+                        </div>
+                    </div>
+                    <textarea class="prompt-textarea" 
+                              name="analysis_prompt" 
+                              id="analysisPrompt"
+                              placeholder="{% trans 'Enter your custom analysis prompt...' %}"></textarea>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn-outline" onclick="closeCustomModal()">
+                    <i class="fas fa-times me-2"></i>
+                    {% trans "Cancel" %}
+                </button>
+                <button type="button" class="btn-primary" onclick="saveCustomConfig()">
+                    <i class="fas fa-save me-2"></i>
+                    {% trans "Save & Use Template" %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+let selectedTemplateId = null;
+let customConfigs = {};
+
+function selectTemplate(templateId, templateTitle) {
+    // Remove previous selection
+    document.querySelectorAll('.template-card').forEach(card => {
+        card.classList.remove('selected');
+    });
+    
+    // Add selection to clicked card
+    const clickedCard = document.querySelector(`[data-template-id="${templateId}"]`);
+    clickedCard.classList.add('selected');
+    
+    // Update form data
+    selectedTemplateId = templateId;
+    document.getElementById('selectedTemplateId').value = templateId;
+    
+    // Enable next button
+    const nextButton = document.getElementById('nextButton');
+    nextButton.disabled = false;
+    nextButton.innerHTML = `{% trans "Next: Search & Execute" %} (${templateTitle}) <i class="fas fa-arrow-right ms-2"></i>`;
+}
+
+// Form submission
+document.getElementById('templateForm').addEventListener('submit', function(e) {
+    if (!selectedTemplateId) {
+        e.preventDefault();
+        alert('{% trans "Please select a template first." %}');
+    }
+});
+
+// Custom Configuration Functions
+function openCustomModal(templateId, templateName) {
+    document.getElementById('modalTemplateName').textContent = templateName;
+    document.getElementById('customTemplateId').value = templateId;
+    
+    // Load existing custom config if available
+    if (customConfigs[templateId]) {
+        document.getElementById('keywordPrompt').value = customConfigs[templateId].keyword_generation || '';
+        document.getElementById('analysisPrompt').value = customConfigs[templateId].analysis || '';
+    } else {
+        // Clear previous content
+        document.getElementById('keywordPrompt').value = '';
+        document.getElementById('analysisPrompt').value = '';
+    }
+    
+    document.getElementById('customConfigModal').classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeCustomModal() {
+    document.getElementById('customConfigModal').classList.remove('active');
+    document.body.style.overflow = 'auto';
+    
+    // Hide all example popups
+    document.querySelectorAll('.example-popup').forEach(popup => {
+        popup.classList.remove('active');
+    });
+}
+
+function showExample(type) {
+    const exampleId = type + 'Example';
+    const popup = document.getElementById(exampleId);
+    
+    // Hide other popups
+    document.querySelectorAll('.example-popup').forEach(p => {
+        if (p.id !== exampleId) p.classList.remove('active');
+    });
+    
+    // Toggle current popup
+    popup.classList.toggle('active');
+    
+    // Hide popup when clicking outside
+    setTimeout(() => {
+        document.addEventListener('click', function hidePopup(e) {
+            if (!popup.contains(e.target) && !e.target.classList.contains('prompt-example-btn')) {
+                popup.classList.remove('active');
+                document.removeEventListener('click', hidePopup);
+            }
+        });
+    }, 100);
+}
+
+function saveCustomConfig() {
+    const templateId = document.getElementById('customTemplateId').value;
+    const keywordPrompt = document.getElementById('keywordPrompt').value.trim();
+    const analysisPrompt = document.getElementById('analysisPrompt').value.trim();
+    
+    if (!keywordPrompt || !analysisPrompt) {
+        alert('{% trans "Please fill in both prompts before saving." %}');
+        return;
+    }
+    
+    // Store custom configuration
+    customConfigs[templateId] = {
+        keyword_generation: keywordPrompt,
+        analysis: analysisPrompt
+    };
+    
+    // Auto-select this template
+    selectTemplate(templateId, document.getElementById('modalTemplateName').textContent);
+    
+    // Add visual indicator that this template has custom config
+    const templateCard = document.querySelector(`[data-template-id="${templateId}"]`);
+    if (!templateCard.querySelector('.customizable-badge')) {
+        const badge = document.createElement('div');
+        badge.className = 'customizable-badge';
+        badge.innerHTML = '<i class="fas fa-user-cog"></i> {% trans "Customized" %}';
+        templateCard.appendChild(badge);
+    }
+    
+    closeCustomModal();
+    
+    // Show success message
+    const message = document.createElement('div');
+    message.className = 'alert alert-success';
+    message.style.position = 'fixed';
+    message.style.top = '20px';
+    message.style.right = '20px';
+    message.style.zIndex = '1002';
+    message.innerHTML = '<i class="fas fa-check-circle me-2"></i>{% trans "Custom configuration saved!" %}';
+    document.body.appendChild(message);
+    
+    setTimeout(() => {
+        message.remove();
+    }, 3000);
+}
+
+// Submit custom configs with the form
+document.getElementById('templateForm').addEventListener('submit', function(e) {
+    if (!selectedTemplateId) {
+        e.preventDefault();
+        alert('{% trans "Please select a template first." %}');
+        return;
+    }
+    
+    // Add custom configuration to form if exists
+    if (customConfigs[selectedTemplateId]) {
+        const customConfigInput = document.createElement('input');
+        customConfigInput.type = 'hidden';
+        customConfigInput.name = 'custom_config';
+        customConfigInput.value = JSON.stringify(customConfigs[selectedTemplateId]);
+        this.appendChild(customConfigInput);
+    }
+});
+
+// Close modal when clicking outside
+document.getElementById('customConfigModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeCustomModal();
+    }
+});
+
+// ESC key to close modal
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && document.getElementById('customConfigModal').classList.contains('active')) {
+        closeCustomModal();
+    }
+});
+</script>
+{% endblock %}

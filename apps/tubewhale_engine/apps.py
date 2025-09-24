@@ -8,9 +8,9 @@ class TubewhaleEngineConfig(AppConfig):
     verbose_name = _('TubeWhale Engine')
     
     def ready(self):
-        """在应用启动时导入TubeWhale核心组件"""
+        """Import TubeWhale core components on application startup"""
         try:
-            # 确保agents可以被导入
+            # Ensure agents can be imported
             from agents import audio_agent, transcript_agent, summarizer_agent, search_agent, standardizer_agent
             print("✅ TubeWhale agents loaded successfully")
         except ImportError as e:

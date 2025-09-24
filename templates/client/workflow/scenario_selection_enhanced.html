@@ -1,0 +1,664 @@
+{% extends "client/base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}🎯 选择分析场景 - TubeWhale AI 智能分析{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --primary: #2563eb;
+        --primary-hover: #1d4ed8;
+        --success: #10b981;
+        --warning: #f59e0b;
+        --danger: #ef4444;
+        --gray-50: #f9fafb;
+        --gray-100: #f3f4f6;
+        --gray-200: #e5e7eb;
+        --gray-600: #4b5563;
+        --gray-800: #1f2937;
+        --gray-900: #111827;
+    }
+
+    body {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    }
+
+    .main-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 2rem;
+    }
+
+    /* Agent Status Banner */
+    .agent-banner {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border: 2px solid var(--primary);
+        border-radius: 16px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+
+    .agent-status-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .agent-avatar {
+        width: 60px;
+        height: 60px;
+        background: linear-gradient(135deg, var(--primary) 0%, #7c3aed 100%);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        color: white;
+        position: relative;
+    }
+
+    .agent-avatar::after {
+        content: '';
+        position: absolute;
+        bottom: -2px;
+        right: -2px;
+        width: 16px;
+        height: 16px;
+        background: var(--success);
+        border: 2px solid white;
+        border-radius: 50%;
+        animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+    }
+
+    .agent-info h2 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--gray-900);
+        margin: 0 0 0.25rem 0;
+    }
+
+    .agent-status-text {
+        color: var(--success);
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+
+    .agent-capabilities {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+
+    .capability-item {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem;
+        background: var(--gray-50);
+        border-radius: 8px;
+    }
+
+    .capability-icon {
+        font-size: 1.25rem;
+    }
+
+    .capability-text {
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: var(--gray-800);
+    }
+
+    /* Instructions Section */
+    .instructions-section {
+        background: rgba(255, 255, 255, 0.98);
+        border-radius: 16px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        border-left: 6px solid var(--primary);
+    }
+
+    .instructions-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .instructions-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--gray-900);
+    }
+
+    .step-by-step {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .instruction-step {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+        padding: 1rem;
+        background: var(--gray-50);
+        border-radius: 12px;
+        border-left: 4px solid var(--primary);
+    }
+
+    .step-number {
+        background: var(--primary);
+        color: white;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 0.9rem;
+        flex-shrink: 0;
+    }
+
+    .step-content h3 {
+        font-weight: 600;
+        color: var(--gray-900);
+        margin-bottom: 0.5rem;
+    }
+
+    .step-content p {
+        color: var(--gray-600);
+        line-height: 1.5;
+        margin: 0;
+    }
+
+    /* Scenario Selection */
+    .scenarios-section {
+        background: white;
+        border-radius: 16px;
+        padding: 2rem;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    }
+
+    .scenarios-header {
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+
+    .scenarios-title {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--gray-900);
+        margin-bottom: 0.5rem;
+    }
+
+    .scenarios-subtitle {
+        color: var(--gray-600);
+        font-size: 1.1rem;
+    }
+
+    .scenarios-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .scenario-card {
+        border: 2px solid var(--gray-200);
+        border-radius: 16px;
+        padding: 1.5rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        background: white;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .scenario-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 4px;
+        background: var(--gray-200);
+        transition: all 0.3s ease;
+    }
+
+    .scenario-card:hover {
+        border-color: var(--primary);
+        box-shadow: 0 10px 25px rgba(37, 99, 235, 0.1);
+        transform: translateY(-4px);
+    }
+
+    .scenario-card:hover::before {
+        background: linear-gradient(135deg, var(--primary) 0%, #7c3aed 100%);
+    }
+
+    .scenario-card.selected {
+        border-color: var(--primary);
+        background: linear-gradient(135deg, #eff6ff 0%, #f3e8ff 100%);
+        box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+    }
+
+    .scenario-card.selected::before {
+        background: linear-gradient(135deg, var(--primary) 0%, #7c3aed 100%);
+        height: 6px;
+    }
+
+    .scenario-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .scenario-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        background: var(--gray-100);
+        transition: all 0.3s ease;
+    }
+
+    .scenario-card.selected .scenario-icon {
+        background: linear-gradient(135deg, var(--primary) 0%, #7c3aed 100%);
+        color: white;
+    }
+
+    .scenario-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--gray-900);
+        margin: 0;
+    }
+
+    .scenario-description {
+        color: var(--gray-600);
+        line-height: 1.5;
+        margin-bottom: 1rem;
+    }
+
+    .scenario-features {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .feature-tag {
+        background: var(--gray-100);
+        color: var(--gray-700);
+        padding: 0.25rem 0.75rem;
+        border-radius: 16px;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+
+    .scenario-card.selected .feature-tag {
+        background: rgba(37, 99, 235, 0.1);
+        color: var(--primary);
+    }
+
+    .ai-preview {
+        background: var(--gray-50);
+        border-radius: 8px;
+        padding: 1rem;
+        margin-top: 1rem;
+        border-left: 3px solid var(--primary);
+    }
+
+    .ai-preview-title {
+        font-weight: 600;
+        color: var(--gray-900);
+        margin-bottom: 0.5rem;
+        font-size: 0.9rem;
+    }
+
+    .ai-preview-text {
+        font-size: 0.8rem;
+        color: var(--gray-600);
+        line-height: 1.4;
+        font-style: italic;
+    }
+
+    /* Action Button */
+    .continue-section {
+        text-align: center;
+        padding-top: 2rem;
+        border-top: 1px solid var(--gray-200);
+    }
+
+    .continue-button {
+        background: linear-gradient(135deg, var(--primary) 0%, #7c3aed 100%);
+        color: white;
+        border: none;
+        padding: 1rem 3rem;
+        border-radius: 12px;
+        font-size: 1.1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.75rem;
+        opacity: 0.5;
+        pointer-events: none;
+    }
+
+    .continue-button.enabled {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .continue-button.enabled:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px rgba(37, 99, 235, 0.3);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .main-container {
+            padding: 1rem;
+        }
+        
+        .scenarios-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .agent-capabilities {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="main-container">
+    <!-- AI Agent Status Banner -->
+    <div class="agent-banner">
+        <div class="agent-status-header">
+            <div class="agent-avatar">🤖</div>
+            <div class="agent-info">
+                <h2>TubeWhale AI 智能分析助手</h2>
+                <div class="agent-status-text">🟢 已就绪 - 等待您的指令</div>
+            </div>
+        </div>
+        
+        <div class="agent-capabilities">
+            <div class="capability-item">
+                <span class="capability-icon">🎥</span>
+                <span class="capability-text">YouTube 视频解析</span>
+            </div>
+            <div class="capability-item">
+                <span class="capability-icon">🧠</span>
+                <span class="capability-text">AI 驱动内容分析</span>
+            </div>
+            <div class="capability-item">
+                <span class="capability-icon">📊</span>
+                <span class="capability-text">多维度数据洞察</span>
+            </div>
+            <div class="capability-item">
+                <span class="capability-icon">⚡</span>
+                <span class="capability-text">实时处理监控</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Clear Instructions Section -->
+    <div class="instructions-section">
+        <div class="instructions-header">
+            <span style="font-size: 2rem;">📋</span>
+            <h2 class="instructions-title">操作指引 - 请按步骤执行</h2>
+        </div>
+        
+        <div class="step-by-step">
+            <div class="instruction-step">
+                <div class="step-number">1</div>
+                <div class="step-content">
+                    <h3>选择分析场景</h3>
+                    <p>从下方选择最符合您需求的分析场景。每个场景都针对不同的用途进行了AI优化。</p>
+                </div>
+            </div>
+            
+            <div class="instruction-step">
+                <div class="step-number">2</div>
+                <div class="step-content">
+                    <h3>查看AI预览</h3>
+                    <p>点击场景卡片查看AI将如何分析您的内容。系统会显示具体的分析维度和输出格式。</p>
+                </div>
+            </div>
+            
+            <div class="instruction-step">
+                <div class="step-number">3</div>
+                <div class="step-content">
+                    <h3>确认并继续</h3>
+                    <p>确认选择后，点击"启动AI分析"按钮，系统将引导您进入下一步视频输入环节。</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scenario Selection -->
+    <div class="scenarios-section">
+        <div class="scenarios-header">
+            <h2 class="scenarios-title">🎯 选择您的分析场景</h2>
+            <p class="scenarios-subtitle">每个场景都经过AI调优，为您提供专业级分析结果</p>
+        </div>
+
+        <div class="scenarios-grid">
+            <!-- Content Creator Scenario -->
+            <div class="scenario-card" data-scenario="content_creator">
+                <div class="scenario-header">
+                    <div class="scenario-icon">🎥</div>
+                    <h3 class="scenario-title">内容创作者分析</h3>
+                </div>
+                <p class="scenario-description">
+                    专为YouTube创作者设计，分析视频表现、观众互动和内容优化机会，帮助您提升频道表现。
+                </p>
+                <div class="scenario-features">
+                    <span class="feature-tag">观众留存分析</span>
+                    <span class="feature-tag">热门元素识别</span>
+                    <span class="feature-tag">优化建议</span>
+                </div>
+                <div class="ai-preview">
+                    <div class="ai-preview-title">🤖 AI 分析预览:</div>
+                    <div class="ai-preview-text">
+                        "我将以专业内容创作者的视角分析您的视频，重点关注观众参与度、内容质量和增长潜力..."
+                    </div>
+                </div>
+            </div>
+
+            <!-- Marketing Analysis -->
+            <div class="scenario-card" data-scenario="marketing">
+                <div class="scenario-header">
+                    <div class="scenario-icon">📊</div>
+                    <h3 class="scenario-title">营销效果分析</h3>
+                </div>
+                <p class="scenario-description">
+                    评估品牌传播效果、受众反馈和市场表现，为营销策略提供数据支持和优化方向。
+                </p>
+                <div class="scenario-features">
+                    <span class="feature-tag">品牌提及分析</span>
+                    <span class="feature-tag">情感倾向</span>
+                    <span class="feature-tag">竞品对比</span>
+                </div>
+                <div class="ai-preview">
+                    <div class="ai-preview-title">🤖 AI 分析预览:</div>
+                    <div class="ai-preview-text">
+                        "我将从营销专家角度评估内容的品牌价值、受众触达效果和转化潜力..."
+                    </div>
+                </div>
+            </div>
+
+            <!-- Academic Research -->
+            <div class="scenario-card" data-scenario="research">
+                <div class="scenario-header">
+                    <div class="scenario-icon">🔬</div>
+                    <h3 class="scenario-title">学术研究分析</h3>
+                </div>
+                <p class="scenario-description">
+                    进行系统性内容分析，提供学术级别的深度洞察，支持研究论文和报告撰写。
+                </p>
+                <div class="scenario-features">
+                    <span class="feature-tag">系统性分析</span>
+                    <span class="feature-tag">数据可视化</span>
+                    <span class="feature-tag">学术引用</span>
+                </div>
+                <div class="ai-preview">
+                    <div class="ai-preview-title">🤖 AI 分析预览:</div>
+                    <div class="ai-preview-text">
+                        "我将采用严谨的学术方法论，对内容进行深度结构化分析，提供可引用的研究结果..."
+                    </div>
+                </div>
+            </div>
+
+            <!-- Data Analytics -->
+            <div class="scenario-card" data-scenario="data_analytics">
+                <div class="scenario-header">
+                    <div class="scenario-icon">📈</div>
+                    <h3 class="scenario-title">数据洞察分析</h3>
+                </div>
+                <p class="scenario-description">
+                    深挖数据背后的模式和趋势，提供量化分析和预测性洞察，支持数据驱动决策。
+                </p>
+                <div class="scenario-features">
+                    <span class="feature-tag">趋势预测</span>
+                    <span class="feature-tag">关联分析</span>
+                    <span class="feature-tag">异常检测</span>
+                </div>
+                <div class="ai-preview">
+                    <div class="ai-preview-title">🤖 AI 分析预览:</div>
+                    <div class="ai-preview-text">
+                        "我将运用统计方法和机器学习算法，从数据中发现隐藏的模式和商业价值..."
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="continue-section">
+            <button class="continue-button" id="continueBtn">
+                <span>🚀</span>
+                <span>启动 AI 分析</span>
+                <span>→</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+let selectedScenario = null;
+
+// 场景选择处理
+document.querySelectorAll('.scenario-card').forEach(card => {
+    card.addEventListener('click', function() {
+        // 移除其他选中状态
+        document.querySelectorAll('.scenario-card').forEach(c => c.classList.remove('selected'));
+        
+        // 添加选中状态
+        this.classList.add('selected');
+        selectedScenario = this.dataset.scenario;
+        
+        // 启用继续按钮
+        const continueBtn = document.getElementById('continueBtn');
+        continueBtn.classList.add('enabled');
+        
+        // 提供即时反馈
+        showFeedback(`已选择：${this.querySelector('.scenario-title').textContent}`, 'success');
+    });
+});
+
+// 继续按钮处理
+document.getElementById('continueBtn').addEventListener('click', function() {
+    if (!selectedScenario) {
+        showFeedback('请先选择一个分析场景！', 'warning');
+        return;
+    }
+    
+    // 显示加载状态
+    this.innerHTML = '<span>🔄</span><span>正在准备AI引擎...</span>';
+    this.style.pointerEvents = 'none';
+    
+    // 模拟加载并跳转
+    setTimeout(() => {
+        // 这里可以跳转到下一步
+        window.location.href = `/client/analysis/input/?scenario=${selectedScenario}`;
+    }, 1500);
+});
+
+// 反馈消息显示
+function showFeedback(message, type = 'info') {
+    // 创建提示元素
+    const feedback = document.createElement('div');
+    feedback.style.cssText = `
+        position: fixed;
+        top: 2rem;
+        right: 2rem;
+        background: ${type === 'success' ? '#10b981' : type === 'warning' ? '#f59e0b' : '#2563eb'};
+        color: white;
+        padding: 1rem 1.5rem;
+        border-radius: 12px;
+        font-weight: 600;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        z-index: 1000;
+        animation: slideIn 0.3s ease;
+    `;
+    feedback.textContent = message;
+    
+    // 添加动画样式
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+    `;
+    document.head.appendChild(style);
+    
+    document.body.appendChild(feedback);
+    
+    // 3秒后移除
+    setTimeout(() => {
+        feedback.remove();
+        style.remove();
+    }, 3000);
+}
+
+// 键盘快捷键支持
+document.addEventListener('keydown', function(e) {
+    if (e.key >= '1' && e.key <= '4') {
+        const cards = document.querySelectorAll('.scenario-card');
+        const index = parseInt(e.key) - 1;
+        if (cards[index]) {
+            cards[index].click();
+        }
+    } else if (e.key === 'Enter' && selectedScenario) {
+        document.getElementById('continueBtn').click();
+    }
+});
+
+// 页面加载时的提示
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(() => {
+        showFeedback('💡 您可以使用键盘数字键 1-4 快速选择场景', 'info');
+    }, 1000);
+});
+</script>
+{% endblock %}

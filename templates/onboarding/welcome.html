@@ -1,0 +1,190 @@
+{% load i18n %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TubeWhale - {% trans "Welcome" %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .welcome-container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+            padding: 3rem;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .logo {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        
+        .logo h1 {
+            color: #667eea;
+            font-weight: 700;
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .logo p {
+            color: #6c757d;
+            font-size: 1.1rem;
+        }
+        
+        .action-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-top: 3rem;
+        }
+        
+        .action-btn {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 15px;
+            padding: 2rem 1rem;
+            text-decoration: none;
+            color: #495057;
+            transition: all 0.3s ease;
+            text-align: center;
+            display: block;
+        }
+        
+        .action-btn:hover {
+            transform: translateY(-5px);
+            border-color: #667eea;
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.2);
+            color: #667eea;
+            text-decoration: none;
+        }
+        
+        .action-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            display: block;
+        }
+        
+        .action-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        
+        .action-subtitle {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="welcome-container">
+            <div class="logo">
+                <h1><i class="fas fa-whale"></i> TubeWhale</h1>
+                <p>AI-Powered Professional Video Analysis Platform</p>
+            </div>
+            
+            <div class="text-center">
+                <h2 class="mb-4">Welcome back, {{ user.username }}!</h2>
+                <p class="lead text-muted">Your AI video analysis assistant is ready</p>
+            </div>
+            
+            <div class="action-grid">
+                <!-- 1. Start Analysis -->
+                <a href="{% url 'dashboard:smart_wizard' %}" class="action-btn">
+                    <i class="fas fa-rocket action-icon" style="color: #667eea;"></i>
+                    <div class="action-title">Start AI Analysis</div>
+                    <div class="action-subtitle">Analyze YouTube videos with professional AI insights</div>
+                </a>
+                
+                <!-- 2. Analysis History -->
+                <a href="{% url 'dashboard:jobs' %}" class="action-btn">
+                    <i class="fas fa-chart-line action-icon" style="color: #28a745;"></i>
+                    <div class="action-title">Analysis History</div>
+                    <div class="action-subtitle">Review completed video analysis results</div>
+                </a>
+                
+                <!-- 3. Platform Overview -->
+                <a href="#" class="action-btn" data-bs-toggle="modal" data-bs-target="#aboutModal">
+                    <i class="fas fa-lightbulb action-icon" style="color: #ffc107;"></i>
+                    <div class="action-title">Platform Overview</div>
+                    <div class="action-subtitle">Discover our AI analysis capabilities</div>
+                </a>
+            </div>
+            
+            <div class="text-center mt-4">
+                <small class="text-muted">
+                    Tier: <span class="badge bg-primary">{{ user.get_tier_display_name }}</span>
+                    {% if user.is_staff %}<span class="badge bg-success ms-2">API Keys Loaded</span>{% endif %}
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <!-- About Tools Modal -->
+    <div class="modal fade" id="aboutModal" tabindex="-1" aria-labelledby="aboutModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="aboutModalLabel">
+                        <i class="fas fa-rocket text-primary me-2"></i>
+                        TubeWhale AI Analysis Platform
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-4 text-center mb-4">
+                            <i class="fas fa-video text-primary" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                            <h6>Single Video Analysis</h6>
+                            <p class="small text-muted">Deep AI analysis of individual YouTube videos including transcription, sentiment analysis, and key insights extraction.</p>
+                        </div>
+                        <div class="col-md-4 text-center mb-4">
+                            <i class="fas fa-list text-success" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                            <h6>Playlist Processing</h6>
+                            <p class="small text-muted">Batch analysis of YouTube playlists with comparative insights, trend identification, and comprehensive reporting.</p>
+                        </div>
+                        <div class="col-md-4 text-center mb-4">
+                            <i class="fas fa-brain text-warning" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                            <h6>AI Brainstorm Engine</h6>
+                            <p class="small text-muted">Advanced AI-powered creative strategy generator with command-line interface for professional content planning.</p>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="text-center">
+                        <h6 class="mb-3">Professional Analysis Perspectives</h6>
+                        <div class="d-flex justify-content-center flex-wrap gap-2">
+                            <span class="badge bg-primary">Content Creator Focus</span>
+                            <span class="badge bg-success">Marketing Strategy</span>
+                            <span class="badge bg-info">Data Analytics</span>
+                            <span class="badge bg-warning">Research Insights</span>
+                            <span class="badge bg-danger">Product Strategy</span>
+                            <span class="badge bg-dark">Executive Summary</span>
+                        </div>
+                        <p class="small text-muted mt-2">AI adapts analysis depth and focus based on your professional role and objectives.</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <a href="{% url 'dashboard:smart_wizard' %}" class="btn btn-primary">
+                        <i class="fas fa-arrow-right me-2"></i>Get Started
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

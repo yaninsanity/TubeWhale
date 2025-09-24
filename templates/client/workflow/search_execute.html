@@ -1,0 +1,442 @@
+{% extends "dashboard/base_simple.html" %}
+{% load i18n %}
+
+{% block title %}{{ title }} - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        --success-color: #10b981;
+        --warning-color: #f59e0b;
+        --danger-color: #ef4444;
+        --info-color: #3b82f6;
+        --gray-50: #f9fafb;
+        --gray-100: #f3f4f6;
+        --gray-200: #e5e7eb;
+        --gray-300: #d1d5db;
+        --gray-500: #6b7280;
+        --gray-700: #374151;
+        --gray-800: #1f2937;
+        --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        --radius-md: 0.5rem;
+        --radius-lg: 0.75rem;
+    }
+
+    .workflow-container {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 2rem;
+    }
+
+    .workflow-header {
+        text-align: center;
+        margin-bottom: 3rem;
+    }
+
+    .workflow-steps {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 3rem;
+        position: relative;
+    }
+
+    .step {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        position: relative;
+        z-index: 2;
+    }
+
+    .step:not(:last-child) {
+        margin-right: 3rem;
+    }
+
+    .step-circle {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        color: white;
+        margin-bottom: 0.5rem;
+        position: relative;
+    }
+
+    .step-circle.active {
+        background: var(--primary-gradient);
+        box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.2);
+    }
+
+    .step-circle.completed {
+        background: var(--success-color);
+    }
+
+    .step-circle.pending {
+        background: var(--gray-300);
+        color: var(--gray-500);
+    }
+
+    .step-label {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--gray-700);
+        text-align: center;
+    }
+
+    .step-connector {
+        position: absolute;
+        top: 25px;
+        left: 80px;
+        width: calc(100% - 160px);
+        height: 2px;
+        background: var(--gray-200);
+        z-index: 1;
+    }
+
+    .summary-card {
+        background: white;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-md);
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+
+    .summary-section {
+        margin-bottom: 1.5rem;
+        padding-bottom: 1.5rem;
+        border-bottom: 1px solid var(--gray-200);
+    }
+
+    .summary-section:last-child {
+        margin-bottom: 0;
+        padding-bottom: 0;
+        border-bottom: none;
+    }
+
+    .summary-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--gray-800);
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+    }
+
+    .summary-title i {
+        margin-right: 0.5rem;
+        color: var(--info-color);
+    }
+
+    .summary-content {
+        font-size: 0.875rem;
+        color: var(--gray-600);
+        line-height: 1.5;
+    }
+
+    .search-form {
+        background: white;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-md);
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+
+    .search-header {
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+
+    .search-input-group {
+        position: relative;
+        margin-bottom: 2rem;
+    }
+
+    .search-input {
+        width: 100%;
+        padding: 1rem 1.5rem;
+        border: 2px solid var(--gray-300);
+        border-radius: var(--radius-lg);
+        font-size: 1.125rem;
+        transition: all 0.3s;
+        background: white;
+    }
+
+    .search-input:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+    }
+
+    .search-input::placeholder {
+        color: var(--gray-400);
+    }
+
+    .search-icon {
+        position: absolute;
+        right: 1.5rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--gray-400);
+        font-size: 1.25rem;
+    }
+
+    .search-help {
+        text-align: center;
+        color: var(--gray-500);
+        font-size: 0.875rem;
+        margin-bottom: 2rem;
+    }
+
+    .execute-button {
+        width: 100%;
+        background: var(--primary-gradient);
+        border: none;
+        color: white;
+        padding: 1.25rem 2rem;
+        border-radius: var(--radius-lg);
+        font-size: 1.125rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .execute-button:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-lg);
+    }
+
+    .execute-button:disabled {
+        background: var(--gray-300);
+        color: var(--gray-500);
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+
+    .execute-button i {
+        margin-left: 0.5rem;
+        font-size: 1rem;
+    }
+
+    .actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 2rem;
+    }
+
+    .btn-secondary {
+        background: var(--gray-100);
+        border: 1px solid var(--gray-300);
+        color: var(--gray-700);
+        padding: 0.875rem 2rem;
+        border-radius: var(--radius-md);
+        font-weight: 500;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        transition: all 0.2s;
+        cursor: pointer;
+    }
+
+    .btn-secondary:hover {
+        background: var(--gray-200);
+        color: var(--gray-800);
+        text-decoration: none;
+    }
+
+    .tier-badge {
+        background: var(--primary-gradient);
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 1rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+        text-transform: uppercase;
+    }
+
+    .config-tag {
+        background: var(--gray-100);
+        color: var(--gray-700);
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+        margin-right: 0.5rem;
+        margin-bottom: 0.5rem;
+        display: inline-block;
+    }
+
+    .template-highlight {
+        background: var(--primary-gradient);
+        color: white;
+        padding: 0.75rem 1rem;
+        border-radius: var(--radius-md);
+        text-align: center;
+        font-weight: 600;
+    }
+
+    .loading {
+        display: none;
+    }
+
+    .loading.active {
+        display: inline-block;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="workflow-container">
+    <!-- Workflow Header -->
+    <div class="workflow-header">
+        <h1 class="h2 mb-2">{{ title }}</h1>
+        <p class="text-muted">{{ subtitle }}</p>
+        <span class="tier-badge">{{ user_tier|title }} Tier</span>
+    </div>
+
+    <!-- Workflow Steps -->
+    <div class="workflow-steps">
+        <div class="step-connector"></div>
+        
+        <div class="step">
+            <div class="step-circle completed">
+                <i class="fas fa-check"></i>
+            </div>
+            <div class="step-label">{% trans "Engine Config" %}</div>
+        </div>
+        
+        <div class="step">
+            <div class="step-circle completed">
+                <i class="fas fa-check"></i>
+            </div>
+            <div class="step-label">{% trans "Template Selection" %}</div>
+        </div>
+        
+        <div class="step">
+            <div class="step-circle active">
+                <i class="fas fa-play"></i>
+            </div>
+            <div class="step-label">{% trans "Search & Execute" %}</div>
+        </div>
+    </div>
+
+    <!-- Configuration Summary -->
+    <div class="summary-card">
+        <div class="summary-section">
+            <div class="summary-title">
+                <i class="fas fa-cog"></i>
+                {% trans "Engine Configuration" %}
+            </div>
+            <div class="summary-content">
+                <span class="config-tag">{% trans "Max Videos" %}: {{ engine_config.max_n }}</span>
+                <span class="config-tag">{% trans "Top Results" %}: {{ engine_config.top_k }}</span>
+                <span class="config-tag">{% trans "Filter" %}: {{ engine_config.filter_type|title }}</span>
+                <span class="config-tag">{% trans "Concurrency" %}: {{ engine_config.concurrency }}</span>
+                {% if engine_config.full_audio_analysis %}
+                <span class="config-tag">{% trans "Full Audio Analysis" %}</span>
+                {% endif %}
+                {% if engine_config.persist_summaries %}
+                <span class="config-tag">{% trans "Persist Summaries" %}</span>
+                {% endif %}
+                {% if engine_config.dry_run %}
+                <span class="config-tag">{% trans "Dry Run Mode" %}</span>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="summary-section">
+            <div class="summary-title">
+                <i class="fas fa-layer-group"></i>
+                {% trans "Selected Template" %}
+            </div>
+            <div class="summary-content">
+                <div class="template-highlight">
+                    {{ selected_template.title }}
+                </div>
+                <p class="mt-2 mb-0">{{ selected_template.description }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search & Execute Form -->
+    <form method="post" class="search-form" id="executeForm">
+        {% csrf_token %}
+        
+        <div class="search-header">
+            <h2 class="h4 mb-2">{% trans "Enter Your Search Query" %}</h2>
+            <p class="text-muted">{% trans "Specify the topic or keywords you want to analyze" %}</p>
+        </div>
+
+        <div class="search-input-group">
+            <input type="text" 
+                   class="search-input" 
+                   id="search_keyword" 
+                   name="search_keyword" 
+                   value="{{ engine_config.keyword }}"
+                   placeholder="{% trans 'e.g., Arizona homeless before covid19' %}"
+                   required>
+            <i class="fas fa-search search-icon"></i>
+        </div>
+
+        <div class="search-help">
+            {% trans "This keyword will be used to search and analyze YouTube videos using your selected template and configuration." %}
+        </div>
+
+        <button type="submit" class="execute-button" id="executeButton">
+            <span id="buttonText">{% trans "Start Analysis" %}</span>
+            <i class="fas fa-play" id="buttonIcon"></i>
+            <i class="fas fa-spinner loading" id="loadingIcon"></i>
+        </button>
+    </form>
+
+    <!-- Actions -->
+    <div class="actions">
+        <a href="{{ prev_step_url }}" class="btn-secondary">
+            <i class="fas fa-arrow-left me-2"></i>
+            {% trans "Back: Template Selection" %}
+        </a>
+        <div class="text-muted">
+            <small>{% trans "Analysis will begin immediately after clicking Start" %}</small>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('executeForm').addEventListener('submit', function(e) {
+    const button = document.getElementById('executeButton');
+    const buttonText = document.getElementById('buttonText');
+    const buttonIcon = document.getElementById('buttonIcon');
+    const loadingIcon = document.getElementById('loadingIcon');
+    
+    // Show loading state
+    button.disabled = true;
+    buttonText.textContent = '{% trans "Starting Analysis..." %}';
+    buttonIcon.style.display = 'none';
+    loadingIcon.classList.add('active');
+    
+    // Form will submit naturally
+});
+
+// Auto-resize search input
+document.getElementById('search_keyword').addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.max(60, this.scrollHeight) + 'px';
+});
+</script>
+{% endblock %}

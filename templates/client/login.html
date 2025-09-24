@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - TubeWhale Intelligent Video Analysis Platform</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/media/logo.png">
+    
+    <!-- Industrial-grade login page styles -->
+    <style>
+        /* AAA-grade design system variables */
+        :root {
+            /* Primary colors - WCAG AAA contrast compliant */
+            --primary-500: #2563eb;
+            --primary-600: #1d4ed8;
+            --primary-700: #1e40af;
+            --primary-50: #eff6ff;
+            --primary-100: #dbeafe;
+            
+            /* Gray scale system */
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-300: #d1d5db;
+            --gray-400: #9ca3af;
+            --gray-500: #6b7280;
+            --gray-600: #4b5563;
+            --gray-700: #374151;
+            --gray-800: #1f2937;
+            --gray-900: #111827;
+            
+            /* Semantic colors */
+            --success-500: #10b981;
+            --success-50: #ecfdf5;
+            --error-500: #ef4444;
+            --error-50: #fef2f2;
+            --warning-500: #f59e0b;
+            --warning-50: #fffbeb;
+            
+            /* Shadow system */
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+            
+            /* Border radius system */
+            --radius-sm: 0.25rem;
+            --radius-md: 0.375rem;
+            --radius-lg: 0.5rem;
+            --radius-xl: 0.75rem;
+            --radius-2xl: 1rem;
+            
+            /* Spacing system */
+            --space-1: 0.25rem;
+            --space-2: 0.5rem;
+            --space-3: 0.75rem;
+            --space-4: 1rem;
+            --space-5: 1.25rem;
+            --space-6: 1.5rem;
+            --space-8: 2rem;
+            --space-12: 3rem;
+            --space-16: 4rem;
+            
+            /* Font system */
+            --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+            --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+        }
+        
+        /* Global reset - Industrial standards */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        html {
+            font-size: 16px;
+            line-height: 1.5;
+            -webkit-text-size-adjust: 100%;
+            -ms-text-size-adjust: 100%;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
+        body {
+            font-family: var(--font-sans);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--gray-900);
+            overflow-x: hidden;
+        }
+        
+        /* Accessibility support */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+        
+        /* Skip navigation link - AAA accessibility */
+        .skip-nav {
+            position: absolute;
+            top: -9999px;
+            left: -9999px;
+            z-index: 999;
+            padding: var(--space-3) var(--space-4);
+            background: var(--gray-900);
+            color: white;
+            text-decoration: none;
+            border-radius: var(--radius-md);
+        }
+        
+        .skip-nav:focus {
+            top: var(--space-4);
+            left: var(--space-4);
+        }
+        
+        /* Main container - Industrial layout */
+        .login-container {
+            width: 100%;
+            max-width: 28rem;
+            margin: 0 auto;
+            padding: var(--space-6);
+            background: white;
+            border-radius: var(--radius-2xl);
+            box-shadow: var(--shadow-xl);
+            border: 1px solid var(--gray-200);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .login-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary-500), var(--primary-600));
+        }
+        
+        /* Logo section */
+        .logo-section {
+            text-align: center;
+            margin-bottom: var(--space-8);
+        }
+        
+        .logo-container {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--primary-50), var(--primary-100));
+            border-radius: var(--radius-2xl);
+            margin-bottom: var(--space-4);
+            border: 2px solid var(--primary-200);
+            box-shadow: var(--shadow-md);
+        }
+        
+        .logo {
+            width: 48px;
+            height: 48px;
+            border-radius: var(--radius-lg);
+            object-fit: cover;
+        }
+        
+        .brand-title {
+            font-size: 1.875rem;
+            font-weight: 700;
+            color: var(--gray-900);
+            margin-bottom: var(--space-2);
+            letter-spacing: -0.025em;
+        }
+        
+        .brand-subtitle {
+            font-size: 0.875rem;
+            color: var(--gray-500);
+            font-weight: 500;
+        }
+        
+        /* Form styles - AAA standards */
+        .form-group {
+            margin-bottom: var(--space-5);
+        }
+        
+        .form-label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--gray-700);
+            margin-bottom: var(--space-2);
+            line-height: 1.25;
+        }
+        
+        .form-label::after {
+            content: " *";
+            color: var(--error-500);
+            font-weight: 400;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: var(--space-3) var(--space-4);
+            border: 2px solid var(--gray-300);
+            border-radius: var(--radius-lg);
+            font-size: 1rem;
+            line-height: 1.5;
+            color: var(--gray-900);
+            background: white;
+            transition: all 0.2s ease-in-out;
+            font-family: inherit;
+        }
+        
+        .form-input::placeholder {
+            color: var(--gray-400);
+            font-weight: 400;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary-500);
+            box-shadow: 0 0 0 3px rgb(37 99 235 / 0.1);
+        }
+        
+        .form-input:invalid:not(:placeholder-shown) {
+            border-color: var(--error-500);
+            box-shadow: 0 0 0 3px rgb(239 68 68 / 0.1);
+        }
+        
+        .form-input:valid:not(:placeholder-shown) {
+            border-color: var(--success-500);
+        }
+        
+        /* Password field */
+        .password-container {
+            position: relative;
+        }
+        
+        .password-toggle {
+            position: absolute;
+            right: var(--space-3);
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: var(--gray-400);
+            cursor: pointer;
+            padding: var(--space-1);
+            border-radius: var(--radius-sm);
+            transition: color 0.2s ease;
+        }
+        
+        .password-toggle:hover {
+            color: var(--gray-600);
+        }
+        
+        .password-toggle:focus {
+            outline: 2px solid var(--primary-500);
+            outline-offset: 2px;
+            color: var(--primary-600);
+        }
+        
+        /* Options area */
+        .form-options {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: var(--space-6);
+            flex-wrap: wrap;
+            gap: var(--space-2);
+        }
+        
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+        }
+        
+        .checkbox {
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid var(--gray-300);
+            border-radius: var(--radius-sm);
+            background: white;
+            cursor: pointer;
+            position: relative;
+        }
+        
+        .checkbox:checked {
+            background: var(--primary-500);
+            border-color: var(--primary-500);
+        }
+        
+        .checkbox:checked::after {
+            content: '✓';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .checkbox:focus {
+            outline: 2px solid var(--primary-500);
+            outline-offset: 2px;
+        }
+        
+        .checkbox-label {
+            font-size: 0.875rem;
+            color: var(--gray-600);
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .forgot-link {
+            color: var(--primary-600);
+            text-decoration: none;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: color 0.2s ease;
+        }
+        
+        .forgot-link:hover {
+            color: var(--primary-700);
+            text-decoration: underline;
+        }
+        
+        .forgot-link:focus {
+            outline: 2px solid var(--primary-500);
+            outline-offset: 2px;
+            border-radius: var(--radius-sm);
+        }
+        
+        /* Login button - Industrial design */
+        .login-button {
+            width: 100%;
+            padding: var(--space-4);
+            background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+            color: white;
+            border: none;
+            border-radius: var(--radius-lg);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            box-shadow: var(--shadow-md);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .login-button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s ease;
+        }
+        
+        .login-button:hover {
+            background: linear-gradient(135deg, var(--primary-600), var(--primary-700));
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .login-button:hover::before {
+            left: 100%;
+        }
+        
+        .login-button:active {
+            transform: translateY(0);
+            box-shadow: var(--shadow-md);
+        }
+        
+        .login-button:focus {
+            outline: 2px solid var(--primary-300);
+            outline-offset: 2px;
+        }
+        
+        .login-button:disabled {
+            background: var(--gray-300);
+            color: var(--gray-500);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .login-button:disabled::before {
+            display: none;
+        }
+        
+        /* Loading state */
+        .button-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--space-2);
+        }
+        
+        .loading-spinner {
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top: 2px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Error message */
+        .error-message {
+            background: var(--error-50);
+            border: 1px solid var(--error-200);
+            color: var(--error-700);
+            padding: var(--space-4);
+            border-radius: var(--radius-lg);
+            margin-bottom: var(--space-6);
+            font-size: 0.875rem;
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+        }
+        
+        .error-icon {
+            color: var(--error-500);
+            font-size: 1.125rem;
+        }
+        
+        /* Footer links */
+        .footer-links {
+            text-align: center;
+            margin-top: var(--space-8);
+            padding-top: var(--space-6);
+            border-top: 1px solid var(--gray-200);
+        }
+        
+        .footer-text {
+            color: var(--gray-500);
+            font-size: 0.875rem;
+            line-height: 1.5;
+        }
+        
+        .footer-link {
+            color: var(--primary-600);
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.2s ease;
+        }
+        
+        .footer-link:hover {
+            color: var(--primary-700);
+        }
+        
+        .footer-link:focus {
+            outline: 2px solid var(--primary-500);
+            outline-offset: 1px;
+            border-radius: var(--radius-sm);
+        }
+        
+        /* Security note */
+        .security-note {
+            text-align: center;
+            margin-top: var(--space-6);
+            padding: var(--space-3);
+            background: var(--gray-50);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--gray-200);
+        }
+        
+        .security-text {
+            color: var(--gray-600);
+            font-size: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--space-2);
+        }
+        
+        /* Animation effects */
+        .fade-in {
+            animation: fadeIn 0.6s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(1rem);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* Responsive design */
+        @media (max-width: 640px) {
+            .login-container {
+                max-width: 100%;
+                margin: var(--space-4);
+                padding: var(--space-5);
+            }
+            
+            .brand-title {
+                font-size: 1.5rem;
+            }
+            
+            .form-options {
+                flex-direction: column;
+                align-items: stretch;
+                gap: var(--space-3);
+            }
+            
+            .checkbox-container {
+                justify-content: center;
+            }
+        }
+        
+        /* High contrast mode support */
+        @media (prefers-contrast: high) {
+            :root {
+                --gray-300: #666;
+                --gray-400: #555;
+                --gray-500: #444;
+            }
+            
+            .form-input {
+                border-width: 3px;
+            }
+            
+            .login-button {
+                border: 2px solid var(--primary-700);
+            }
+        }
+        
+        /* Reduced motion mode support */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+        
+        /* Dark mode support */
+        @media (prefers-color-scheme: dark) {
+            .login-container {
+                background: var(--gray-800);
+                border-color: var(--gray-700);
+                color: var(--gray-100);
+            }
+            
+            .brand-title {
+                color: var(--gray-100);
+            }
+            
+            .brand-subtitle {
+                color: var(--gray-400);
+            }
+            
+            .form-label {
+                color: var(--gray-300);
+            }
+            
+            .form-input {
+                background: var(--gray-700);
+                border-color: var(--gray-600);
+                color: var(--gray-100);
+            }
+            
+            .form-input::placeholder {
+                color: var(--gray-500);
+            }
+            
+            .security-note {
+                background: var(--gray-700);
+                border-color: var(--gray-600);
+            }
+            
+            .footer-links {
+                border-color: var(--gray-700);
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Accessibility skip navigation -->
+    <a href="#main-content" class="skip-nav">Skip to main content</a>
+    
+    <!-- Main content area -->
+    <main id="main-content" class="login-container fade-in" role="main">
+        <!-- Logo and brand area -->
+        <header class="logo-section">
+            <div class="logo-container">
+                <img src="/media/logo.png" alt="TubeWhale Logo" class="logo" onerror="this.style.display='none'">
+            </div>
+            <h1 class="brand-title">TubeWhale</h1>
+            <p class="brand-subtitle">Intelligent Video Analysis Platform</p>
+        </header>
+        
+        <!-- Error message display -->
+        {% if form.errors or user.is_authenticated == False and 'invalid_login' in request.GET %}
+        <div class="error-message" role="alert" aria-live="polite">
+            <span class="error-icon" aria-hidden="true">⚠️</span>
+            <span>Login failed. Please check your username and password.</span>
+        </div>
+        {% endif %}
+        
+        <!-- Login form -->
+        <form id="loginForm" method="post" action="{% url 'client:login' %}" novalidate>
+            {% csrf_token %}
+            
+            <!-- Username field -->
+            <div class="form-group">
+                <label for="username" class="form-label">
+                    Username or Email
+                    <span class="sr-only">Required</span>
+                </label>
+                <input 
+                    type="text" 
+                    id="username" 
+                    name="username" 
+                    class="form-input"
+                    required
+                    autocomplete="username"
+                    aria-describedby="username-help"
+                    placeholder="Enter your username or email address"
+                    value="{{ form.username.value|default:'' }}"
+                >
+                <div id="username-help" class="sr-only">
+                    Please enter the username or email address you used during registration
+                </div>
+            </div>
+            
+            <!-- Password field -->
+            <div class="form-group">
+                <label for="password" class="form-label">
+                    Password
+                    <span class="sr-only">Required</span>
+                </label>
+                <div class="password-container">
+                    <input 
+                        type="password" 
+                        id="password" 
+                        name="password" 
+                        class="form-input"
+                        required
+                        autocomplete="current-password"
+                        aria-describedby="password-help"
+                        placeholder="Enter your password"
+                        minlength="6"
+                    >
+                    <button 
+                        type="button" 
+                        class="password-toggle"
+                        onclick="togglePasswordVisibility()" 
+                        aria-label="Toggle password visibility"
+                        title="Show/Hide password"
+                    >
+                        <span id="password-icon" aria-hidden="true">👁️</span>
+                    </button>
+                </div>
+                <div id="password-help" class="sr-only">
+                    Please enter your account password, at least 6 characters
+                </div>
+            </div>
+            
+            <!-- Options area -->
+            <div class="form-options">
+                <label class="checkbox-container">
+                    <input 
+                        type="checkbox" 
+                        name="remember_me" 
+                        class="checkbox"
+                        aria-describedby="remember-help"
+                    >
+                    <span class="checkbox-label">Remember me</span>
+                    <div id="remember-help" class="sr-only">
+                        Check this option to automatically log in on your next visit
+                    </div>
+                </label>
+                <a href="#" class="forgot-link" role="link">
+                    Forgot password?
+                </a>
+            </div>
+            
+            <!-- Login button -->
+            <button 
+                type="submit" 
+                id="loginButton"
+                class="login-button"
+                aria-describedby="login-help"
+            >
+                <div class="button-content">
+                    <span id="loginText">Sign In</span>
+                    <div id="loginSpinner" class="loading-spinner" style="display: none;" aria-hidden="true"></div>
+                </div>
+            </button>
+            <div id="login-help" class="sr-only">
+                Click this button to submit the login form
+            </div>
+        </form>
+        
+        <!-- Footer links -->
+        <footer class="footer-links">
+            <p class="footer-text">
+                Don't have an account? 
+                <a href="{% url 'client:register' %}" class="footer-link">Sign up now</a>
+            </p>
+        </footer>
+        
+        <!-- Security note -->
+        <div class="security-note">
+            <p class="security-text">
+                <span aria-hidden="true">🔒</span>
+                <span>Your information is protected by enterprise-grade security</span>
+            </p>
+        </div>
+    </main>
+    
+    <!-- Industrial-grade JavaScript functionality -->
+    <script>
+        // Form state management
+        class LoginFormManager {
+            constructor() {
+                this.form = document.getElementById('loginForm');
+                this.loginButton = document.getElementById('loginButton');
+                this.loginText = document.getElementById('loginText');
+                this.loginSpinner = document.getElementById('loginSpinner');
+                this.usernameInput = document.getElementById('username');
+                this.passwordInput = document.getElementById('password');
+                
+                this.initializeEventListeners();
+                this.initializeAccessibility();
+            }
+            
+            initializeEventListeners() {
+                // Form submit handling
+                this.form.addEventListener('submit', this.handleSubmit.bind(this));
+                
+                // Real-time validation
+                this.usernameInput.addEventListener('input', this.validateUsername.bind(this));
+                this.passwordInput.addEventListener('input', this.validatePassword.bind(this));
+                
+                // Keyboard navigation
+                document.addEventListener('keydown', this.handleKeyDown.bind(this));
+                
+                // Auto focus
+                this.usernameInput.focus();
+            }
+            
+            initializeAccessibility() {
+                // Add ARIA attributes to form
+                this.form.setAttribute('aria-label', 'User login form');
+                
+                // Accessibility support for error messages
+                const errorMessage = document.querySelector('.error-message');
+                if (errorMessage) {
+                    errorMessage.setAttribute('role', 'alert');
+                    errorMessage.setAttribute('aria-live', 'polite');
+                }
+            }
+            
+            handleSubmit(event) {
+                event.preventDefault();
+                
+                // Validate form
+                if (!this.validateForm()) {
+                    return;
+                }
+                
+                // Show loading state
+                this.setLoadingState(true);
+                
+                // Simulate submit delay (will be replaced by backend handling in production)
+                setTimeout(() => {
+                    this.form.submit();
+                }, 500);
+            }
+            
+            validateForm() {
+                const username = this.usernameInput.value.trim();
+                const password = this.passwordInput.value.trim();
+                
+                let isValid = true;
+                
+                // Validate username
+                if (!username) {
+                    this.showFieldError(this.usernameInput, 'Please enter your username or email');
+                    isValid = false;
+                } else {
+                    this.clearFieldError(this.usernameInput);
+                }
+                
+                // Validate password
+                if (!password) {
+                    this.showFieldError(this.passwordInput, 'Please enter your password');
+                    isValid = false;
+                } else if (password.length < 6) {
+                    this.showFieldError(this.passwordInput, 'Password must be at least 6 characters');
+                    isValid = false;
+                } else {
+                    this.clearFieldError(this.passwordInput);
+                }
+                
+                return isValid;
+            }
+            
+            validateUsername() {
+                const value = this.usernameInput.value.trim();
+                if (value) {
+                    this.clearFieldError(this.usernameInput);
+                }
+            }
+            
+            validatePassword() {
+                const value = this.passwordInput.value.trim();
+                if (value && value.length >= 6) {
+                    this.clearFieldError(this.passwordInput);
+                }
+            }
+            
+            showFieldError(field, message) {
+                field.style.borderColor = 'var(--error-500)';
+                field.style.boxShadow = '0 0 0 3px rgb(239 68 68 / 0.1)';
+                field.setAttribute('aria-invalid', 'true');
+                
+                // Add error message
+                const existingError = field.parentNode.querySelector('.field-error');
+                if (existingError) {
+                    existingError.textContent = message;
+                } else {
+                    const errorElement = document.createElement('div');
+                    errorElement.className = 'field-error';
+                    errorElement.textContent = message;
+                    errorElement.style.color = 'var(--error-500)';
+                    errorElement.style.fontSize = '0.75rem';
+                    errorElement.style.marginTop = 'var(--space-1)';
+                    errorElement.setAttribute('role', 'alert');
+                    field.parentNode.appendChild(errorElement);
+                }
+            }
+            
+            clearFieldError(field) {
+                field.style.borderColor = '';
+                field.style.boxShadow = '';
+                field.removeAttribute('aria-invalid');
+                
+                const errorElement = field.parentNode.querySelector('.field-error');
+                if (errorElement) {
+                    errorElement.remove();
+                }
+            }
+            
+            setLoadingState(isLoading) {
+                this.loginButton.disabled = isLoading;
+                
+                if (isLoading) {
+                    this.loginText.textContent = 'Signing in...';
+                    this.loginSpinner.style.display = 'block';
+                    this.loginButton.setAttribute('aria-busy', 'true');
+                } else {
+                    this.loginText.textContent = 'Sign In';
+                    this.loginSpinner.style.display = 'none';
+                    this.loginButton.removeAttribute('aria-busy');
+                }
+            }
+            
+            handleKeyDown(event) {
+                // Enter key for quick submit
+                if (event.key === 'Enter' && (event.target === this.usernameInput || event.target === this.passwordInput)) {
+                    this.handleSubmit(event);
+                }
+                
+                // ESC key to clear errors
+                if (event.key === 'Escape') {
+                    this.clearAllErrors();
+                }
+            }
+            
+            clearAllErrors() {
+                this.clearFieldError(this.usernameInput);
+                this.clearFieldError(this.passwordInput);
+            }
+        }
+        
+        // Password visibility toggle
+        function togglePasswordVisibility() {
+            const passwordField = document.getElementById('password');
+            const passwordIcon = document.getElementById('password-icon');
+            const toggleButton = document.querySelector('.password-toggle');
+            
+            if (passwordField.type === 'password') {
+                passwordField.type = 'text';
+                passwordIcon.textContent = '🙈';
+                toggleButton.setAttribute('aria-label', 'Hide password');
+                toggleButton.setAttribute('title', 'Hide password');
+            } else {
+                passwordField.type = 'password';
+                passwordIcon.textContent = '👁️';
+                toggleButton.setAttribute('aria-label', 'Show password');
+                toggleButton.setAttribute('title', 'Show password');
+            }
+        }
+        
+        // Initialize after page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize form manager
+            new LoginFormManager();
+            
+            // Detect user preferences
+            if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.documentElement.style.setProperty('--animation-duration', '0s');
+            }
+            
+            // Detect high contrast mode
+            if (window.matchMedia && window.matchMedia('(prefers-contrast: high)').matches) {
+                document.body.classList.add('high-contrast');
+            }
+            
+            // Performance monitoring
+            if ('performance' in window) {
+                window.addEventListener('load', function() {
+                    const loadTime = performance.timing.loadEventEnd - performance.timing.navigationStart;
+                    if (loadTime > 3000) {
+                        console.warn('Page load time is high:', loadTime + 'ms');
+                    }
+                });
+            }
+        });
+        
+        // Error handling
+        window.addEventListener('error', function(event) {
+            console.error('JavaScript error:', event.error);
+            // In production, this should report errors to monitoring system
+        });
+        
+        // Service worker support (if offline functionality is needed)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                // Can register service worker here
+            });
+        }
+    </script>
+</body>
+</html>

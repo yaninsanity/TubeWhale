@@ -18,13 +18,17 @@ from .models import User, APIKey, APIUsageLog, InvitationCode
 class UserAdmin(BaseUserAdmin):
     """Enhanced User Admin with English Interface"""
     
-    list_display = ('username', 'email', 'first_name', 'last_name', 'is_verified', 'api_calls_today', 'total_api_calls', 'is_staff', 'date_joined')
-    list_filter = ('is_staff', 'is_superuser', 'is_active', 'is_verified', 'language', 'date_joined')
+    list_display = ('username', 'email', 'first_name', 'last_name', 'tier_display', 'is_verified', 'api_calls_today', 'total_api_calls', 'is_staff', 'date_joined')
+    list_filter = ('is_staff', 'is_superuser', 'is_active', 'is_verified', 'tier', 'language', 'date_joined')
     search_fields = ('username', 'first_name', 'last_name', 'email', 'phone_number')
     ordering = ('-date_joined',)
     
     # Enhanced fieldsets with proper English labels
     fieldsets = BaseUserAdmin.fieldsets + (
+        (_('User Tier & Access'), {
+            'fields': ('tier',),
+            'description': _('User access level determines available templates and features')
+        }),
         (_('Extended Information'), {
             'fields': ('phone_number', 'avatar', 'timezone_setting', 'language', 'is_verified')
         }),
@@ -39,12 +43,86 @@ class UserAdmin(BaseUserAdmin):
     )
     
     add_fieldsets = BaseUserAdmin.add_fieldsets + (
+        (_('User Tier'), {
+            'fields': ('tier',),
+            'description': _('Set user access level (Basic/Standard/Premium)')
+        }),
         (_('Extended Information'), {
             'fields': ('email', 'phone_number', 'timezone_setting', 'language')
         }),
     )
     
     readonly_fields = ('last_activity', 'date_joined', 'invitation_code_used')
+    
+    # Enhanced admin actions for better tier management
+    actions = ['upgrade_to_standard', 'upgrade_to_premium', 'downgrade_to_basic', 'verify_users', 'export_user_report']
+    
+    def tier_display(self, obj):
+        """Display user tier with badge styling"""
+        tier_colors = {
+            'basic': 'secondary',
+            'standard': 'primary', 
+            'premium': 'warning'
+        }
+        color = tier_colors.get(obj.tier, 'secondary')
+        return format_html(
+            '<span class="badge bg-{}">{}</span>',
+            color,
+            obj.get_tier_display_name()
+        )
+    tier_display.short_description = _('User Tier')
+    tier_display.admin_order_field = 'tier'
+    
+    # Custom admin actions for tier management
+    actions = ['upgrade_to_standard', 'upgrade_to_premium', 'downgrade_to_basic', 'verify_users', 'export_user_report']
+    
+    def upgrade_to_standard(self, request, queryset):
+        """Batch upgrade users to Standard tier"""
+        updated = queryset.update(tier='standard')
+        self.message_user(request, f'{updated} users upgraded to Standard tier.', level='success')
+    upgrade_to_standard.short_description = _('🔥 Upgrade selected users to Standard tier')
+    
+    def upgrade_to_premium(self, request, queryset):
+        """Batch upgrade users to Premium tier"""
+        updated = queryset.update(tier='premium')
+        self.message_user(request, f'{updated} users upgraded to Premium tier.', level='success')
+    upgrade_to_premium.short_description = _('💎 Upgrade selected users to Premium tier')
+    
+    def downgrade_to_basic(self, request, queryset):
+        """Batch downgrade users to Basic tier"""
+        updated = queryset.update(tier='basic')
+        self.message_user(request, f'{updated} users downgraded to Basic tier.', level='warning')
+    downgrade_to_basic.short_description = _('⬇️ Downgrade selected users to Basic tier')
+    
+    def verify_users(self, request, queryset):
+        """Batch verify selected users"""
+        updated = queryset.update(is_verified=True)
+        self.message_user(request, f'{updated} users verified successfully.', level='success')
+    verify_users.short_description = _('✅ Verify selected users')
+    
+    def export_user_report(self, request, queryset):
+        """Export user report as CSV"""
+        import csv
+        from django.http import HttpResponse
+        
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="user_report.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow(['Username', 'Email', 'Tier', 'API Calls Today', 'Total API Calls', 'Date Joined'])
+        
+        for user in queryset:
+            writer.writerow([
+                user.username,
+                user.email,
+                user.get_tier_display_name(),
+                user.api_calls_today,
+                user.total_api_calls,
+                user.date_joined.strftime('%Y-%m-%d')
+            ])
+        
+        return response
+    export_user_report.short_description = _('Export selected users report as CSV')
     
     def invitation_code_used(self, obj):
         """Display invitation code used by this user"""

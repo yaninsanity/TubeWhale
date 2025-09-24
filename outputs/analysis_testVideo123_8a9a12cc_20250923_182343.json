@@ -1,0 +1,22 @@
+{
+  "job_id": "8a9a12cc",
+  "status": "completed",
+  "video_id": "testVideo123",
+  "analysis_type": "tech",
+  "created_at": "2025-09-24T01:23:43.087841+00:00",
+  "completed_at": "2025-09-24T01:23:43.087893+00:00",
+  "results": {
+    "summary": "Analysis completed for video testVideo123 using tech approach",
+    "insights": [
+      "Video ID: testVideo123",
+      "Analysis Type: tech",
+      "Processing completed successfully",
+      "Output saved to results directory"
+    ],
+    "metrics": {
+      "processing_time": "2.5s",
+      "confidence_score": 0.85,
+      "output_format": "json"
+    }
+  }
+}

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+{% load static %}
+{% load i18n %}
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{% trans "Dashboard" %} - TubeWhale{% endblock %}</title>
+    
+    <!-- Favicon -->
+    <!-- <link rel="icon" type="image/png" href="{% static 'logo.png' %}"> -->
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Custom Dashboard Styles -->
+    <style>
+        :root {
+            --primary-color: #3b82f6;
+            --secondary-color: #6b7280;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --info-color: #06b6d4;
+        }
+        
+        body {
+            background-color: #f8fafc;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        
+        .dashboard-header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, #1e40af 100%);
+            color: white;
+            padding: 1rem 0;
+            margin-bottom: 2rem;
+        }
+        
+        .dashboard-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+        
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .btn {
+            border-radius: 8px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+        
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.5rem;
+        }
+        
+        .nav-link {
+            border-radius: 6px;
+            margin: 0 0.25rem;
+        }
+        
+        .nav-link:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        .badge {
+            font-size: 0.8rem;
+            padding: 0.4rem 0.8rem;
+        }
+        
+        .progress {
+            height: 8px;
+            border-radius: 4px;
+        }
+        
+        .table {
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .table th {
+            background-color: #f8fafc;
+            border: none;
+            font-weight: 600;
+            color: var(--secondary-color);
+        }
+        
+        .loading-spinner {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 0.5rem;
+        }
+        
+        .status-running { background-color: var(--success-color); }
+        .status-pending { background-color: var(--warning-color); }
+        .status-failed { background-color: var(--danger-color); }
+        .status-completed { background-color: var(--info-color); }
+    </style>
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Dashboard Header -->
+    <div class="dashboard-header">
+        <div class="dashboard-container">
+            <nav class="navbar navbar-expand-lg navbar-dark">
+                <div class="container-fluid p-0">
+                    <a class="navbar-brand" href="{% url 'dashboard:overview' %}">
+                        <i class="fas fa-chart-line me-2"></i>
+                        {% trans "TubeWhale Dashboard" %}
+                    </a>
+                    
+                    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
+                    
+                    <div class="collapse navbar-collapse" id="navbarNav">
+                        <ul class="navbar-nav me-auto">
+                            <li class="nav-item">
+                                <a class="nav-link" href="{% url 'dashboard:overview' %}">
+                                    <i class="fas fa-tachometer-alt me-1"></i>
+                                    {% trans "Overview" %}
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{% url 'dashboard:templates' %}">
+                                    <i class="fas fa-layer-group me-1"></i>
+                                    {% trans "Templates" %}
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{% url 'dashboard:jobs' %}">
+                                    <i class="fas fa-tasks me-1"></i>
+                                    {% trans "Jobs" %}
+                                </a>
+                            </li>
+                        </ul>
+                        
+                        <ul class="navbar-nav">
+                            {% if user.is_authenticated %}
+                                <li class="nav-item dropdown">
+                                    <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
+                                        <i class="fas fa-user-circle me-1"></i>
+                                        {{ user.username }}
+                                        <span class="badge bg-light text-dark ms-2">{{ user.get_tier_display_name }}</span>
+                                    </a>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li><a class="dropdown-item" href="{% url 'admin:index' %}">
+                                            <i class="fas fa-cog me-2"></i>{% trans "Settings" %}
+                                        </a></li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li><a class="dropdown-item" href="{% url 'admin:logout' %}">
+                                            <i class="fas fa-sign-out-alt me-2"></i>{% trans "Logout" %}
+                                        </a></li>
+                                    </ul>
+                                </li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                </div>
+            </nav>
+        </div>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="dashboard-container">
+        {% block content %}{% endblock %}
+    </div>
+    
+    <!-- Footer -->
+    <footer class="mt-5 py-4 bg-white border-top">
+        <div class="dashboard-container">
+            <div class="row">
+                <div class="col-md-6">
+                    <p class="text-muted mb-0">
+                        &copy; 2024 TubeWhale. {% trans "All rights reserved." %}
+                    </p>
+                </div>
+                <div class="col-md-6 text-end">
+                    <small class="text-muted">
+                        {% trans "Dashboard v1.0" %}
+                    </small>
+                </div>
+            </div>
+        </div>
+    </footer>
+    
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- jQuery for AJAX -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,447 @@
+{% extends "dashboard/base_simple.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Dashboard" %} - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        --hover-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        --radius-lg: 0.75rem;
+    }
+    
+    .dashboard-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 2rem;
+        margin-top: 2rem;
+    }
+    
+    .dashboard-card {
+        background: white;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--card-shadow);
+        overflow: hidden;
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    
+    .dashboard-card:hover {
+        box-shadow: var(--hover-shadow);
+        transform: translateY(-4px);
+    }
+    
+    .card-header {
+        padding: 1.5rem;
+        background: var(--primary-gradient);
+        color: white;
+    }
+    
+    .card-icon {
+        width: 3rem;
+        height: 3rem;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 1rem;
+        font-size: 1.5rem;
+    }
+    
+    .card-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+    }
+    
+    .card-subtitle {
+        opacity: 0.9;
+        font-size: 0.875rem;
+    }
+    
+    .card-body {
+        padding: 1.5rem;
+    }
+    
+    .feature-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    
+    .feature-list li {
+        display: flex;
+        align-items: center;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    
+    .feature-list li:last-child {
+        border-bottom: none;
+    }
+    
+    .feature-icon {
+        color: #10b981;
+        margin-right: 0.75rem;
+        width: 1rem;
+    }
+    
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .stat-item {
+        text-align: center;
+        padding: 1rem;
+        background: #f8fafc;
+        border-radius: 8px;
+    }
+    
+    .stat-value {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #1f2937;
+    }
+    
+    .stat-label {
+        font-size: 0.75rem;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .action-btn {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.75rem 1.5rem;
+        background: var(--primary-gradient);
+        color: white;
+        text-decoration: none;
+        border-radius: 6px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+        border: none;
+        cursor: pointer;
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .action-btn:hover {
+        transform: translateY(-1px);
+        color: white;
+        text-decoration: none;
+    }
+    
+    .tier-badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        border-radius: 9999px;
+        letter-spacing: 0.5px;
+    }
+    
+    .tier-basic { background: #fef3c7; color: #d97706; }
+    .tier-standard { background: #dbeafe; color: #2563eb; }
+    .tier-premium { background: #f3e8ff; color: #7c3aed; }
+    
+    .welcome-header {
+        text-align: center;
+        margin-bottom: 3rem;
+    }
+    
+    .welcome-title {
+        font-size: 2.25rem;
+        font-weight: 700;
+        color: #1f2937;
+        margin-bottom: 0.5rem;
+    }
+    
+    .welcome-subtitle {
+        color: #6b7280;
+        font-size: 1.125rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="welcome-header">
+    <h1 class="welcome-title">
+        {% trans "Welcome back," %} {{ user.username }}!
+    </h1>
+    <p class="welcome-subtitle">
+        {% trans "Your analysis platform is ready. Choose your next action below." %}
+        <span class="tier-badge tier-{{ user.tier }}">{{ user.get_tier_display_name }}</span>
+    </p>
+</div>
+
+<div class="dashboard-grid">
+    <!-- Template Selection -->
+    <div class="dashboard-card" onclick="window.location.href='{% url 'dashboard:template_selection' %}'">
+        <div class="card-header">
+            <div class="card-icon">
+                <i class="fas fa-clipboard-list"></i>
+            </div>
+            <div class="card-title">{% trans "Analysis Templates" %}</div>
+            <div class="card-subtitle">{% trans "Choose from professional analysis templates" %}</div>
+        </div>
+        <div class="card-body">
+            <ul class="feature-list">
+                <li>
+                    <i class="fas fa-check feature-icon"></i>
+                    {% trans "Sentiment Analysis" %}
+                </li>
+                <li>
+                    <i class="fas fa-check feature-icon"></i>
+                    {% trans "Content Summarization" %}
+                </li>
+                <li>
+                    <i class="fas fa-check feature-icon"></i>
+                    {% trans "Keyword Extraction" %}
+                </li>
+                <li>
+                    <i class="fas fa-check feature-icon"></i>
+                    {% trans "Advanced Analytics" %}
+                </li>
+            </ul>
+            <div class="mt-3">
+                <a href="{% url 'dashboard:template_selection' %}" class="action-btn">
+                    <i class="fas fa-rocket me-2"></i>
+                    {% trans "Start Analysis" %}
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Job Management -->
+    <div class="dashboard-card" onclick="window.location.href='{% url 'dashboard:job_runner' %}'">
+        <div class="card-header">
+            <div class="card-icon">
+                <i class="fas fa-tasks"></i>
+            </div>
+            <div class="card-title">{% trans "Job Management" %}</div>
+            <div class="card-subtitle">{% trans "Monitor and control your analysis jobs" %}</div>
+        </div>
+        <div class="card-body">
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-value">3</div>
+                    <div class="stat-label">{% trans "Active Jobs" %}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">12</div>
+                    <div class="stat-label">{% trans "Completed" %}</div>
+                </div>
+            </div>
+            <div class="mt-3">
+                <a href="{% url 'dashboard:job_runner' %}" class="action-btn">
+                    <i class="fas fa-cogs me-2"></i>
+                    {% trans "Manage Jobs" %}
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Theme Search -->
+    <div class="dashboard-card" onclick="window.location.href='{% url 'dashboard:theme_search' %}'">
+        <div class="card-header">
+            <div class="card-icon">
+                <i class="fas fa-search"></i>
+            </div>
+            <div class="card-title">{% trans "Theme Search" %}</div>
+            <div class="card-subtitle">{% trans "Intelligent theme-based template discovery" %}</div>
+        </div>
+        <div class="card-body">
+            <ul class="feature-list">
+                <li>
+                    <i class="fas fa-check feature-icon"></i>
+                    {% trans "Smart Theme Recognition" %}
+                </li>
+                <li>
+                    <i class="fas fa-check feature-icon"></i>
+                    {% trans "Advanced Filtering" %}
+                </li>
+                <li>
+                    <i class="fas fa-check feature-icon"></i>
+                    {% trans "Professional Categories" %}
+                </li>
+                <li>
+                    <i class="fas fa-check feature-icon"></i>
+                    {% trans "Intelligent Recommendations" %}
+                </li>
+            </ul>
+            <div class="mt-3">
+                <a href="{% url 'dashboard:theme_search' %}" class="action-btn">
+                    <i class="fas fa-brain me-2"></i>
+                    {% trans "Search Themes" %}
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transparent Analysis Terminal -->
+    <div class="dashboard-card" onclick="window.location.href='{% url 'dashboard:transparent_terminal' %}'">
+        <div class="card-header">
+            <div class="card-icon">
+                <i class="fas fa-terminal"></i>
+            </div>
+            <div class="card-title">透明分析终端</div>
+            <div class="card-subtitle">实时查看分析过程，支持样本数据测试</div>
+        </div>
+        <div class="card-body">
+            <ul class="feature-list">
+                <li>
+                    <i class="fas fa-check feature-icon"></i>
+                    实时进度显示
+                </li>
+                <li>
+                    <i class="fas fa-check feature-icon"></i>
+                    详细日志输出
+                </li>
+                <li>
+                    <i class="fas fa-check feature-icon"></i>
+                    样本数据测试
+                </li>
+                <li>
+                    <i class="fas fa-check feature-icon"></i>
+                    无需登录演示
+                </li>
+            </ul>
+            <div class="mt-3">
+                <a href="{% url 'dashboard:transparent_terminal' %}" class="action-btn">
+                    <i class="fas fa-play me-2"></i>
+                    开始透明分析
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- CLI Interface -->
+    <div class="dashboard-card" onclick="window.location.href='{% url 'dashboard:cli_interface' %}'">
+        <div class="card-header">
+            <div class="card-icon">
+                <i class="fas fa-terminal"></i>
+            </div>
+            <div class="card-title">{% trans "CLI Interface" %}</div>
+            <div class="card-subtitle">{% trans "Professional command-line control system" %}</div>
+        </div>
+        <div class="card-body">
+            <ul class="feature-list">
+                <li>
+                    <i class="fas fa-check feature-icon"></i>
+                    {% trans "System Status Monitoring" %}
+                </li>
+                <li>
+                    <i class="fas fa-check feature-icon"></i>
+                    {% trans "Real-time Job Control" %}
+                </li>
+                <li>
+                    <i class="fas fa-check feature-icon"></i>
+                    {% trans "Docker Management" %}
+                </li>
+                <li>
+                    <i class="fas fa-check feature-icon"></i>
+                    {% trans "Advanced Operations" %}
+                </li>
+            </ul>
+            <div class="mt-3">
+                <a href="{% url 'dashboard:cli_interface' %}" class="action-btn">
+                    <i class="fas fa-code me-2"></i>
+                    {% trans "Open CLI" %}
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Status -->
+    <div class="dashboard-card">
+        <div class="card-header">
+            <div class="card-icon">
+                <i class="fas fa-heartbeat"></i>
+            </div>
+            <div class="card-title">{% trans "System Status" %}</div>
+            <div class="card-subtitle">{% trans "Real-time health monitoring" %}</div>
+        </div>
+        <div class="card-body">
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-value text-success">●</div>
+                    <div class="stat-label">{% trans "Docker Services" %}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value text-success">●</div>
+                    <div class="stat-label">{% trans "Analysis Engine" %}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value text-success">●</div>
+                    <div class="stat-label">{% trans "Database" %}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value text-warning">●</div>
+                    <div class="stat-label">{% trans "Queue" %}</div>
+                </div>
+            </div>
+            <div class="mt-3">
+                <button class="action-btn" onclick="checkSystemHealth()">
+                    <i class="fas fa-sync me-2"></i>
+                    {% trans "Refresh Status" %}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function checkSystemHealth() {
+    // Simulate system health check
+    const button = event.target;
+    const originalText = button.innerHTML;
+    
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>{% trans "Checking..." %}';
+    button.disabled = true;
+    
+    setTimeout(() => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+        
+        // Show a simple notification
+        const alert = document.createElement('div');
+        alert.className = 'alert alert-success position-fixed';
+        alert.style.top = '20px';
+        alert.style.right = '20px';
+        alert.style.zIndex = '9999';
+        alert.innerHTML = '<i class="fas fa-check me-2"></i>{% trans "All systems operational" %}';
+        
+        document.body.appendChild(alert);
+        
+        setTimeout(() => {
+            alert.remove();
+        }, 3000);
+    }, 1500);
+}
+
+// Add smooth hover effects
+document.addEventListener('DOMContentLoaded', () => {
+    const cards = document.querySelectorAll('.dashboard-card');
+    
+    cards.forEach(card => {
+        card.addEventListener('mouseenter', () => {
+            card.style.transform = 'translateY(-4px)';
+        });
+        
+        card.addEventListener('mouseleave', () => {
+            card.style.transform = 'translateY(0)';
+        });
+    });
+});
+</script>
+{% endblock %}

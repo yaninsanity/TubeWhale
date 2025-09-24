@@ -1,0 +1,37 @@
+{
+  "job_id": "416d2426",
+  "status": "completed",
+  "analysis_type": "single_video",
+  "video_id": "dQw4w9WgXcQ",
+  "role_id": "content_creator",
+  "template_id": "basic_performance",
+  "created_at": "2025-09-24T01:50:54.486279+00:00",
+  "completed_at": "2025-09-24T01:50:54.486301+00:00",
+  "results": {
+    "summary": "Video analysis completed using content_creator perspective with basic_performance template",
+    "expert_insights": {
+      "role": "content_creator",
+      "perspective": "Analysis from Content Creator viewpoint",
+      "key_findings": [
+        "Professional analysis using content_creator expertise",
+        "Template-based insights from basic_performance",
+        "Customized recommendations based on role perspective",
+        "Industry best practices applied"
+      ]
+    },
+    "template_analysis": {
+      "template": "basic_performance",
+      "sections_completed": [
+        "Performance",
+        "Insights",
+        "Recommendations"
+      ],
+      "custom_questions_answered": 0
+    },
+    "metrics": {
+      "processing_time": "3.2s",
+      "confidence_score": 0.92,
+      "analysis_depth": "comprehensive"
+    }
+  }
+}

@@ -1,0 +1,180 @@
+/* Template Admin Styling */
+
+/* Badge styling for tiers and complexity */
+.badge {
+    padding: 0.25em 0.6em;
+    font-size: 0.75em;
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: baseline;
+    border-radius: 0.375rem;
+    margin: 0 0.1em;
+}
+
+/* Tier badges */
+.badge-basic {
+    color: #0f5132;
+    background-color: #d1e7dd;
+    border: 1px solid #badbcc;
+}
+
+.badge-standard {
+    color: #664d03;
+    background-color: #fff3cd;
+    border: 1px solid #ffecb5;
+}
+
+.badge-premium {
+    color: #58151c;
+    background-color: #f8d7da;
+    border: 1px solid #f5c2c7;
+}
+
+/* Complexity badges */
+.badge-simple {
+    color: #055160;
+    background-color: #cff4fc;
+    border: 1px solid #b6effb;
+}
+
+.badge-moderate {
+    color: #845947;
+    background-color: #f1e8e6;
+    border: 1px solid #e5d5d0;
+}
+
+.badge-complex {
+    color: #842029;
+    background-color: #f8d7da;
+    border: 1px solid #f5c2c7;
+}
+
+/* Template list styling */
+.template-list-item {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem;
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    margin-bottom: 0.5rem;
+    background-color: #fff;
+}
+
+.template-icon {
+    width: 40px;
+    height: 40px;
+    margin-right: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.25rem;
+    font-size: 1.25rem;
+}
+
+.template-info {
+    flex: 1;
+}
+
+.template-title {
+    font-weight: 600;
+    color: #212529;
+    margin-bottom: 0.25rem;
+}
+
+.template-description {
+    color: #6c757d;
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+}
+
+.template-meta {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+/* Form field styling */
+.field-color_preview .readonly {
+    display: inline-block;
+    width: 30px;
+    height: 30px;
+    border: 2px solid #ddd;
+    border-radius: 4px;
+    vertical-align: middle;
+}
+
+/* Color picker field */
+input[type="color"] {
+    width: 50px;
+    height: 30px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+/* Featured template indicator */
+.featured-indicator {
+    color: #ffc107;
+    font-size: 1.2em;
+}
+
+/* Template category preview */
+.category-preview {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    background-color: #f8f9fa;
+}
+
+.category-icon {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.25rem;
+}
+
+/* Admin form enhancements */
+.form-row .field-preview_image img {
+    max-width: 200px;
+    max-height: 150px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+/* JSON field styling */
+.field-parameters_schema textarea,
+.field-sample_use_cases textarea {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.9em;
+}
+
+/* Usage count styling */
+.field-usage_count .readonly {
+    font-weight: 600;
+    color: #198754;
+    font-size: 1.1em;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .template-list-item {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .template-icon {
+        margin-right: 0;
+        margin-bottom: 0.5rem;
+    }
+    
+    .template-meta {
+        flex-wrap: wrap;
+    }
+}

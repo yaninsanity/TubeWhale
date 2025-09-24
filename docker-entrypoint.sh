@@ -1,71 +1,85 @@
-#!/bin/bash
-# TubeWhale Docker Entrypoint Script
-# 启动前的初始化工作
+#!/bin/bash#!/bin/bash
+
+# Docker entrypoint script for TubeWhale backend# TubeWhale Docker Entrypoint Script
+
+# Initialization work before startup
 
 set -e
 
-# 颜色输出
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+set -e
 
-echo -e "${BLUE}🐋 TubeWhale Backend Starting...${NC}"
+echo "🔄 Starting TubeWhale backend initialization..."
 
-# 等待数据库就绪
-wait_for_db() {
-    echo -e "${YELLOW}⏳ Waiting for database...${NC}"
+# Color output
+
+# Wait for PostgreSQL to be readyRED='\033[0;31m'
+
+echo "⏳ Waiting for PostgreSQL..."GREEN='\033[0;32m'
+
+while ! pg_isready -h postgres -p 5432 -U tubewhale; doYELLOW='\033[1;33m'
+
+    echo "Waiting for PostgreSQL to be ready..."BLUE='\033[0;34m'
+
+    sleep 2NC='\033[0m' # No Color
+
+done
+
+echo "✅ PostgreSQL is ready!"echo -e "${BLUE}� TubeWhale Development Environment Starting...${NC}"
+
+
+
+# Run Django migrations# Wait for database to be ready
+
+echo "🔄 Running Django migrations..."wait_for_db() {
+
+python manage.py migrate --noinput    echo -e "${YELLOW}⏳ Waiting for database...${NC}"
+
     
-    # 如果使用PostgreSQL
-    # Compose passes DB_ENGINE=django.db.backends.postgresql
-    if echo "$DB_ENGINE" | grep -qi "postgres"; then
-        while ! python -c "
-import psycopg2
-import os
-try:
-    psycopg2.connect(
-        host=os.environ.get('DB_HOST', 'localhost'),
-        port=os.environ.get('DB_PORT', '5432'),
-        user=os.environ.get('DB_USER', 'postgres'),
-        password=os.environ.get('DB_PASSWORD', ''),
-        database=os.environ.get('DB_NAME', 'tubewhale')
-    )
-    print('Database is ready!')
-except:
-    exit(1)
-" 2>/dev/null; do
-            echo -e "${YELLOW}⏳ PostgreSQL is unavailable - sleeping${NC}"
-            sleep 2
-        done
-    fi
-    
-    # 如果使用MySQL
-    if echo "$DB_ENGINE" | grep -qi "mysql"; then
-        while ! python -c "
-import MySQLdb
-import os
-try:
-    MySQLdb.connect(
-        host=os.environ.get('DB_HOST', 'localhost'),
-        port=int(os.environ.get('DB_PORT', '3306')),
-        user=os.environ.get('DB_USER', 'root'),
-        passwd=os.environ.get('DB_PASSWORD', ''),
-        db=os.environ.get('DB_NAME', 'tubewhale')
-    )
-    print('Database is ready!')
-except:
-    exit(1)
-" 2>/dev/null; do
-            echo -e "${YELLOW}⏳ MySQL is unavailable - sleeping${NC}"
-            sleep 2
-        done
-    fi
-    
+
+# Create superuser if it doesn't exist    # Simple database connection check  
+
+echo "👤 Creating superuser..."    while ! python -c "
+
+python manage.py shell -c "import django
+
+from apps.user_app.models import Userimport os
+
+try:os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'tubewhale_project.settings')
+
+    if not User.objects.filter(username='admin').exists():django.setup()
+
+        admin = User.objects.create_superuser('admin', 'admin@tubewhale.com', 'admin123')from django.db import connection
+
+        admin.tier = 'premium'try:
+
+        admin.save()    cursor = connection.cursor()
+
+        print('✅ Superuser created: admin/admin123')    cursor.execute('SELECT 1')
+
+    else:    print('Database is ready!')
+
+        print('✅ Superuser already exists')except Exception as e:
+
+except Exception as e:    print('Database not ready:', e)
+
+    print(f'⚠️ Superuser creation skipped: {e}')    exit(1)
+
+"" 2>/dev/null; do
+
+        echo -e "${YELLOW}⏳ Database is unavailable - sleeping${NC}"
+
+# Collect static files        sleep 2
+
+echo "📁 Collecting static files..."    done
+
+python manage.py collectstatic --noinput    
+
     echo -e "${GREEN}✅ Database is ready!${NC}"
-}
 
-# 运行数据库迁移
+echo "🚀 Starting Django development server..."}
+
+exec python manage.py runserver 0.0.0.0:8000
+# Run database migrations
 run_migrations() {
     echo -e "${BLUE}🔄 Running database migrations...${NC}"
         python manage.py migrate --noinput || {
@@ -73,7 +87,7 @@ run_migrations() {
     echo -e "${GREEN}✅ Migrations completed!${NC}"
 }
 
-# 创建超级用户
+# Create superuser
 create_superuser() {
     echo -e "${BLUE}👤 Creating superuser...${NC}"
     python manage.py shell -c "
@@ -91,41 +105,41 @@ else:
 "
 }
 
-# 收集静态文件
+# Collect static files
 collect_static() {
     echo -e "${BLUE}📁 Collecting static files...${NC}"
     python manage.py collectstatic --noinput --clear || true
     echo -e "${GREEN}✅ Static files collected!${NC}"
 }
 
-# 编译翻译文件
+# Compile translation files
 compile_messages() {
     echo -e "${BLUE}🌐 Compiling translation messages...${NC}"
     python manage.py compilemessages || true
     echo -e "${GREEN}✅ Translation messages compiled!${NC}"
 }
 
-# 主函数
+# Main function
 main() {
     echo -e "${BLUE}========================================${NC}"
     echo -e "${BLUE}🐋 TubeWhale Django Backend Initialization${NC}"
     echo -e "${BLUE}========================================${NC}"
     
-    # 等待数据库
+    # Wait for database
     if [ "$WAIT_FOR_DB" = "true" ]; then
         wait_for_db
     fi
     
-    # 运行迁移
+    # Run migrations
     run_migrations
     
-    # 创建超级用户
+    # Create superuser
     create_superuser
     
-    # 收集静态文件
+    # Collect static files
     collect_static
     
-    # 编译翻译
+    # Compile translations
     compile_messages
     
     echo -e "${GREEN}========================================${NC}"
@@ -136,13 +150,19 @@ main() {
     echo -e "${GREEN}🔐 Login: admin / admin123${NC}"
     echo -e "${GREEN}========================================${NC}"
     
-    # 执行传入的命令
+    # Execute passed command
     exec "$@"
 }
 
-# 如果直接运行此脚本
+# If running this script directly
 if [ "${1#-}" != "$1" ] || [ "${1%.py}" != "$1" ] || [ "$1" = "gunicorn" ] || [ "$1" = "python" ]; then
     main "$@"
+elif [ "$1" = "runserver" ]; then
+    # Run development server directly
+    main python manage.py runserver 0.0.0.0:8001
+elif [ "$1" = "wait_for_db" ]; then
+    # Just wait for db and exit
+    wait_for_db
 else
     exec "$@"
 fi

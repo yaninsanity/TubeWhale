@@ -104,6 +104,17 @@ urlpatterns = [
     # Main application engine and CLI integration
     path('', include('apps.tubewhale_engine.urls')),
     
+    # === DASHBOARD ===
+    # Main user dashboard and template selection
+    path('dashboard/', include('apps.dashboard_app.urls')),
+    
+    # === CLIENT APP ===
+    # Independent client authentication and profile management
+    path('client/', include('apps.client_app.urls')),
+    
+    # Root redirect to dashboard
+    path('', RedirectView.as_view(url='/dashboard/', permanent=False), name='root_redirect'),
+    
     # === API DOCUMENTATION ===
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),

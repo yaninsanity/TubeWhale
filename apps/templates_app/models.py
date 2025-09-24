@@ -247,3 +247,56 @@ class Job(models.Model):
     def __str__(self):  # pragma: no cover
         return f"Job({self.id} {self.command} {self.status})"
 
+
+class TemplateInfo(models.Model):
+    """Template Information for Client Display"""
+    template_id = models.CharField(max_length=128, unique=True, verbose_name="Template ID")
+    title = models.CharField(max_length=255, verbose_name="Template Title")
+    description = models.TextField(verbose_name="Description")
+    theme = models.CharField(max_length=100, verbose_name="Theme", 
+                           help_text="Main theme or topic (e.g., 'Business Analysis', 'Content Research')")
+    category = models.CharField(max_length=50, choices=[
+        ('research', 'Research & Analysis'),
+        ('content', 'Content Creation'),
+        ('business', 'Business Intelligence'),
+        ('education', 'Educational'),
+        ('technical', 'Technical Analysis'),
+        ('social', 'Social Media Analysis'),
+    ], default='research', verbose_name="Category")
+    
+    # Accessibility and user experience fields
+    difficulty_level = models.CharField(max_length=20, choices=[
+        ('beginner', 'Beginner - Easy to use'),
+        ('intermediate', 'Intermediate - Some experience needed'),
+        ('advanced', 'Advanced - Expert users'),
+    ], default='beginner', verbose_name="Difficulty Level")
+    
+    estimated_time = models.CharField(max_length=50, verbose_name="Estimated Processing Time",
+                                    help_text="e.g., '5-10 minutes', '30+ minutes'")
+    
+    features = models.JSONField(default=list, verbose_name="Key Features",
+                               help_text="List of key features or capabilities")
+    
+    use_cases = models.JSONField(default=list, verbose_name="Use Cases",
+                               help_text="List of common use cases or scenarios")
+    
+    required_tier = models.CharField(max_length=20, choices=[
+        ('basic', 'Basic Tier'),
+        ('standard', 'Standard Tier'),
+        ('premium', 'Premium Tier'),
+    ], default='basic', verbose_name="Required Tier")
+    
+    is_active = models.BooleanField(default=True, verbose_name="Is Active")
+    sort_order = models.IntegerField(default=0, verbose_name="Sort Order")
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Template Information"
+        verbose_name_plural = "Template Information"
+        ordering = ['sort_order', 'title']
+    
+    def __str__(self):
+        return f"{self.title} ({self.category})"
+

@@ -1,0 +1,1060 @@
+{% extends "client/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Execute Analysis" %} - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --primary-color: #667eea;
+        --secondary-color: #764ba2;
+        --success-color: #10b981;
+        --warning-color: #f59e0b;
+        --error-color: #ef4444;
+        --info-color: #3b82f6;
+        --gray-50: #f9fafb;
+        --gray-100: #f3f4f6;
+        --gray-200: #e5e7eb;
+        --gray-300: #d1d5db;
+        --gray-400: #9ca3af;
+        --gray-500: #6b7280;
+        --gray-600: #4b5563;
+        --gray-700: #374151;
+        --gray-800: #1f2937;
+        --gray-900: #111827;
+        --radius-sm: 0.375rem;
+        --radius-md: 0.5rem;
+        --radius-lg: 0.75rem;
+        --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        --transition: all 0.3s ease;
+    }
+
+    body {
+        background: linear-gradient(135deg, var(--gray-50) 0%, var(--gray-100) 100%);
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        line-height: 1.6;
+        color: var(--gray-800);
+    }
+
+    .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 2rem;
+    }
+
+    .workflow-header {
+        text-align: center;
+        margin-bottom: 3rem;
+    }
+
+    .workflow-title {
+        font-size: 2.5rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin-bottom: 1rem;
+    }
+
+    .workflow-subtitle {
+        font-size: 1.125rem;
+        color: var(--gray-600);
+        max-width: 600px;
+        margin: 0 auto;
+    }
+
+    /* Step Indicator */
+    .step-indicator {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-bottom: 3rem;
+        position: relative;
+    }
+
+    .step {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        position: relative;
+        z-index: 2;
+    }
+
+    .step-number {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 1.125rem;
+        margin-bottom: 0.5rem;
+        transition: all 0.3s ease;
+    }
+
+    .step.completed .step-number {
+        background: var(--success-color);
+        color: white;
+    }
+
+    .step.active .step-number {
+        background: var(--primary-color);
+        color: white;
+        transform: scale(1.1);
+        box-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
+    }
+
+    .step.pending .step-number {
+        background: var(--gray-200);
+        color: var(--gray-500);
+    }
+
+    .step-label {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--gray-600);
+        text-align: center;
+        max-width: 120px;
+    }
+
+    .step.active .step-label {
+        color: var(--primary-color);
+        font-weight: 600;
+    }
+
+    .step-connector {
+        position: absolute;
+        top: 25px;
+        left: 80px;
+        width: calc(100% - 160px);
+        height: 2px;
+        background: var(--gray-200);
+        z-index: 1;
+    }
+
+    .progress-bar {
+        width: 100%;
+        height: 6px;
+        background: var(--gray-200);
+        border-radius: 3px;
+        overflow: hidden;
+        margin-bottom: 2rem;
+    }
+
+    .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+        width: 100%; /* Step 4 of 4 */
+        transition: width 0.5s ease;
+    }
+
+    /* Execution Interface */
+    .execution-container {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+        margin-bottom: 2rem;
+    }
+
+    .execution-panel {
+        background: white;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-lg);
+        overflow: hidden;
+    }
+
+    .panel-header {
+        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+        color: white;
+        padding: 1.5rem;
+        text-align: center;
+    }
+
+    .panel-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+    }
+
+    .panel-subtitle {
+        opacity: 0.9;
+        font-size: 0.875rem;
+    }
+
+    .panel-content {
+        padding: 2rem;
+    }
+
+    /* Configuration Summary */
+    .config-summary {
+        background: var(--gray-50);
+        border: 1px solid var(--gray-200);
+        border-radius: var(--radius-md);
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .config-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.75rem;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid var(--gray-200);
+    }
+
+    .config-item:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+    }
+
+    .config-label {
+        font-weight: 500;
+        color: var(--gray-700);
+    }
+
+    .config-value {
+        font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+        font-size: 0.875rem;
+        color: var(--gray-600);
+        background: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--gray-200);
+    }
+
+    /* Search Interface */
+    .search-form {
+        margin-bottom: 2rem;
+    }
+
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+
+    .form-label {
+        display: block;
+        font-weight: 600;
+        color: var(--gray-700);
+        margin-bottom: 0.5rem;
+        font-size: 1rem;
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 0.875rem;
+        border: 2px solid var(--gray-200);
+        border-radius: var(--radius-md);
+        font-size: 1rem;
+        transition: var(--transition);
+    }
+
+    .form-control:focus {
+        outline: none;
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .form-control.large {
+        min-height: 120px;
+        resize: vertical;
+        font-family: inherit;
+    }
+
+    /* Execution Progress */
+    .execution-status {
+        background: var(--gray-50);
+        border-radius: var(--radius-md);
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        border-left: 4px solid var(--info-color);
+    }
+
+    .status-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+    .status-icon {
+        font-size: 1.5rem;
+        margin-right: 0.75rem;
+    }
+
+    .status-title {
+        font-weight: 600;
+        color: var(--gray-800);
+    }
+
+    .status-message {
+        color: var(--gray-600);
+        font-size: 0.875rem;
+        margin-bottom: 1rem;
+    }
+
+    .execution-progress {
+        background: var(--gray-200);
+        border-radius: var(--radius-sm);
+        height: 8px;
+        overflow: hidden;
+        margin-bottom: 0.5rem;
+    }
+
+    .progress-bar-fill {
+        height: 100%;
+        background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+        transition: width 0.3s ease;
+        width: 0%;
+    }
+
+    .progress-text {
+        font-size: 0.75rem;
+        color: var(--gray-500);
+        text-align: center;
+    }
+
+    /* Process Timeline */
+    .process-timeline {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+
+    .timeline-item {
+        display: flex;
+        align-items: flex-start;
+        margin-bottom: 1rem;
+        padding: 1rem;
+        border-radius: var(--radius-md);
+        transition: var(--transition);
+    }
+
+    .timeline-item.pending {
+        background: var(--gray-50);
+        color: var(--gray-500);
+    }
+
+    .timeline-item.running {
+        background: color-mix(in srgb, var(--info-color) 10%, white);
+        border-left: 3px solid var(--info-color);
+    }
+
+    .timeline-item.completed {
+        background: color-mix(in srgb, var(--success-color) 10%, white);
+        border-left: 3px solid var(--success-color);
+    }
+
+    .timeline-item.error {
+        background: color-mix(in srgb, var(--error-color) 10%, white);
+        border-left: 3px solid var(--error-color);
+    }
+
+    .timeline-icon {
+        font-size: 1.25rem;
+        margin-right: 1rem;
+        margin-top: 0.125rem;
+    }
+
+    .timeline-content {
+        flex: 1;
+    }
+
+    .timeline-title {
+        font-weight: 600;
+        margin-bottom: 0.25rem;
+    }
+
+    .timeline-description {
+        font-size: 0.875rem;
+        opacity: 0.8;
+        margin-bottom: 0.5rem;
+    }
+
+    .timeline-details {
+        font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+        font-size: 0.75rem;
+        background: rgba(0, 0, 0, 0.05);
+        padding: 0.5rem;
+        border-radius: var(--radius-sm);
+        white-space: pre-wrap;
+        display: none;
+    }
+
+    .timeline-details.visible {
+        display: block;
+    }
+
+    .timeline-timestamp {
+        font-size: 0.75rem;
+        color: var(--gray-400);
+    }
+
+    /* Buttons */
+    .btn {
+        padding: 0.875rem 2rem;
+        border-radius: var(--radius-md);
+        font-weight: 600;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        cursor: pointer;
+        border: none;
+        font-size: 1rem;
+        transition: var(--transition);
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+        color: white;
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-lg);
+        color: white;
+        text-decoration: none;
+    }
+
+    .btn-secondary {
+        background: var(--gray-200);
+        color: var(--gray-700);
+    }
+
+    .btn-secondary:hover {
+        background: var(--gray-300);
+        color: var(--gray-800);
+        text-decoration: none;
+        transform: translateY(-1px);
+    }
+
+    .btn-success {
+        background: var(--success-color);
+        color: white;
+    }
+
+    .btn-success:hover {
+        background: color-mix(in srgb, var(--success-color) 85%, black);
+        transform: translateY(-1px);
+        color: white;
+        text-decoration: none;
+    }
+
+    .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none !important;
+    }
+
+    .actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 2rem;
+        background: white;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-md);
+        margin-top: 2rem;
+    }
+
+    /* Full-width execution panel when running */
+    .execution-container.running {
+        grid-template-columns: 1fr;
+    }
+
+    .execution-container.running .config-panel {
+        display: none;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .execution-container {
+            grid-template-columns: 1fr;
+        }
+        
+        .step-indicator {
+            overflow-x: auto;
+            padding-bottom: 1rem;
+        }
+        
+        .container {
+            padding: 1rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <!-- Workflow Header -->
+    <div class="workflow-header">
+        <h1 class="workflow-title">{% trans "Execute Analysis" %}</h1>
+        <p class="workflow-subtitle">
+            {% trans "Configure your search parameters and start the YouTube analysis engine" %}
+        </p>
+        <div class="progress-bar">
+            <div class="progress-fill"></div>
+        </div>
+    </div>
+
+    <!-- Step Indicator -->
+    <div class="step-indicator">
+        <div class="step-connector"></div>
+        
+        <div class="step completed">
+            <div class="step-number">
+                <i class="fas fa-check"></i>
+            </div>
+            <div class="step-label">{% trans "Scenario" %}</div>
+        </div>
+        
+        <div class="step completed" style="margin-left: 6rem;">
+            <div class="step-number">
+                <i class="fas fa-check"></i>
+            </div>
+            <div class="step-label">{% trans "Engine Config" %}</div>
+        </div>
+        
+        <div class="step completed" style="margin-left: 6rem;">
+            <div class="step-number">
+                <i class="fas fa-check"></i>
+            </div>
+            <div class="step-label">{% trans "Template" %}</div>
+        </div>
+        
+        {% if selected_template.customized %}
+        <div class="step completed" style="margin-left: 6rem;">
+            <div class="step-number">
+                <i class="fas fa-check"></i>
+            </div>
+            <div class="step-label">{% trans "Customized" %}</div>
+        </div>
+        {% endif %}
+        
+        <div class="step active" style="margin-left: 6rem;">
+            <div class="step-number">
+                <i class="fas fa-play"></i>
+            </div>
+            <div class="step-label">{% trans "Execute" %}</div>
+        </div>
+    </div>
+
+    <!-- Execution Interface -->
+    <div class="execution-container" id="executionContainer">
+        <!-- Configuration Panel -->
+        <div class="execution-panel config-panel" id="configPanel">
+            <div class="panel-header">
+                <h2 class="panel-title">{% trans "Configuration Summary" %}</h2>
+                <p class="panel-subtitle">{% trans "Review your analysis setup" %}</p>
+            </div>
+            <div class="panel-content">
+                <!-- Scenario Summary -->
+                <div class="config-summary">
+                    <h3 class="config-label" style="margin-bottom: 1rem;">{% trans "Analysis Scenario" %}</h3>
+                    <div class="config-item">
+                        <span class="config-label">{% trans "Scenario" %}:</span>
+                        <span class="config-value">{{ scenario_config.name }}</span>
+                    </div>
+                    <div class="config-item">
+                        <span class="config-label">{% trans "Focus" %}:</span>
+                        <span class="config-value">{{ scenario_config.focus }}</span>
+                    </div>
+                </div>
+
+                <!-- Template Summary -->
+                <div class="config-summary">
+                    <h3 class="config-label" style="margin-bottom: 1rem;">{% trans "Template Configuration" %}</h3>
+                    <div class="config-item">
+                        <span class="config-label">{% trans "Template" %}:</span>
+                        <span class="config-value">{{ selected_template.name }}</span>
+                    </div>
+                    <div class="config-item">
+                        <span class="config-label">{% trans "Category" %}:</span>
+                        <span class="config-value">{{ selected_template.category }}</span>
+                    </div>
+                    {% if selected_template.customized %}
+                    <div class="config-item">
+                        <span class="config-label">{% trans "Status" %}:</span>
+                        <span class="config-value" style="color: var(--success-color);">
+                            <i class="fas fa-cog me-1"></i>{% trans "Customized" %}
+                        </span>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Engine Configuration -->
+                <div class="config-summary">
+                    <h3 class="config-label" style="margin-bottom: 1rem;">{% trans "Engine Parameters" %}</h3>
+                    {% for key, value in engine_config.items %}
+                    <div class="config-item">
+                        <span class="config-label">{{ key|title }}:</span>
+                        <span class="config-value">{{ value }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Execution Panel -->
+        <div class="execution-panel">
+            <div class="panel-header">
+                <h2 class="panel-title">{% trans "Search & Execute" %}</h2>
+                <p class="panel-subtitle">{% trans "Enter your search keyword and start analysis" %}</p>
+            </div>
+            <div class="panel-content">
+                <!-- Search Form -->
+                <form method="post" id="executionForm" class="search-form">
+                    {% csrf_token %}
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="search_keyword">
+                            <i class="fas fa-search me-2"></i>{% trans "Search Keyword" %}
+                        </label>
+                        <input type="text" 
+                               name="search_keyword" 
+                               id="search_keyword" 
+                               class="form-control"
+                               value="{{ engine_config.keyword|default:'' }}"
+                               placeholder="{% trans 'Enter your YouTube search keyword...' %}"
+                               required>
+                        <small class="form-text text-muted">
+                            {% trans "This keyword will be used to discover relevant YouTube videos for analysis" %}
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="analysis_notes">
+                            {% trans "Analysis Notes" %} ({% trans "Optional" %})
+                        </label>
+                        <textarea name="analysis_notes" 
+                                  id="analysis_notes" 
+                                  class="form-control large"
+                                  placeholder="{% trans 'Add any specific requirements or notes for this analysis...' %}"></textarea>
+                        <small class="form-text text-muted">
+                            {% trans "These notes will help customize the analysis to your specific needs" %}
+                        </small>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100" id="executeButton">
+                        <i class="fas fa-rocket me-2"></i>{% trans "Start Analysis" %}
+                    </button>
+                </form>
+
+                <!-- Execution Status (Hidden initially) -->
+                <div class="execution-status" id="executionStatus" style="display: none;">
+                    <div class="status-header">
+                        <i class="fas fa-cog fa-spin status-icon text-primary"></i>
+                        <div>
+                            <div class="status-title" id="statusTitle">{% trans "Initializing Analysis..." %}</div>
+                            <div class="status-message" id="statusMessage">{% trans "Setting up the analysis engine" %}</div>
+                        </div>
+                    </div>
+                    <div class="execution-progress">
+                        <div class="progress-bar-fill" id="progressBar"></div>
+                    </div>
+                    <div class="progress-text" id="progressText">0% {% trans "Complete" %}</div>
+                </div>
+
+                <!-- Process Timeline -->
+                <div class="process-timeline" id="processTimeline" style="display: none;">
+                    <!-- Timeline items will be populated dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="actions">
+        <div>
+            {% if selected_template.customized %}
+            <a href="{% url 'client_app:template_customization' %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left me-2"></i>{% trans "Back: Customization" %}
+            </a>
+            {% else %}
+            <a href="{% url 'client_app:template_selection' %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left me-2"></i>{% trans "Back: Template Selection" %}
+            </a>
+            {% endif %}
+        </div>
+        
+        <div class="action-buttons" id="actionButtons">
+            <button type="button" class="btn btn-secondary me-3" onclick="saveConfiguration()" id="saveButton">
+                <i class="fas fa-save me-2"></i>{% trans "Save Configuration" %}
+            </button>
+            
+            <button type="button" class="btn btn-success" onclick="downloadResults()" id="downloadButton" style="display: none;">
+                <i class="fas fa-download me-2"></i>{% trans "Download Results" %}
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+// Global execution state
+let executionJobId = null;
+let executionStartTime = null;
+let executionInterval = null;
+
+// Process timeline data
+const processSteps = [
+    {
+        id: 'init',
+        title: '{% trans "Initialize Engine" %}',
+        description: '{% trans "Setting up analysis environment and loading configurations" %}',
+        icon: 'fas fa-cog'
+    },
+    {
+        id: 'search',
+        title: '{% trans "YouTube Search" %}',
+        description: '{% trans "Searching for relevant videos using your keyword" %}',
+        icon: 'fas fa-search'
+    },
+    {
+        id: 'download',
+        title: '{% trans "Download Content" %}',
+        description: '{% trans "Downloading video metadata and transcripts" %}',
+        icon: 'fas fa-download'
+    },
+    {
+        id: 'analyze',
+        title: '{% trans "AI Analysis" %}',
+        description: '{% trans "Processing content with AI engines and extracting insights" %}',
+        icon: 'fas fa-brain'
+    },
+    {
+        id: 'generate',
+        title: '{% trans "Generate Report" %}',
+        description: '{% trans "Creating comprehensive analysis report and database" %}',
+        icon: 'fas fa-file-alt'
+    },
+    {
+        id: 'complete',
+        title: '{% trans "Complete" %}',
+        description: '{% trans "Analysis finished successfully" %}',
+        icon: 'fas fa-check-circle'
+    }
+];
+
+// Form submission
+document.getElementById('executionForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    startExecution();
+});
+
+// Start execution
+async function startExecution() {
+    const form = document.getElementById('executionForm');
+    const formData = new FormData(form);
+    
+    // Update UI to execution mode
+    document.getElementById('executionContainer').classList.add('running');
+    document.getElementById('executionStatus').style.display = 'block';
+    document.getElementById('processTimeline').style.display = 'block';
+    document.getElementById('executeButton').style.display = 'none';
+    
+    // Initialize timeline
+    initializeTimeline();
+    
+    try {
+        // Submit execution request
+        const response = await fetch('{% url "client_app:search_execute" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        });
+        
+        // Check if response is ok
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        // Check if response is JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            const text = await response.text();
+            if (text.includes('CSRF')) {
+                throw new Error('{% trans "Security token expired. Please refresh the page and try again." %}');
+            } else if (text.includes('403')) {
+                throw new Error('{% trans "Access denied. Please log in and try again." %}');
+            } else {
+                throw new Error('{% trans "Server returned invalid response. Please try again." %}');
+            }
+        }
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            executionJobId = data.job_id;
+            executionStartTime = Date.now();
+            
+            // Start progress monitoring
+            startProgressMonitoring();
+            
+            // Update status
+            const statusMessage = data.process_pid ? 
+                `{% trans "Analysis is running" %} (PID: ${data.process_pid})` : 
+                '{% trans "Your analysis is now running in the background" %}';
+            updateExecutionStatus('running', '{% trans "Analysis Running" %}', statusMessage);
+            
+        } else {
+            let errorMsg = data.error || '{% trans "Failed to start analysis" %}';
+            if (data.details && data.details.trim()) {
+                console.error('Backend error details:', data.details);
+                // Show more user-friendly error if it's a known issue
+                if (data.details.includes('FileNotFoundError')) {
+                    errorMsg = '{% trans "Analysis engine not found. Please contact support." %}';
+                } else if (data.details.includes('PermissionError')) {
+                    errorMsg = '{% trans "Permission error. Please try again." %}';
+                }
+            }
+            throw new Error(errorMsg);
+        }
+        
+    } catch (error) {
+        console.error('Analysis execution error:', error);
+        let errorMessage = error.message;
+        
+        // Handle different types of errors
+        if (error.name === 'TypeError' && error.message.includes('fetch')) {
+            errorMessage = '{% trans "Network error. Please check your connection and try again." %}';
+        } else if (error.message.includes('CSRF')) {
+            errorMessage = '{% trans "Security token expired. Please refresh the page and try again." %}';
+        } else if (error.message.includes('403')) {
+            errorMessage = '{% trans "Access denied. Please check your permissions." %}';
+        } else if (error.message.includes('500')) {
+            errorMessage = '{% trans "Server error. Please try again later." %}';
+        }
+        
+        updateExecutionStatus('error', '{% trans "Execution Failed" %}', errorMessage);
+        document.getElementById('executionContainer').classList.remove('running');
+        document.getElementById('executeButton').style.display = 'block';
+        document.getElementById('executeButton').disabled = false;
+    }
+}
+
+// Initialize process timeline
+function initializeTimeline() {
+    const timeline = document.getElementById('processTimeline');
+    timeline.innerHTML = '';
+    
+    processSteps.forEach(step => {
+        const item = document.createElement('div');
+        item.className = 'timeline-item pending';
+        item.id = `timeline-${step.id}`;
+        item.innerHTML = `
+            <i class="${step.icon} timeline-icon"></i>
+            <div class="timeline-content">
+                <div class="timeline-title">${step.title}</div>
+                <div class="timeline-description">${step.description}</div>
+                <div class="timeline-details" id="details-${step.id}"></div>
+                <div class="timeline-timestamp" id="timestamp-${step.id}"></div>
+            </div>
+        `;
+        timeline.appendChild(item);
+    });
+}
+
+// Update execution status
+function updateExecutionStatus(status, title, message) {
+    const statusIcon = document.querySelector('.status-icon');
+    const statusTitle = document.getElementById('statusTitle');
+    const statusMessage = document.getElementById('statusMessage');
+    
+    statusTitle.textContent = title;
+    statusMessage.textContent = message;
+    
+    // Update icon based on status
+    statusIcon.className = 'status-icon';
+    switch (status) {
+        case 'running':
+            statusIcon.classList.add('fas', 'fa-cog', 'fa-spin', 'text-primary');
+            break;
+        case 'success':
+            statusIcon.classList.add('fas', 'fa-check-circle', 'text-success');
+            break;
+        case 'error':
+            statusIcon.classList.add('fas', 'fa-exclamation-triangle', 'text-danger');
+            break;
+    }
+}
+
+// Start progress monitoring
+function startProgressMonitoring() {
+    let currentStep = 0;
+    let progress = 0;
+    
+    executionInterval = setInterval(() => {
+        // Simulate progress updates (in real implementation, this would poll the backend)
+        progress += Math.random() * 5 + 2; // Random progress increment
+        
+        if (progress > 100) progress = 100;
+        
+        // Update progress bar
+        updateProgressBar(progress);
+        
+        // Update timeline based on progress
+        updateTimelineProgress(progress);
+        
+        // Check if execution is complete
+        if (progress >= 100) {
+            completeExecution();
+        }
+        
+    }, 1000);
+}
+
+// Update progress bar
+function updateProgressBar(progress) {
+    const progressBar = document.getElementById('progressBar');
+    const progressText = document.getElementById('progressText');
+    
+    progressBar.style.width = progress + '%';
+    progressText.textContent = Math.round(progress) + '% {% trans "Complete" %}';
+}
+
+// Update timeline progress
+function updateTimelineProgress(progress) {
+    const stepsCount = processSteps.length;
+    const progressPerStep = 100 / stepsCount;
+    
+    processSteps.forEach((step, index) => {
+        const stepProgress = (index + 1) * progressPerStep;
+        const timelineItem = document.getElementById(`timeline-${step.id}`);
+        const timestamp = document.getElementById(`timestamp-${step.id}`);
+        
+        if (progress >= stepProgress) {
+            // Step completed
+            timelineItem.className = 'timeline-item completed';
+            timestamp.textContent = new Date().toLocaleTimeString();
+        } else if (progress >= stepProgress - progressPerStep) {
+            // Step running
+            timelineItem.className = 'timeline-item running';
+            timestamp.textContent = '{% trans "Running..." %}';
+        }
+    });
+}
+
+// Complete execution
+function completeExecution() {
+    clearInterval(executionInterval);
+    
+    // Update status
+    updateExecutionStatus('success', '{% trans "Analysis Complete!" %}', '{% trans "Your YouTube analysis has been completed successfully" %}');
+    
+    // Show download button
+    document.getElementById('downloadButton').style.display = 'inline-flex';
+    
+    // Mark all timeline items as completed
+    document.querySelectorAll('.timeline-item').forEach(item => {
+        item.className = 'timeline-item completed';
+    });
+    
+    // Update final timestamp
+    const finalTimestamp = document.getElementById('timestamp-complete');
+    if (finalTimestamp) {
+        finalTimestamp.textContent = new Date().toLocaleTimeString();
+    }
+}
+
+// Save configuration
+function saveConfiguration() {
+    const button = document.getElementById('saveButton');
+    const originalText = button.innerHTML;
+    
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>{% trans "Saving..." %}';
+    button.disabled = true;
+    
+    // Simulate save operation
+    setTimeout(() => {
+        button.innerHTML = '<i class="fas fa-check me-2"></i>{% trans "Saved!" %}';
+        
+        setTimeout(() => {
+            button.innerHTML = originalText;
+            button.disabled = false;
+        }, 2000);
+    }, 1000);
+}
+
+// Download results
+async function downloadResults() {
+    if (!executionJobId) {
+        alert('{% trans "No analysis results available for download" %}');
+        return;
+    }
+    
+    const button = document.getElementById('downloadButton');
+    const originalText = button.innerHTML;
+    
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>{% trans "Preparing Download..." %}';
+    button.disabled = true;
+    
+    try {
+        // Create download URL
+        const downloadUrl = `{% url 'client_app:job_results' '0' %}`.replace('0', executionJobId) + '?download=true';
+        
+        // Create temporary download link
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = `tubewhale-analysis-${executionJobId}.db`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        button.innerHTML = '<i class="fas fa-check me-2"></i>{% trans "Downloaded!" %}';
+        
+        setTimeout(() => {
+            button.innerHTML = originalText;
+            button.disabled = false;
+        }, 3000);
+        
+    } catch (error) {
+        button.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>{% trans "Download Failed" %}';
+        console.error('Download error:', error);
+        
+        setTimeout(() => {
+            button.innerHTML = originalText;
+            button.disabled = false;
+        }, 3000);
+    }
+}
+
+// Timeline item click to show/hide details
+document.addEventListener('click', function(e) {
+    if (e.target.closest('.timeline-item')) {
+        const item = e.target.closest('.timeline-item');
+        const details = item.querySelector('.timeline-details');
+        if (details) {
+            details.classList.toggle('visible');
+        }
+    }
+});
+
+// Auto-save form data as user types
+let autoSaveTimer;
+document.addEventListener('input', function(e) {
+    if (e.target.matches('#search_keyword, #analysis_notes')) {
+        clearTimeout(autoSaveTimer);
+        autoSaveTimer = setTimeout(() => {
+            // Auto-save logic here
+            console.log('Auto-saving form data...');
+        }, 2000);
+    }
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+    // Ctrl/Cmd + Enter to start execution
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        const executeButton = document.getElementById('executeButton');
+        if (executeButton.style.display !== 'none') {
+            startExecution();
+        }
+    }
+});
+</script>
+{% endblock %}

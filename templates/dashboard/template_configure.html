@@ -1,0 +1,388 @@
+{% extends "dashboard/base_simple.html" %}
+{% load i18n %}
+
+{% block title %}配置分析 - {{ template.name }} - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .config-card {
+        border: none;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border-radius: 12px;
+    }
+    
+    .step-indicator {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 30px;
+    }
+    
+    .step {
+        display: flex;
+        align-items: center;
+        margin: 0 15px;
+    }
+    
+    .step-number {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background-color: #e9ecef;
+        color: #6c757d;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        margin-right: 10px;
+    }
+    
+    .step.active .step-number {
+        background-color: #0d6efd;
+        color: white;
+    }
+    
+    .step.completed .step-number {
+        background-color: #198754;
+        color: white;
+    }
+    
+    .form-section {
+        margin-bottom: 30px;
+    }
+    
+    .parameter-group {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    
+    .execution-preview {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 20px;
+        margin-top: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- 步骤指示器 -->
+<div class="step-indicator">
+    <div class="step completed">
+        <div class="step-number">1</div>
+        <span>选择模板</span>
+    </div>
+    <div class="step active">
+        <div class="step-number">2</div>
+        <span>配置参数</span>
+    </div>
+    <div class="step">
+        <div class="step-number">3</div>
+        <span>执行分析</span>
+    </div>
+    <div class="step">
+        <div class="step-number">4</div>
+        <span>查看结果</span>
+    </div>
+</div>
+
+<!-- 模板信息 -->
+<div class="card config-card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h3 class="card-title mb-0">
+            <i class="{{ template.icon|default:'fas fa-chart-bar' }} me-2"></i>
+            {{ template.name }}
+        </h3>
+    </div>
+    <div class="card-body">
+        <p class="card-text">{{ template.full_description }}</p>
+        
+        <div class="row">
+            <div class="col-md-4">
+                <small class="text-muted">
+                    <i class="fas fa-layer-group me-1"></i>
+                    <strong>分类:</strong> {{ template.category.name }}
+                </small>
+            </div>
+            <div class="col-md-4">
+                <small class="text-muted">
+                    <i class="fas fa-clock me-1"></i>
+                    <strong>预计时间:</strong> {{ template.estimated_duration }}
+                </small>
+            </div>
+            <div class="col-md-4">
+                <small class="text-muted">
+                    <i class="fas fa-file-export me-1"></i>
+                    <strong>输出格式:</strong> {{ template.output_formats }}
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 配置表单 -->
+<form id="analysisForm" method="post">
+    {% csrf_token %}
+    
+    <!-- 基本设置 -->
+    <div class="card config-card mb-4">
+        <div class="card-header">
+            <h4 class="mb-0">
+                <i class="fas fa-cog me-2"></i>
+                基本设置
+            </h4>
+        </div>
+        <div class="card-body">
+            <div class="form-section">
+                <div class="row">
+                    <div class="col-md-6">
+                        <label for="jobName" class="form-label">任务名称 *</label>
+                        <input type="text" class="form-control" id="jobName" name="job_name" 
+                               placeholder="为这次分析命名" required>
+                        <div class="form-text">便于后续查找和管理</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="priority" class="form-label">优先级</label>
+                        <select class="form-select" id="priority" name="priority">
+                            <option value="low">低优先级</option>
+                            <option value="normal" selected>普通优先级</option>
+                            <option value="high">高优先级</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 数据源配置 -->
+    <div class="card config-card mb-4">
+        <div class="card-header">
+            <h4 class="mb-0">
+                <i class="fas fa-database me-2"></i>
+                数据源配置
+            </h4>
+        </div>
+        <div class="card-body">
+            <div class="parameter-group">
+                <h5>YouTube视频信息</h5>
+                <div class="row">
+                    <div class="col-md-8">
+                        <label for="videoUrl" class="form-label">视频URL *</label>
+                        <input type="url" class="form-control" id="videoUrl" name="video_url" 
+                               placeholder="https://www.youtube.com/watch?v=..." required>
+                        <div class="form-text">支持YouTube视频链接</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="includeComments" class="form-label">包含评论</label>
+                        <select class="form-select" id="includeComments" name="include_comments">
+                            <option value="true">是，分析评论</option>
+                            <option value="false">否，仅分析视频</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="parameter-group">
+                <h5>分析范围</h5>
+                <div class="row">
+                    <div class="col-md-6">
+                        <label for="analysisDepth" class="form-label">分析深度</label>
+                        <select class="form-select" id="analysisDepth" name="analysis_depth">
+                            <option value="basic">基础分析</option>
+                            <option value="standard" selected>标准分析</option>
+                            {% if user.tier == 'premium' %}
+                            <option value="deep">深度分析</option>
+                            {% endif %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="language" class="form-label">内容语言</label>
+                        <select class="form-select" id="language" name="content_language">
+                            <option value="auto">自动检测</option>
+                            <option value="zh">中文</option>
+                            <option value="en">英文</option>
+                            <option value="ja">日文</option>
+                            <option value="ko">韩文</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 高级选项 (仅Premium用户) -->
+    {% if user.tier == 'premium' %}
+    <div class="card config-card mb-4">
+        <div class="card-header">
+            <h4 class="mb-0">
+                <i class="fas fa-brain me-2"></i>
+                高级选项
+                <span class="badge bg-warning text-dark ms-2">Premium</span>
+            </h4>
+        </div>
+        <div class="card-body">
+            <div class="parameter-group">
+                <h5>AI增强功能</h5>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="enableAI" name="enable_ai">
+                            <label class="form-check-label" for="enableAI">
+                                启用AI深度分析
+                            </label>
+                        </div>
+                        <div class="form-text">使用最新AI技术进行深度内容理解</div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="enablePrediction" name="enable_prediction">
+                            <label class="form-check-label" for="enablePrediction">
+                                趋势预测分析
+                            </label>
+                        </div>
+                        <div class="form-text">预测内容未来表现趋势</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- 执行预览 -->
+    <div class="execution-preview">
+        <h5>
+            <i class="fas fa-play-circle me-2"></i>
+            执行预览
+        </h5>
+        <div id="executionSummary">
+            <p class="text-muted">请填写上述配置，系统将显示执行计划...</p>
+        </div>
+    </div>
+    
+    <!-- 操作按钮 -->
+    <div class="d-flex justify-content-between mt-4">
+        <a href="{% url 'dashboard:template_selection' %}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-1"></i>
+            返回选择模板
+        </a>
+        
+        <div>
+            <button type="button" class="btn btn-outline-primary me-2" onclick="previewExecution()">
+                <i class="fas fa-eye me-1"></i>
+                预览执行计划
+            </button>
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-rocket me-1"></i>
+                开始分析
+            </button>
+        </div>
+    </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 表单验证和预览功能
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('analysisForm');
+    const videoUrlInput = document.getElementById('videoUrl');
+    const jobNameInput = document.getElementById('jobName');
+    
+    // 自动填充任务名称
+    videoUrlInput.addEventListener('blur', function() {
+        if (this.value && !jobNameInput.value) {
+            // 从YouTube URL提取视频ID并生成默认名称
+            const videoId = extractVideoId(this.value);
+            if (videoId) {
+                jobNameInput.value = `{{ template.name }} - ${videoId}`;
+            }
+        }
+        updateExecutionPreview();
+    });
+    
+    // 监听所有输入变化
+    form.addEventListener('change', updateExecutionPreview);
+    form.addEventListener('input', updateExecutionPreview);
+    
+    // 表单提交处理
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        startAnalysis();
+    });
+});
+
+function extractVideoId(url) {
+    const regex = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/;
+    const match = url.match(regex);
+    return match ? match[1] : null;
+}
+
+function updateExecutionPreview() {
+    const videoUrl = document.getElementById('videoUrl').value;
+    const jobName = document.getElementById('jobName').value;
+    const analysisDepth = document.getElementById('analysisDepth').value;
+    const includeComments = document.getElementById('includeComments').value;
+    
+    if (!videoUrl || !jobName) {
+        document.getElementById('executionSummary').innerHTML = 
+            '<p class="text-muted">请填写必要的配置信息...</p>';
+        return;
+    }
+    
+    let summary = `
+        <div class="row">
+            <div class="col-md-6">
+                <strong>任务名称:</strong> ${jobName}<br>
+                <strong>模板:</strong> {{ template.name }}<br>
+                <strong>分析深度:</strong> ${getAnalysisDepthText(analysisDepth)}
+            </div>
+            <div class="col-md-6">
+                <strong>数据源:</strong> YouTube视频<br>
+                <strong>包含评论:</strong> ${includeComments === 'true' ? '是' : '否'}<br>
+                <strong>预计时间:</strong> {{ template.estimated_duration }}
+            </div>
+        </div>
+        <div class="mt-3">
+            <small class="text-success">
+                <i class="fas fa-check-circle me-1"></i>
+                配置完整，可以开始分析
+            </small>
+        </div>
+    `;
+    
+    document.getElementById('executionSummary').innerHTML = summary;
+}
+
+function getAnalysisDepthText(depth) {
+    const texts = {
+        'basic': '基础分析',
+        'standard': '标准分析', 
+        'deep': '深度分析'
+    };
+    return texts[depth] || depth;
+}
+
+function previewExecution() {
+    alert('预览功能：\n\n1. 下载YouTube视频信息\n2. 提取音频和字幕\n3. 执行内容分析\n4. 生成分析报告\n5. 发送完成通知');
+}
+
+function startAnalysis() {
+    const formData = new FormData(document.getElementById('analysisForm'));
+    const button = document.querySelector('button[type="submit"]');
+    
+    // 显示加载状态
+    const originalText = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>启动中...';
+    
+    // 模拟提交到后端
+    setTimeout(() => {
+        alert('分析任务已启动！\n\n任务ID: TASK-' + Date.now() + '\n\n您可以在"任务管理"页面查看进度。');
+        
+        // 跳转到任务管理页面
+        window.location.href = '{% url "dashboard:job_runner" %}';
+    }, 2000);
+}
+</script>
+{% endblock %}

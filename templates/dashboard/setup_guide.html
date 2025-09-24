@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setup Guide - TubeWhale</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .setup-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .step-card {
+            border: 2px solid #e9ecef;
+            transition: all 0.3s ease;
+        }
+        .step-card.active {
+            border-color: #0d6efd;
+            box-shadow: 0 4px 8px rgba(13, 110, 253, 0.2);
+        }
+        .step-number {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #6c757d;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        .step-number.active {
+            background: #0d6efd;
+        }
+        .step-number.completed {
+            background: #198754;
+        }
+        .tier-badge {
+            font-size: 0.9rem;
+            padding: 0.3rem 0.8rem;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <!-- Header -->
+    <nav class="navbar navbar-dark bg-primary">
+        <div class="container">
+            <span class="navbar-brand">
+                🐋 TubeWhale - Setup Guide
+            </span>
+            <div class="text-white">
+                Welcome, {{ user.username }}! 
+                <span class="badge bg-light text-dark ms-2">{{ tier }}</span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4 mb-5">
+        <div class="setup-container">
+            <!-- Welcome Message -->
+            <div class="text-center mb-5">
+                <h1 class="display-5 fw-bold text-primary">Welcome to TubeWhale!</h1>
+                <p class="lead">Let's get you set up in just a few simple steps</p>
+                <div class="progress mb-3" style="height: 8px;">
+                    <div class="progress-bar" role="progressbar" style="width: 0%" id="progressBar"></div>
+                </div>
+            </div>
+
+            <!-- Setup Steps -->
+            <div class="row g-4">
+                <!-- Step 1: Environment Setup -->
+                <div class="col-12">
+                    <div class="card step-card active" id="step1">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center mb-3">
+                                <div class="step-number active me-3">1</div>
+                                <div>
+                                    <h5 class="card-title mb-1">Configure Environment</h5>
+                                    <p class="text-muted mb-0">Set up your API keys and workspace</p>
+                                </div>
+                            </div>
+                            
+                            <div class="ms-5 ps-2">
+                                <p class="mb-3">Configure your environment to start analyzing videos:</p>
+                                <ul class="list-unstyled">
+                                    <li class="mb-2">
+                                        <i class="fas fa-key text-warning me-2"></i>
+                                        <strong>YouTube API Key</strong> - Required for video data access
+                                    </li>
+                                    <li class="mb-2">
+                                        <i class="fas fa-robot text-info me-2"></i>
+                                        <strong>OpenAI API Key</strong> - Required for AI analysis
+                                    </li>
+                                    <li class="mb-2">
+                                        <i class="fas fa-folder text-success me-2"></i>
+                                        <strong>Workspace Folder</strong> - Where to save your results
+                                    </li>
+                                </ul>
+                                
+                                <div class="mt-3">
+                                    <a href="{% url 'dashboard:environment_setup' %}" class="btn btn-primary">
+                                        <i class="fas fa-cog me-2"></i>Configure Environment
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2: Template Selection -->
+                <div class="col-12">
+                    <div class="card step-card" id="step2">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center mb-3">
+                                <div class="step-number me-3">2</div>
+                                <div>
+                                    <h5 class="card-title mb-1">Choose Analysis Template</h5>
+                                    <p class="text-muted mb-0">Select how you want to analyze your videos</p>
+                                </div>
+                            </div>
+                            
+                            <div class="ms-5 ps-2">
+                                <p class="mb-3">Based on your <span class="badge tier-badge bg-secondary">{{ tier }}</span> tier, you have access to:</p>
+                                
+                                {% if user.tier == 'basic' %}
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    <strong>Basic Tier:</strong> You'll use our default analysis template with essential features.
+                                </div>
+                                {% elif user.tier == 'standard' %}
+                                <div class="alert alert-warning">
+                                    <i class="fas fa-star me-2"></i>
+                                    <strong>Standard Tier:</strong> Choose from multiple analysis templates and switch between them.
+                                </div>
+                                {% elif user.tier == 'premium' %}
+                                <div class="alert alert-success">
+                                    <i class="fas fa-crown me-2"></i>
+                                    <strong>Premium Tier:</strong> Full access to all templates plus custom AI interactions!
+                                </div>
+                                {% endif %}
+                                
+                                <div class="mt-3">
+                                    <a href="{% url 'dashboard:template_selection' %}" class="btn btn-outline-primary" disabled>
+                                        <i class="fas fa-templates me-2"></i>Select Template
+                                        <small class="text-muted">(Complete step 1 first)</small>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 3: Start Analysis -->
+                <div class="col-12">
+                    <div class="card step-card" id="step3">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center mb-3">
+                                <div class="step-number me-3">3</div>
+                                <div>
+                                    <h5 class="card-title mb-1">Run Your First Analysis</h5>
+                                    <p class="text-muted mb-0">Start analyzing video content</p>
+                                </div>
+                            </div>
+                            
+                            <div class="ms-5 ps-2">
+                                <p class="mb-3">Once setup is complete, you'll be able to:</p>
+                                <ul class="list-unstyled">
+                                    <li class="mb-2">
+                                        <i class="fas fa-play text-primary me-2"></i>
+                                        Submit video URLs for analysis
+                                    </li>
+                                    <li class="mb-2">
+                                        <i class="fas fa-chart-line text-success me-2"></i>
+                                        Monitor analysis progress in real-time
+                                    </li>
+                                    <li class="mb-2">
+                                        <i class="fas fa-download text-info me-2"></i>
+                                        Download results when complete
+                                    </li>
+                                </ul>
+                                
+                                <div class="mt-3">
+                                    <a href="{% url 'dashboard:job_runner' %}" class="btn btn-outline-primary" disabled>
+                                        <i class="fas fa-rocket me-2"></i>Start Analysis
+                                        <small class="text-muted">(Complete previous steps first)</small>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Tips -->
+            <div class="mt-5">
+                <div class="card border-primary">
+                    <div class="card-header bg-primary text-white">
+                        <i class="fas fa-lightbulb me-2"></i>Quick Tips
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6><i class="fas fa-shield-alt text-success me-2"></i>Security</h6>
+                                <p class="small text-muted">Your API keys are encrypted and stored securely. We never share your data.</p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6><i class="fas fa-support text-info me-2"></i>Support</h6>
+                                <p class="small text-muted">Need help? Check our docs or contact support anytime.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Server-provided flags and URLs (kept in DOM to avoid template tags inside scripts) -->
+    <div id="env-config" data-configured="{% if needs_setup %}false{% else %}true{% endif %}" data-template-url="{% url 'dashboard:template_selection' %}" style="display:none"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Simple progress tracking
+        let completedSteps = 0;
+        const totalSteps = 3;
+        
+        function updateProgress() {
+            const progress = (completedSteps / totalSteps) * 100;
+            document.getElementById('progressBar').style.width = progress + '%';
+        }
+        
+        // Read server-side values from the hidden DOM element to avoid embedding template tags inside JS
+        (function() {
+            const cfgEl = document.getElementById('env-config');
+            const isConfigured = cfgEl ? cfgEl.dataset.configured === 'true' : false;
+            // Avoid redeclaring a block-scoped variable by using the global if it doesn't exist
+            if (typeof envConfigured === 'undefined') {
+                window.envConfigured = isConfigured;
+            } else {
+                envConfigured = isConfigured;
+            }
+
+            if (window.envConfigured) {
+                completedSteps = 1;
+                const step1Number = document.querySelector('#step1 .step-number');
+                if (step1Number) {
+                    step1Number.classList.add('completed');
+                }
+                const step2Card = document.querySelector('#step2');
+                if (step2Card) {
+                    step2Card.classList.add('active');
+                }
+
+                const tplUrl = cfgEl ? cfgEl.dataset.templateUrl : null;
+                if (tplUrl) {
+                    const tplLink = document.querySelector(`a[href="${tplUrl}"]`);
+                    if (tplLink) {
+                        tplLink.removeAttribute('disabled');
+                        tplLink.classList.remove('btn-outline-primary');
+                        tplLink.classList.add('btn-primary');
+                    }
+                }
+            }
+        })();
+        
+        updateProgress();
+    </script>
+</body>
+</html>

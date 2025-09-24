@@ -1,5 +1,5 @@
 # Django Requirements for TubeWhale Platform
-# Django风格的企业级依赖
+# Enterprise-grade Django dependencies
 
 # Core Django
 Django==4.2.7
@@ -9,6 +9,11 @@ django-filter==23.4
 django-extensions==3.2.3
 whitenoise==6.7.0
 
+# WebSocket & Channels
+channels==4.0.0
+channels-redis==4.2.0
+daphne==4.0.0
+
 # Database & ORM
 psycopg2-binary==2.9.7
 django-environ==0.11.2
@@ -17,7 +22,7 @@ django-environ==0.11.2
 django-admin-interface>=0.29.0
 django-nested-admin==4.0.2
 django-import-export==3.3.3
-# django-admin-charts>=1.0.0  # 暂时注释掉，有依赖冲突
+# django-admin-charts>=1.0.0  # Temporarily commented due to dependency conflicts
 
 # API & Documentation
 drf-spectacular==0.26.5
@@ -30,7 +35,7 @@ django-allauth==0.57.0
 django-guardian==2.4.0
 django-oauth-toolkit==1.7.1
 # Security
-# django-security>=0.12.0  # 暂时注释掉，有依赖冲突
+# django-security>=0.12.0  # Temporarily commented due to dependency conflicts
 
 # Task Queue & Background Jobs
 celery[redis]==5.3.4
@@ -69,7 +74,7 @@ coverage==7.3.2
 django-model-utils==4.3.1
 django-phonenumber-field==7.1.0
 django-countries==7.5.1
-python-dateutil>=2.8.2  # 放宽版本约束
+python-dateutil>=2.8.2  # Relaxed version constraints
 
 # Integration with existing TubeWhale components
 # (These will bridge with your existing agents/ and service/ modules)

@@ -1,0 +1,351 @@
+{% extends "dashboard/base_simple.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Analysis Templates" %} - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --primary: #2563eb;
+        --primary-light: #3b82f6;
+        --success-color: #10b981;
+        --warning-color: #f59e0b;
+        --danger-color: #ef4444;
+        --gray-50: #f8fafc;
+        --gray-100: #f1f5f9;
+        --gray-800: #1e293b;
+        --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        --radius-md: 0.5rem;
+        --radius-lg: 0.75rem;
+        --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .upgrade-banner {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: var(--radius-lg);
+        text-align: center;
+        margin-bottom: 2rem;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .upgrade-banner::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="75" cy="75" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="25" cy="75" r="1" fill="rgba(255,255,255,0.05)"/><circle cx="75" cy="25" r="1" fill="rgba(255,255,255,0.05)"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+        opacity: 0.3;
+    }
+
+    .upgrade-content {
+        position: relative;
+        z-index: 1;
+    }
+
+    .upgrade-title {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 1rem;
+    }
+
+    .upgrade-subtitle {
+        font-size: 1.125rem;
+        opacity: 0.9;
+        margin-bottom: 2rem;
+    }
+
+    .cta-buttons {
+        display: flex;
+        justify-content: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .btn {
+        padding: 0.75rem 2rem;
+        border: none;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: var(--transition);
+    }
+
+    .btn-wizard {
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .btn-wizard:hover {
+        background: rgba(255, 255, 255, 0.3);
+        border-color: rgba(255, 255, 255, 0.5);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+    }
+
+    .btn-upgrade {
+        background: white;
+        color: var(--primary);
+    }
+
+    .btn-upgrade:hover {
+        background: var(--gray-50);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+    }
+
+    .features-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 2rem;
+        margin: 3rem 0;
+    }
+
+    .feature-card {
+        background: white;
+        border: 1px solid var(--gray-100);
+        border-radius: var(--radius-lg);
+        padding: 2rem;
+        text-align: center;
+        box-shadow: var(--shadow-sm);
+        transition: var(--transition);
+    }
+
+    .feature-card:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--shadow-lg);
+    }
+
+    .feature-icon {
+        font-size: 3rem;
+        color: var(--primary);
+        margin-bottom: 1rem;
+    }
+
+    .feature-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--gray-800);
+        margin-bottom: 1rem;
+    }
+
+    .feature-description {
+        color: #6b7280;
+        line-height: 1.6;
+    }
+
+    .coming-soon {
+        background: var(--gray-50);
+        border: 2px dashed var(--gray-200);
+        padding: 3rem;
+        text-align: center;
+        border-radius: var(--radius-lg);
+        margin: 2rem 0;
+    }
+
+    .coming-soon-icon {
+        font-size: 4rem;
+        color: var(--gray-400);
+        margin-bottom: 1rem;
+    }
+
+    .coming-soon-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: var(--gray-600);
+        margin-bottom: 1rem;
+    }
+
+    .coming-soon-subtitle {
+        color: var(--gray-500);
+        line-height: 1.5;
+    }
+
+    .user-status-header {
+        background: var(--gray-50);
+        border: 1px solid var(--gray-100);
+        padding: 1.5rem;
+        border-radius: var(--radius-lg);
+        margin: 2rem 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- 智能分析向导推广横幅 -->
+<div class="upgrade-banner">
+    <div class="upgrade-content">
+        <h1 class="upgrade-title">
+            <i class="fas fa-magic" style="margin-right: 0.5rem;"></i>
+            {% trans "Experience the New Intelligent Analysis Wizard" %}
+        </h1>
+        <p class="upgrade-subtitle">
+            {% trans "Smart template recommendations based on your professional background, personalized analysis configuration for more accurate and efficient results" %}
+        </p>
+        <div class="cta-buttons">
+            <a href="{% url 'dashboard:intelligent_wizard' %}" class="btn btn-wizard">
+                <i class="fas fa-wand-magic-sparkles"></i>
+                {% trans "Launch Wizard" %}
+            </a>
+            <a href="#features" class="btn btn-upgrade">
+                <i class="fas fa-info-circle"></i>
+                {% trans "Learn More" %}
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- 智能向导功能特性 -->
+<div class="features-grid" id="features">
+    <div class="feature-card">
+        <div class="feature-icon">🎯</div>
+        <h3 class="feature-title">{% trans "Smart Role Recommendations" %}</h3>
+        <p class="feature-description">
+            {% trans "Automatically recommend the most suitable analysis templates and parameter configurations based on your professional background (Content Creator, Marketing Expert, Data Analyst, etc.)" %}
+        </p>
+    </div>
+
+    <div class="feature-card">
+        <div class="feature-icon">⚙️</div>
+        <h3 class="feature-title">{% trans "Safe Customization" %}</h3>
+        <p class="feature-description">
+            {% trans "Provide secure customization options including analysis depth, output format, visualization style, etc., ensuring no system contamination or crashes" %}
+        </p>
+    </div>
+
+    <div class="feature-card">
+        <div class="feature-icon">🧭</div>
+        <h3 class="feature-title">{% trans "Clear Guidance Process" %}</h3>
+        <p class="feature-description">
+            {% trans "Progressive three-step wizard process with clear guidance and instructions at each step, ensuring any user can easily complete configuration" %}
+        </p>
+    </div>
+
+    <div class="feature-card">
+        <div class="feature-icon">🔄</div>
+        <h3 class="feature-title">{% trans "End-to-End Complete Functionality" %}</h3>
+        <p class="feature-description">
+            {% trans "From role selection to template customization to analysis launch, complete workflow ensures user experience continuity and functionality completeness" %}
+        </p>
+    </div>
+
+    <div class="feature-card">
+        <div class="feature-icon">💡</div>
+        <h3 class="feature-title">{% trans "HCI Best Practices" %}</h3>
+        <p class="feature-description">
+            {% trans "Designed with Human-Computer Interaction (HCI) best practices, intuitive interface interactions that reduce learning costs and improve usage efficiency" %}
+        </p>
+    </div>
+
+    <div class="feature-card">
+        <div class="feature-icon">📊</div>
+        <h3 class="feature-title">{% trans "Real-time Preview Feedback" %}</h3>
+        <p class="feature-description">
+            {% trans "Real-time display of configuration preview and estimated analysis time, letting users understand what results they will get before launching analysis" %}
+        </p>
+    </div>
+</div>
+
+<!-- 传统模板选择（暂时保留但不推荐） -->
+<div class="coming-soon">
+    <div class="coming-soon-icon">
+        <i class="fas fa-tools"></i>
+    </div>
+    <h3 class="coming-soon-title">{% trans "Traditional Template Selection Interface Under Upgrade" %}</h3>
+    <p class="coming-soon-subtitle">
+        {% trans "We are migrating all templates to the new intelligent wizard system." %}<br>
+        {% trans "For the best experience, please use the" %} <strong>{% trans "Intelligent Wizard" %}</strong> {% trans "above to configure your analysis tasks." %}<br><br>
+        {% trans "If you have any questions, please contact the administrator." %}
+    </p>
+</div>
+
+<!-- User Status Header -->
+<div class="user-status-header">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <h3 style="color: var(--gray-800); margin: 0;">{% trans "Current Account Status" %}</h3>
+            <p style="color: #6b7280; margin: 0.5rem 0 0 0;">
+                {% if user.is_authenticated %}
+                    {% trans "Welcome back" %}, {{ user.username }}! {% trans "You are currently a" %}
+                    <span style="background: var(--primary); color: white; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase;">
+                        {% if user.tier %}{{ user.tier }}{% else %}BASIC{% endif %} {% trans "user" %}
+                    </span>
+                {% else %}
+                    {% trans "Please login to access analysis features" %}
+                {% endif %}
+            </p>
+        </div>
+        {% if user.is_authenticated %}
+        <div style="text-align: right;">
+            <a href="{% url 'dashboard:intelligent_wizard' %}" class="btn btn-wizard" style="background: var(--primary); color: white; margin: 0;">
+                <i class="fas fa-magic"></i>
+                {% trans "Start Analysis" %}
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 平滑滚动到功能说明区域
+document.addEventListener('DOMContentLoaded', function() {
+    const featureLinks = document.querySelectorAll('a[href="#features"]');
+    featureLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            document.getElementById('features').scrollIntoView({
+                behavior: 'smooth',
+                block: 'start'
+            });
+        });
+    });
+    
+    // 添加动画效果
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.style.animation = 'fadeInUp 0.6s ease forwards';
+            }
+        });
+    });
+    
+    document.querySelectorAll('.feature-card').forEach(card => {
+        observer.observe(card);
+    });
+});
+
+// 添加CSS动画
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(30px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    .feature-card {
+        opacity: 0;
+    }
+`;
+document.head.appendChild(style);
+</script>
+{% endblock %}

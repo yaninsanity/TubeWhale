@@ -1,0 +1,1007 @@
+{% extends "dashboard/base_simple.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Professional Theme Search" %} - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        --search-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        --hover-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        --radius-lg: 0.75rem;
+        --accent-blue: #3b82f6;
+        --accent-green: #10b981;
+        --accent-purple: #8b5cf6;
+    }
+    
+    .search-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 2rem;
+    }
+    
+    .search-header {
+        text-align: center;
+        margin-bottom: 3rem;
+    }
+    
+    .search-title {
+        font-size: 2.5rem;
+        font-weight: 700;
+        background: var(--primary-gradient);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin-bottom: 1rem;
+    }
+    
+    .search-subtitle {
+        color: #6b7280;
+        font-size: 1.125rem;
+        max-width: 600px;
+        margin: 0 auto;
+    }
+    
+    .search-box-container {
+        position: relative;
+        max-width: 800px;
+        margin: 0 auto 3rem;
+    }
+    
+    .search-box {
+        width: 100%;
+        padding: 1.5rem 4rem 1.5rem 3rem;
+        font-size: 1.125rem;
+        border: 2px solid #e5e7eb;
+        border-radius: var(--radius-lg);
+        background: white;
+        box-shadow: var(--search-shadow);
+        transition: all 0.3s ease;
+        outline: none;
+    }
+    
+    .search-box:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1), var(--search-shadow);
+    }
+    
+    .search-icon {
+        position: absolute;
+        left: 1.25rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #9ca3af;
+        font-size: 1.25rem;
+    }
+    
+    .search-btn {
+        position: absolute;
+        right: 0.75rem;
+        top: 50%;
+        transform: translateY(-50%);
+        background: var(--primary-gradient);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 0.75rem 1.5rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    .search-btn:hover {
+        transform: translateY(-50%) scale(1.05);
+    }
+    
+    .search-suggestions {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--search-shadow);
+        max-height: 300px;
+        overflow-y: auto;
+        z-index: 100;
+        display: none;
+    }
+    
+    .suggestion-item {
+        padding: 1rem 1.5rem;
+        cursor: pointer;
+        border-bottom: 1px solid #f3f4f6;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        transition: background 0.2s ease;
+    }
+    
+    .suggestion-item:last-child {
+        border-bottom: none;
+    }
+    
+    .suggestion-item:hover {
+        background: #f9fafb;
+    }
+    
+    .suggestion-icon {
+        width: 2rem;
+        height: 2rem;
+        background: var(--primary-gradient);
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 0.875rem;
+    }
+    
+    .suggestion-content {
+        flex: 1;
+    }
+    
+    .suggestion-title {
+        font-weight: 600;
+        color: #1f2937;
+        margin-bottom: 0.25rem;
+    }
+    
+    .suggestion-desc {
+        font-size: 0.875rem;
+        color: #6b7280;
+    }
+    
+    .filters-section {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    
+    .filter-group {
+        background: white;
+        padding: 1.5rem;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--card-shadow);
+    }
+    
+    .filter-title {
+        font-weight: 600;
+        color: #1f2937;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .filter-icon {
+        width: 1.25rem;
+        height: 1.25rem;
+        background: var(--primary-gradient);
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 0.75rem;
+    }
+    
+    .filter-options {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .filter-option {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background 0.2s ease;
+    }
+    
+    .filter-option:hover {
+        background: #f3f4f6;
+    }
+    
+    .filter-checkbox {
+        width: 1rem;
+        height: 1rem;
+        border: 2px solid #d1d5db;
+        border-radius: 3px;
+        position: relative;
+        transition: all 0.2s ease;
+    }
+    
+    .filter-checkbox.checked {
+        background: var(--accent-blue);
+        border-color: var(--accent-blue);
+    }
+    
+    .filter-checkbox.checked::after {
+        content: '✓';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: white;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .results-section {
+        margin-top: 2rem;
+    }
+    
+    .results-header {
+        display: flex;
+        justify-content: between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid #f1f5f9;
+    }
+    
+    .results-count {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: #1f2937;
+    }
+    
+    .results-sort {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+    
+    .sort-select {
+        padding: 0.5rem 1rem;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        background: white;
+        cursor: pointer;
+    }
+    
+    .results-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+        gap: 1.5rem;
+    }
+    
+    .result-card {
+        background: white;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--card-shadow);
+        overflow: hidden;
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    
+    .result-card:hover {
+        box-shadow: var(--hover-shadow);
+        transform: translateY(-4px);
+    }
+    
+    .result-header {
+        padding: 1.5rem;
+        background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+        border-bottom: 1px solid #e5e7eb;
+    }
+    
+    .result-title {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: #1f2937;
+        margin-bottom: 0.5rem;
+    }
+    
+    .result-category {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        border-radius: 9999px;
+        letter-spacing: 0.5px;
+    }
+    
+    .category-sentiment { background: #fef3c7; color: #d97706; }
+    .category-content { background: #dbeafe; color: #2563eb; }
+    .category-advanced { background: #f3e8ff; color: #7c3aed; }
+    .category-research { background: #d1fae5; color: #059669; }
+    
+    .result-body {
+        padding: 1.5rem;
+    }
+    
+    .result-description {
+        color: #6b7280;
+        line-height: 1.5;
+        margin-bottom: 1rem;
+    }
+    
+    .result-features {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+    }
+    
+    .feature-tag {
+        padding: 0.25rem 0.5rem;
+        background: #f3f4f6;
+        color: #374151;
+        font-size: 0.75rem;
+        border-radius: 4px;
+    }
+    
+    .result-stats {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-top: 1rem;
+        border-top: 1px solid #f3f4f6;
+    }
+    
+    .stat-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.875rem;
+        color: #6b7280;
+    }
+    
+    .stat-icon {
+        color: var(--accent-green);
+    }
+    
+    .quick-actions {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 1rem;
+    }
+    
+    .action-btn-sm {
+        flex: 1;
+        padding: 0.5rem 1rem;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        background: white;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 0.875rem;
+        text-align: center;
+        text-decoration: none;
+        color: #374151;
+    }
+    
+    .action-btn-sm:hover {
+        background: var(--primary-gradient);
+        color: white;
+        border-color: transparent;
+        text-decoration: none;
+    }
+    
+    .loading-state {
+        text-align: center;
+        padding: 3rem;
+        color: #6b7280;
+    }
+    
+    .loading-spinner {
+        width: 3rem;
+        height: 3rem;
+        border: 3px solid #f3f4f6;
+        border-top: 3px solid #667eea;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 1rem;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .no-results {
+        text-align: center;
+        padding: 3rem;
+        color: #6b7280;
+    }
+    
+    .no-results-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="search-container">
+    <!-- Search Header -->
+    <div class="search-header">
+        <h1 class="search-title">{% trans "Professional Theme Search" %}</h1>
+        <p class="search-subtitle">
+            {% trans "Discover and explore advanced analysis templates using intelligent theme-based search. Find the perfect template for your research needs." %}
+        </p>
+    </div>
+    
+    <!-- Advanced Search Box -->
+    <div class="search-box-container">
+        <i class="fas fa-search search-icon"></i>
+        <input type="text" 
+               id="theme-search" 
+               class="search-box" 
+               placeholder="{% trans 'Search themes: political analysis, consumer sentiment, educational content...' %}"
+               autocomplete="off">
+        <button class="search-btn" onclick="performSearch()">
+            <i class="fas fa-rocket me-2"></i>{% trans "Search" %}
+        </button>
+        
+        <!-- Smart Suggestions -->
+        <div id="search-suggestions" class="search-suggestions">
+            <!-- Dynamically populated -->
+        </div>
+    </div>
+    
+    <!-- Advanced Filters -->
+    <div class="filters-section">
+        <div class="filter-group">
+            <div class="filter-title">
+                <div class="filter-icon">
+                    <i class="fas fa-layer-group"></i>
+                </div>
+                {% trans "Analysis Type" %}
+            </div>
+            <div class="filter-options">
+                <div class="filter-option" onclick="toggleFilter(this, 'type', 'sentiment')">
+                    <div class="filter-checkbox"></div>
+                    <span>{% trans "Sentiment Analysis" %}</span>
+                </div>
+                <div class="filter-option" onclick="toggleFilter(this, 'type', 'content')">
+                    <div class="filter-checkbox"></div>
+                    <span>{% trans "Content Analysis" %}</span>
+                </div>
+                <div class="filter-option" onclick="toggleFilter(this, 'type', 'behavioral')">
+                    <div class="filter-checkbox"></div>
+                    <span>{% trans "Behavioral Analysis" %}</span>
+                </div>
+                <div class="filter-option" onclick="toggleFilter(this, 'type', 'linguistic')">
+                    <div class="filter-checkbox"></div>
+                    <span>{% trans "Linguistic Analysis" %}</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="filter-group">
+            <div class="filter-title">
+                <div class="filter-icon">
+                    <i class="fas fa-industry"></i>
+                </div>
+                {% trans "Industry Focus" %}
+            </div>
+            <div class="filter-options">
+                <div class="filter-option" onclick="toggleFilter(this, 'industry', 'education')">
+                    <div class="filter-checkbox"></div>
+                    <span>{% trans "Education" %}</span>
+                </div>
+                <div class="filter-option" onclick="toggleFilter(this, 'industry', 'healthcare')">
+                    <div class="filter-checkbox"></div>
+                    <span>{% trans "Healthcare" %}</span>
+                </div>
+                <div class="filter-option" onclick="toggleFilter(this, 'industry', 'business')">
+                    <div class="filter-checkbox"></div>
+                    <span>{% trans "Business" %}</span>
+                </div>
+                <div class="filter-option" onclick="toggleFilter(this, 'industry', 'politics')">
+                    <div class="filter-checkbox"></div>
+                    <span>{% trans "Politics" %}</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="filter-group">
+            <div class="filter-title">
+                <div class="filter-icon">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                {% trans "Complexity Level" %}
+            </div>
+            <div class="filter-options">
+                <div class="filter-option" onclick="toggleFilter(this, 'complexity', 'basic')">
+                    <div class="filter-checkbox"></div>
+                    <span>{% trans "Basic" %}</span>
+                </div>
+                <div class="filter-option" onclick="toggleFilter(this, 'complexity', 'intermediate')">
+                    <div class="filter-checkbox"></div>
+                    <span>{% trans "Intermediate" %}</span>
+                </div>
+                <div class="filter-option" onclick="toggleFilter(this, 'complexity', 'advanced')">
+                    <div class="filter-checkbox"></div>
+                    <span>{% trans "Advanced" %}</span>
+                </div>
+                <div class="filter-option" onclick="toggleFilter(this, 'complexity', 'expert')">
+                    <div class="filter-checkbox"></div>
+                    <span>{% trans "Expert" %}</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="filter-group">
+            <div class="filter-title">
+                <div class="filter-icon">
+                    <i class="fas fa-crown"></i>
+                </div>
+                {% trans "Tier Access" %}
+            </div>
+            <div class="filter-options">
+                <div class="filter-option" onclick="toggleFilter(this, 'tier', 'basic')">
+                    <div class="filter-checkbox"></div>
+                    <span>{% trans "Basic Tier" %}</span>
+                </div>
+                <div class="filter-option" onclick="toggleFilter(this, 'tier', 'standard')">
+                    <div class="filter-checkbox"></div>
+                    <span>{% trans "Standard Tier" %}</span>
+                </div>
+                <div class="filter-option" onclick="toggleFilter(this, 'tier', 'premium')">
+                    <div class="filter-checkbox"></div>
+                    <span>{% trans "Premium Tier" %}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Search Results -->
+    <div class="results-section">
+        <div class="results-header">
+            <div class="results-count" id="results-count">
+                {% trans "Ready to search" %}
+            </div>
+            <div class="results-sort">
+                <label for="sort-select">{% trans "Sort by:" %}</label>
+                <select id="sort-select" class="sort-select" onchange="sortResults()">
+                    <option value="relevance">{% trans "Relevance" %}</option>
+                    <option value="popularity">{% trans "Popularity" %}</option>
+                    <option value="newest">{% trans "Newest" %}</option>
+                    <option value="complexity">{% trans "Complexity" %}</option>
+                </select>
+            </div>
+        </div>
+        
+        <!-- Results Grid -->
+        <div id="results-grid" class="results-grid">
+            <!-- Initial state - show some featured templates -->
+            <div class="result-card" onclick="selectTemplate('political-sentiment')">
+                <div class="result-header">
+                    <h3 class="result-title">Political Sentiment Analysis</h3>
+                    <span class="result-category category-sentiment">Sentiment</span>
+                </div>
+                <div class="result-body">
+                    <p class="result-description">
+                        Advanced political discourse analysis with bias detection, emotional sentiment tracking, and stakeholder identification for political content.
+                    </p>
+                    <div class="result-features">
+                        <span class="feature-tag">Bias Detection</span>
+                        <span class="feature-tag">Emotional Analysis</span>
+                        <span class="feature-tag">Speaker Identification</span>
+                        <span class="feature-tag">Trend Analysis</span>
+                    </div>
+                    <div class="result-stats">
+                        <span class="stat-item">
+                            <i class="fas fa-star stat-icon"></i>
+                            4.8/5 Rating
+                        </span>
+                        <span class="stat-item">
+                            <i class="fas fa-users stat-icon"></i>
+                            1.2k Uses
+                        </span>
+                    </div>
+                    <div class="quick-actions">
+                        <a href="#" class="action-btn-sm">{% trans "Preview" %}</a>
+                        <a href="#" class="action-btn-sm">{% trans "Use Template" %}</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="result-card" onclick="selectTemplate('educational-content')">
+                <div class="result-header">
+                    <h3 class="result-title">Educational Content Analysis</h3>
+                    <span class="result-category category-content">Content</span>
+                </div>
+                <div class="result-body">
+                    <p class="result-description">
+                        Comprehensive educational video analysis including learning objective identification, pedagogical approach assessment, and knowledge transfer evaluation.
+                    </p>
+                    <div class="result-features">
+                        <span class="feature-tag">Learning Objectives</span>
+                        <span class="feature-tag">Pedagogy Assessment</span>
+                        <span class="feature-tag">Knowledge Transfer</span>
+                        <span class="feature-tag">Engagement Metrics</span>
+                    </div>
+                    <div class="result-stats">
+                        <span class="stat-item">
+                            <i class="fas fa-star stat-icon"></i>
+                            4.9/5 Rating
+                        </span>
+                        <span class="stat-item">
+                            <i class="fas fa-users stat-icon"></i>
+                            856 Uses
+                        </span>
+                    </div>
+                    <div class="quick-actions">
+                        <a href="#" class="action-btn-sm">{% trans "Preview" %}</a>
+                        <a href="#" class="action-btn-sm">{% trans "Use Template" %}</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="result-card" onclick="selectTemplate('consumer-behavior')">
+                <div class="result-header">
+                    <h3 class="result-title">Consumer Behavior Analysis</h3>
+                    <span class="result-category category-advanced">Advanced</span>
+                </div>
+                <div class="result-body">
+                    <p class="result-description">
+                        Advanced consumer psychology analysis for marketing content, including purchase intent prediction, brand sentiment, and demographic insights.
+                    </p>
+                    <div class="result-features">
+                        <span class="feature-tag">Purchase Intent</span>
+                        <span class="feature-tag">Brand Sentiment</span>
+                        <span class="feature-tag">Demographics</span>
+                        <span class="feature-tag">Conversion Prediction</span>
+                    </div>
+                    <div class="result-stats">
+                        <span class="stat-item">
+                            <i class="fas fa-star stat-icon"></i>
+                            4.7/5 Rating
+                        </span>
+                        <span class="stat-item">
+                            <i class="fas fa-users stat-icon"></i>
+                            2.1k Uses
+                        </span>
+                    </div>
+                    <div class="quick-actions">
+                        <a href="#" class="action-btn-sm">{% trans "Preview" %}</a>
+                        <a href="#" class="action-btn-sm">{% trans "Use Template" %}</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Loading State -->
+        <div id="loading-state" class="loading-state" style="display: none;">
+            <div class="loading-spinner"></div>
+            <p>{% trans "Searching professional templates..." %}</p>
+        </div>
+        
+        <!-- No Results State -->
+        <div id="no-results" class="no-results" style="display: none;">
+            <div class="no-results-icon">
+                <i class="fas fa-search"></i>
+            </div>
+            <h3>{% trans "No templates found" %}</h3>
+            <p>{% trans "Try adjusting your search terms or filters to find relevant templates." %}</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Professional Theme Search System
+class ThemeSearchEngine {
+    constructor() {
+        this.activeFilters = {
+            type: [],
+            industry: [],
+            complexity: [],
+            tier: []
+        };
+        this.searchTerms = '';
+        this.currentResults = [];
+        this.init();
+    }
+    
+    init() {
+        this.bindEvents();
+        this.loadSuggestions();
+    }
+    
+    bindEvents() {
+        const searchInput = document.getElementById('theme-search');
+        
+        // Search input events
+        searchInput.addEventListener('input', (e) => {
+            this.searchTerms = e.target.value;
+            if (this.searchTerms.length > 2) {
+                this.showSuggestions();
+            } else {
+                this.hideSuggestions();
+            }
+        });
+        
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.performSearch();
+            }
+        });
+        
+        // Hide suggestions when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.search-box-container')) {
+                this.hideSuggestions();
+            }
+        });
+    }
+    
+    loadSuggestions() {
+        this.suggestions = [
+            {
+                title: 'Political Discourse Analysis',
+                description: 'Analyze political speeches and debates',
+                icon: 'fas fa-landmark',
+                category: 'politics'
+            },
+            {
+                title: 'Consumer Sentiment Tracking',
+                description: 'Track consumer opinions and preferences',
+                icon: 'fas fa-shopping-cart',
+                category: 'business'
+            },
+            {
+                title: 'Educational Content Assessment',
+                description: 'Evaluate educational video effectiveness',
+                icon: 'fas fa-graduation-cap',
+                category: 'education'
+            },
+            {
+                title: 'Healthcare Communication',
+                description: 'Analyze medical and health information',
+                icon: 'fas fa-heartbeat',
+                category: 'healthcare'
+            },
+            {
+                title: 'Brand Reputation Analysis',
+                description: 'Monitor brand perception and sentiment',
+                icon: 'fas fa-bullhorn',
+                category: 'business'
+            },
+            {
+                title: 'Scientific Research Review',
+                description: 'Analyze research presentations and findings',
+                icon: 'fas fa-microscope',
+                category: 'research'
+            }
+        ];
+    }
+    
+    showSuggestions() {
+        const container = document.getElementById('search-suggestions');
+        const filteredSuggestions = this.suggestions.filter(suggestion =>
+            suggestion.title.toLowerCase().includes(this.searchTerms.toLowerCase()) ||
+            suggestion.description.toLowerCase().includes(this.searchTerms.toLowerCase())
+        );
+        
+        if (filteredSuggestions.length > 0) {
+            container.innerHTML = filteredSuggestions.map(suggestion => `
+                <div class="suggestion-item" onclick="selectSuggestion('${suggestion.title}')">
+                    <div class="suggestion-icon">
+                        <i class="${suggestion.icon}"></i>
+                    </div>
+                    <div class="suggestion-content">
+                        <div class="suggestion-title">${suggestion.title}</div>
+                        <div class="suggestion-desc">${suggestion.description}</div>
+                    </div>
+                </div>
+            `).join('');
+            
+            container.style.display = 'block';
+        } else {
+            this.hideSuggestions();
+        }
+    }
+    
+    hideSuggestions() {
+        document.getElementById('search-suggestions').style.display = 'none';
+    }
+    
+    performSearch() {
+        this.hideSuggestions();
+        this.showLoading();
+        
+        // Simulate API call
+        setTimeout(() => {
+            this.loadResults();
+        }, 1500);
+    }
+    
+    showLoading() {
+        document.getElementById('results-grid').style.display = 'none';
+        document.getElementById('loading-state').style.display = 'block';
+        document.getElementById('no-results').style.display = 'none';
+    }
+    
+    loadResults() {
+        // Simulate filtered results based on search and filters
+        const mockResults = this.generateMockResults();
+        
+        document.getElementById('loading-state').style.display = 'none';
+        
+        if (mockResults.length > 0) {
+            this.displayResults(mockResults);
+            document.getElementById('results-count').textContent = 
+                `{% trans "Found" %} ${mockResults.length} {% trans "professional templates" %}`;
+        } else {
+            document.getElementById('no-results').style.display = 'block';
+            document.getElementById('results-count').textContent = '{% trans "No results found" %}';
+        }
+    }
+    
+    generateMockResults() {
+        // Simulate intelligent results based on search terms and filters
+        const allTemplates = [
+            {
+                title: 'Advanced Political Sentiment Analysis',
+                category: 'sentiment',
+                tier: 'premium',
+                complexity: 'advanced',
+                industry: 'politics',
+                description: 'Comprehensive political discourse analysis with bias detection and emotional sentiment tracking.',
+                features: ['Bias Detection', 'Emotional Analysis', 'Speaker ID', 'Trend Analysis'],
+                rating: 4.8,
+                uses: 1200
+            },
+            {
+                title: 'Educational Content Effectiveness',
+                category: 'content',
+                tier: 'standard',
+                complexity: 'intermediate',
+                industry: 'education',
+                description: 'Evaluate educational video effectiveness and learning objective achievement.',
+                features: ['Learning Objectives', 'Pedagogy Assessment', 'Knowledge Transfer', 'Engagement'],
+                rating: 4.9,
+                uses: 856
+            },
+            {
+                title: 'Consumer Behavior Insights',
+                category: 'behavioral',
+                tier: 'premium',
+                complexity: 'advanced',
+                industry: 'business',
+                description: 'Advanced consumer psychology analysis with purchase intent prediction.',
+                features: ['Purchase Intent', 'Brand Sentiment', 'Demographics', 'Conversion Prediction'],
+                rating: 4.7,
+                uses: 2100
+            },
+            {
+                title: 'Healthcare Communication Analysis',
+                category: 'content',
+                tier: 'basic',
+                complexity: 'basic',
+                industry: 'healthcare',
+                description: 'Analyze medical communication clarity and patient comprehension.',
+                features: ['Medical Clarity', 'Patient Understanding', 'Risk Communication', 'Compliance'],
+                rating: 4.6,
+                uses: 643
+            }
+        ];
+        
+        // Filter based on active filters and search terms
+        return allTemplates.filter(template => {
+            // Check search terms
+            if (this.searchTerms) {
+                const searchLower = this.searchTerms.toLowerCase();
+                const matchesSearch = 
+                    template.title.toLowerCase().includes(searchLower) ||
+                    template.description.toLowerCase().includes(searchLower) ||
+                    template.features.some(feature => feature.toLowerCase().includes(searchLower));
+                
+                if (!matchesSearch) return false;
+            }
+            
+            // Check filters
+            for (const [filterType, selectedValues] of Object.entries(this.activeFilters)) {
+                if (selectedValues.length > 0 && !selectedValues.includes(template[filterType])) {
+                    return false;
+                }
+            }
+            
+            return true;
+        });
+    }
+    
+    displayResults(results) {
+        const grid = document.getElementById('results-grid');
+        
+        grid.innerHTML = results.map(template => `
+            <div class="result-card" onclick="selectTemplate('${template.title.toLowerCase().replace(/\s+/g, '-')}')">
+                <div class="result-header">
+                    <h3 class="result-title">${template.title}</h3>
+                    <span class="result-category category-${template.category}">${template.category}</span>
+                </div>
+                <div class="result-body">
+                    <p class="result-description">${template.description}</p>
+                    <div class="result-features">
+                        ${template.features.map(feature => `<span class="feature-tag">${feature}</span>`).join('')}
+                    </div>
+                    <div class="result-stats">
+                        <span class="stat-item">
+                            <i class="fas fa-star stat-icon"></i>
+                            ${template.rating}/5 Rating
+                        </span>
+                        <span class="stat-item">
+                            <i class="fas fa-users stat-icon"></i>
+                            ${template.uses.toLocaleString()} Uses
+                        </span>
+                    </div>
+                    <div class="quick-actions">
+                        <a href="#" class="action-btn-sm">{% trans "Preview" %}</a>
+                        <a href="{% url 'dashboard:template_selection' %}" class="action-btn-sm">{% trans "Use Template" %}</a>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+        
+        grid.style.display = 'grid';
+    }
+}
+
+// Global functions for template interaction
+function toggleFilter(element, filterType, value) {
+    const checkbox = element.querySelector('.filter-checkbox');
+    const isChecked = checkbox.classList.contains('checked');
+    
+    if (isChecked) {
+        checkbox.classList.remove('checked');
+        const index = themeSearch.activeFilters[filterType].indexOf(value);
+        if (index > -1) {
+            themeSearch.activeFilters[filterType].splice(index, 1);
+        }
+    } else {
+        checkbox.classList.add('checked');
+        themeSearch.activeFilters[filterType].push(value);
+    }
+    
+    // Auto-search on filter change
+    if (themeSearch.searchTerms || Object.values(themeSearch.activeFilters).some(arr => arr.length > 0)) {
+        themeSearch.performSearch();
+    }
+}
+
+function selectSuggestion(title) {
+    document.getElementById('theme-search').value = title;
+    themeSearch.searchTerms = title;
+    themeSearch.performSearch();
+}
+
+function performSearch() {
+    themeSearch.performSearch();
+}
+
+function sortResults() {
+    // Implement sorting logic
+    const sortBy = document.getElementById('sort-select').value;
+    console.log('Sorting by:', sortBy);
+    // Re-render results with new sort order
+}
+
+function selectTemplate(templateId) {
+    // Navigate to template configuration
+    window.location.href = `{% url 'dashboard:template_selection' %}?highlight=${templateId}`;
+}
+
+// Initialize the search engine
+let themeSearch;
+document.addEventListener('DOMContentLoaded', () => {
+    themeSearch = new ThemeSearchEngine();
+});
+</script>
+{% endblock %}

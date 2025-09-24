@@ -1,0 +1,23 @@
+TubeWhale Analysis Report
+========================
+
+Job ID: 99c066df
+Video ID: dQw4w9WgXcQ
+Analysis Type: comprehensive
+Status: completed
+Created: 2025-09-24T01:23:18.700602+00:00
+Completed: 2025-09-24T01:23:18.700613+00:00
+
+Summary:
+Analysis completed for video dQw4w9WgXcQ using comprehensive approach
+
+Insights:
+- Video ID: dQw4w9WgXcQ
+- Analysis Type: comprehensive
+- Processing completed successfully
+- Output saved to results directory
+
+Metrics:
+- processing_time: 2.5s
+- confidence_score: 0.85
+- output_format: text

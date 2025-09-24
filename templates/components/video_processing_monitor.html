@@ -1,0 +1,1200 @@
+{% load static %}
+<!-- 🎯 工业级实时视频处理监控面板 -->
+<div id="video-processing-monitor" class="video-monitor-container">
+    <div class="monitor-header">
+        <h2 class="monitor-title">
+            <span class="monitor-icon">📹</span>
+            Video Processing Monitor
+            <span id="connection-status" class="connection-status disconnected">
+                <span class="status-dot"></span>
+                Connecting...
+            </span>
+        </h2>
+        
+        <div class="monitor-controls">
+            <button id="refresh-btn" class="control-btn">
+                <span class="icon">🔄</span>
+                Refresh Status
+            </button>
+            <button id="clear-completed" class="control-btn">
+                <span class="icon">🧹</span>
+                Clear Completed
+            </button>
+            <button id="toggle-auto-scroll" class="control-btn active" data-active="true">
+                <span class="icon">📜</span>
+                Auto Scroll
+            </button>
+        </div>
+    </div>
+
+    <!-- 统计概览 -->
+    <div class="stats-overview">
+        <div class="stat-card">
+            <div class="stat-value" id="total-videos">0</div>
+            <div class="stat-label">Total Videos</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="processing-videos">0</div>
+            <div class="stat-label">Processing</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="completed-videos">0</div>
+            <div class="stat-label">Completed</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="error-videos">0</div>
+            <div class="stat-label">Failed</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="success-rate">0%</div>
+            <div class="stat-label">Success Rate</div>
+        </div>
+    </div>
+
+    <!-- 视频列表 -->
+    <div class="video-list-container">
+        <div class="list-header">
+            <h3>Video Processing Queue</h3>
+            <div class="filter-controls">
+                <select id="status-filter" class="filter-select">
+                    <option value="all">All Status</option>
+                    <option value="pending">Pending</option>
+                    <option value="downloading">Downloading</option>
+                    <option value="processing">Processing</option>
+                    <option value="transcribing">Transcribing</option>
+                    <option value="analyzing">Analyzing</option>
+                    <option value="summarizing">Summarizing</option>
+                    <option value="completed">Completed</option>
+                    <option value="error">Failed</option>
+                    <option value="paused">Paused</option>
+                </select>
+            </div>
+        </div>
+        
+        <div id="video-list" class="video-list">
+            <!-- 动态加载的视频项目 -->
+        </div>
+        
+        <div id="empty-state" class="empty-state" style="display: none;">
+            <div class="empty-icon">📱</div>
+            <h3>No Videos Processing</h3>
+            <p>Start adding videos for processing and their status will appear here in real-time</p>
+        </div>
+    </div>
+
+    <!-- 详细日志面板 -->
+    <div id="log-panel" class="log-panel">
+        <div class="log-header">
+            <h4>Real-time Processing Logs</h4>
+            <div class="log-controls">
+                <button id="clear-logs" class="log-control-btn">Clear Logs</button>
+                <button id="pause-logs" class="log-control-btn">Pause</button>
+                <button id="export-logs" class="log-control-btn">Export</button>
+            </div>
+        </div>
+        <div id="log-content" class="log-content">
+            <!-- 实时日志内容 -->
+        </div>
+    </div>
+</div>
+
+<style>
+/* 🎨 工业级监控面板样式 */
+.video-monitor-container {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 12px;
+    padding: 24px;
+    margin: 20px 0;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+    color: white;
+    position: relative;
+    overflow: hidden;
+}
+
+.video-monitor-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(45deg, rgba(255,255,255,0.1) 0%, transparent 100%);
+    pointer-events: none;
+}
+
+.monitor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    position: relative;
+    z-index: 1;
+}
+
+.monitor-title {
+    font-size: 24px;
+    font-weight: 700;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.monitor-icon {
+    font-size: 28px;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+.connection-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    background: rgba(255,255,255,0.1);
+    backdrop-filter: blur(10px);
+}
+
+.connection-status.connected {
+    background: rgba(0,255,0,0.2);
+}
+
+.connection-status.disconnected {
+    background: rgba(255,0,0,0.2);
+}
+
+.connection-status.reconnecting {
+    background: rgba(255,165,0,0.2);
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: blink 1s infinite;
+}
+
+.connection-status.connected .status-dot {
+    background: #00ff00;
+    animation: none;
+}
+
+@keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0.3; }
+}
+
+.monitor-controls {
+    display: flex;
+    gap: 12px;
+}
+
+.control-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: rgba(255,255,255,0.15);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+}
+
+.control-btn:hover {
+    background: rgba(255,255,255,0.25);
+    transform: translateY(-2px);
+}
+
+.control-btn.active {
+    background: rgba(0,255,0,0.2);
+    box-shadow: 0 0 10px rgba(0,255,0,0.3);
+}
+
+.stats-overview {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.stat-card {
+    background: rgba(255,255,255,0.1);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.2);
+    transition: transform 0.3s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-4px);
+}
+
+.stat-value {
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 8px;
+    background: linear-gradient(45deg, #fff, #f0f8ff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.stat-label {
+    font-size: 14px;
+    opacity: 0.8;
+    font-weight: 500;
+}
+
+.video-list-container {
+    background: rgba(255,255,255,0.05);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 24px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+.list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.list-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.filter-controls {
+    display: flex;
+    gap: 12px;
+}
+
+.filter-select {
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.3);
+    background: rgba(255,255,255,0.1);
+    color: white;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.filter-select option {
+    background: #2a2a2a;
+    color: white;
+}
+
+.video-list {
+    max-height: 500px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.3) transparent;
+}
+
+.video-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.video-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.video-list::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.3);
+    border-radius: 3px;
+}
+
+.video-item {
+    background: rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 12px;
+    border: 1px solid rgba(255,255,255,0.1);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.video-item:hover {
+    background: rgba(255,255,255,0.12);
+    transform: translateX(4px);
+}
+
+.video-item.status-completed {
+    border-left: 4px solid #00ff88;
+}
+
+.video-item.status-error {
+    border-left: 4px solid #ff4757;
+}
+
+.video-item.status-processing {
+    border-left: 4px solid #3742fa;
+    animation: processing-glow 2s infinite;
+}
+
+@keyframes processing-glow {
+    0%, 100% { box-shadow: 0 0 5px rgba(55, 66, 250, 0.3); }
+    50% { box-shadow: 0 0 20px rgba(55, 66, 250, 0.6); }
+}
+
+.video-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+}
+
+.video-title {
+    font-weight: 600;
+    font-size: 16px;
+    margin: 0;
+    flex: 1;
+    margin-right: 16px;
+}
+
+.video-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.action-btn {
+    padding: 4px 8px;
+    border: none;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.15);
+    color: white;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.action-btn:hover {
+    background: rgba(255,255,255,0.25);
+}
+
+.video-info {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+    font-size: 14px;
+}
+
+.info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.info-label {
+    opacity: 0.7;
+    font-size: 12px;
+}
+
+.info-value {
+    font-weight: 500;
+}
+
+.progress-section {
+    margin-bottom: 12px;
+}
+
+.progress-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 8px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #00ff88, #00d4ff);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+    position: relative;
+}
+
+.progress-fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    animation: progress-shine 2s infinite;
+}
+
+@keyframes progress-shine {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+.agents-status {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 8px;
+}
+
+.agent-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 6px;
+    font-size: 12px;
+}
+
+.agent-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.agent-indicator.pending { background: #ffa500; }
+.agent-indicator.processing { background: #3742fa; animation: blink 1s infinite; }
+.agent-indicator.completed { background: #00ff88; }
+.agent-indicator.error { background: #ff4757; }
+
+.log-panel {
+    background: rgba(0,0,0,0.3);
+    border-radius: 12px;
+    padding: 20px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+.log-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.log-header h4 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.log-controls {
+    display: flex;
+    gap: 8px;
+}
+
+.log-control-btn {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.1);
+    color: white;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.log-control-btn:hover {
+    background: rgba(255,255,255,0.2);
+}
+
+.log-content {
+    max-height: 300px;
+    overflow-y: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.4;
+    background: rgba(0,0,0,0.2);
+    padding: 12px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+.log-entry {
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.log-timestamp {
+    color: #888;
+    margin-right: 8px;
+}
+
+.log-level-info { color: #00d4ff; }
+.log-level-warning { color: #ffa500; }
+.log-level-error { color: #ff4757; }
+.log-level-success { color: #00ff88; }
+
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    opacity: 0.7;
+}
+
+.empty-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+}
+
+.empty-state h3 {
+    margin: 0 0 8px 0;
+    font-size: 20px;
+}
+
+.empty-state p {
+    margin: 0;
+    opacity: 0.8;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .monitor-header {
+        flex-direction: column;
+        gap: 16px;
+        align-items: stretch;
+    }
+    
+    .monitor-controls {
+        justify-content: center;
+    }
+    
+    .stats-overview {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .video-info {
+        grid-template-columns: 1fr;
+    }
+    
+    .agents-status {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* 新消息提示动画 */
+.new-video-animation {
+    animation: slideInFromTop 0.5s ease-out;
+}
+
+@keyframes slideInFromTop {
+    from {
+        transform: translateY(-20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* 状态更新动画 */
+.status-update-animation {
+    animation: highlightUpdate 1s ease-out;
+}
+
+@keyframes highlightUpdate {
+    0% { background: rgba(0,255,136,0.3); }
+    100% { background: rgba(255,255,255,0.08); }
+}
+</style>
+
+<script>
+// 🚀 工业级实时视频处理监控JavaScript
+class VideoProcessingMonitor {
+    constructor() {
+        this.websocket = null;
+        this.isConnected = false;
+        this.reconnectAttempts = 0;
+        this.maxReconnectAttempts = 5;
+        this.reconnectDelay = 1000;
+        this.videos = new Map();
+        this.autoScroll = true;
+        this.logsPaused = false;
+        this.logs = [];
+        
+        this.init();
+    }
+
+    init() {
+        this.setupWebSocket();
+        this.setupEventListeners();
+        this.setupPeriodicUpdates();
+        this.log('info', 'Video Processing Monitor initialized');
+    }
+
+    setupWebSocket() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws/video-processing/`;
+        
+        try {
+            this.websocket = new WebSocket(wsUrl);
+            this.setupWebSocketHandlers();
+        } catch (error) {
+            this.log('error', `WebSocket connection failed: ${error.message}`);
+            this.scheduleReconnect();
+        }
+    }
+
+    setupWebSocketHandlers() {
+        this.websocket.onopen = () => {
+            this.isConnected = true;
+            this.reconnectAttempts = 0;
+            this.updateConnectionStatus('connected', 'Connected');
+            this.log('success', 'WebSocket connection established');
+            
+            // 请求当前状态
+            this.sendMessage({ type: 'request_status' });
+        };
+
+        this.websocket.onclose = (event) => {
+            this.isConnected = false;
+            this.updateConnectionStatus('disconnected', 'Disconnected');
+            this.log('warning', `WebSocket connection closed: ${event.code}`);
+            this.scheduleReconnect();
+        };
+
+        this.websocket.onerror = (error) => {
+            this.log('error', `WebSocket error: ${error}`);
+        };
+
+        this.websocket.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                this.handleWebSocketMessage(data);
+            } catch (error) {
+                this.log('error', `Failed to parse WebSocket message: ${error.message}`);
+            }
+        };
+    }
+
+    handleWebSocketMessage(data) {
+        switch (data.type) {
+            case 'current_status':
+                this.handleCurrentStatus(data.videos);
+                break;
+            case 'video_update':
+                this.handleVideoUpdate(data.video);
+                break;
+            case 'progress_update':
+                this.handleProgressUpdate(data.video_id, data.progress, data.current_step);
+                break;
+            case 'video_error':
+                this.handleVideoError(data.video_id, data.error);
+                break;
+            case 'video_completed':
+                this.handleVideoCompleted(data.video_id, data.results);
+                break;
+            case 'system_status':
+                this.handleSystemStatus(data.status, data.metrics);
+                break;
+            case 'error':
+                this.log('error', data.message);
+                break;
+            default:
+                this.log('info', `未知消息类型: ${data.type}`);
+        }
+    }
+
+    handleCurrentStatus(videos) {
+        this.videos.clear();
+        videos.forEach(video => {
+            this.videos.set(video.video_id, video);
+        });
+        this.renderVideoList();
+        this.updateStatistics();
+        this.log('info', `Loaded status for ${videos.length} videos`);
+    }
+
+    handleVideoUpdate(video) {
+        const existing = this.videos.get(video.video_id);
+        const isNew = !existing;
+        
+        this.videos.set(video.video_id, video);
+        
+        if (isNew) {
+            this.renderVideoItem(video, true);
+            this.log('info', `New video: ${video.title} (${video.video_id})`);
+        } else {
+            this.updateVideoItem(video);
+            this.log('info', `Video updated: ${video.title} -> ${video.status}`);
+        }
+        
+        this.updateStatistics();
+    }
+
+    handleProgressUpdate(videoId, progress, currentStep) {
+        const video = this.videos.get(videoId);
+        if (video) {
+            video.progress = progress;
+            video.current_step = currentStep;
+            this.updateVideoProgress(videoId, progress, currentStep);
+            this.log('info', `${video.title}: ${currentStep} (${progress}%)`);
+        }
+    }
+
+    handleVideoError(videoId, error) {
+        const video = this.videos.get(videoId);
+        if (video) {
+            video.status = 'error';
+            video.error_message = error;
+            this.updateVideoItem(video);
+            this.log('error', `${video.title}: ${error}`);
+        }
+    }
+
+    handleVideoCompleted(videoId, results) {
+        const video = this.videos.get(videoId);
+        if (video) {
+            video.status = 'completed';
+            video.progress = 100;
+            video.results = results;
+            this.updateVideoItem(video);
+            this.log('success', `${video.title}: 处理完成`);
+        }
+    }
+
+    handleSystemStatus(status, metrics) {
+        // 更新系统状态显示
+        this.log('info', `System status: ${JSON.stringify(status)}`);
+    }
+
+    renderVideoList() {
+        const videoList = document.getElementById('video-list');
+        const emptyState = document.getElementById('empty-state');
+        
+        videoList.innerHTML = '';
+        
+        if (this.videos.size === 0) {
+            emptyState.style.display = 'block';
+            return;
+        }
+        
+        emptyState.style.display = 'none';
+        
+        // 按更新时间排序
+        const sortedVideos = Array.from(this.videos.values())
+            .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+        
+        sortedVideos.forEach(video => {
+            this.renderVideoItem(video);
+        });
+    }
+
+    renderVideoItem(video, isNew = false) {
+        const videoList = document.getElementById('video-list');
+        const emptyState = document.getElementById('empty-state');
+        
+        emptyState.style.display = 'none';
+        
+        const videoElement = this.createVideoElement(video);
+        
+        if (isNew && videoList.firstChild) {
+            videoElement.classList.add('new-video-animation');
+            videoList.insertBefore(videoElement, videoList.firstChild);
+        } else {
+            videoList.appendChild(videoElement);
+        }
+        
+        if (this.autoScroll && isNew) {
+            videoElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    }
+
+    createVideoElement(video) {
+        const div = document.createElement('div');
+        div.className = `video-item status-${video.status}`;
+        div.id = `video-${video.video_id}`;
+        
+        const statusIcon = this.getStatusIcon(video.status);
+        const statusText = this.getStatusText(video.status);
+        const progressPercent = video.progress || 0;
+        
+        div.innerHTML = `
+            <div class="video-header">
+                <h4 class="video-title">${video.title || 'Unknown Video'}</h4>
+                <div class="video-actions">
+                    ${video.status === 'processing' ? 
+                        `<button class="action-btn" onclick="monitor.pauseVideo('${video.video_id}')">⏸️ Pause</button>` :
+                        video.status === 'paused' ?
+                        `<button class="action-btn" onclick="monitor.resumeVideo('${video.video_id}')">▶️ Resume</button>` :
+                        ''
+                    }
+                    <button class="action-btn" onclick="monitor.showVideoDetails('${video.video_id}')">📊 Details</button>
+                </div>
+            </div>
+            
+            <div class="video-info">
+                <div class="info-item">
+                    <div class="info-label">Status</div>
+                    <div class="info-value">${statusIcon} ${statusText}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Video ID</div>
+                    <div class="info-value">${video.video_id.substring(0, 8)}...</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Created</div>
+                    <div class="info-value">${this.formatTime(video.created_at)}</div>
+                </div>
+            </div>
+            
+            <div class="progress-section">
+                <div class="progress-header">
+                    <span>Processing Progress</span>
+                    <span>${progressPercent}%</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${progressPercent}%"></div>
+                </div>
+                <div style="margin-top: 8px; font-size: 14px; opacity: 0.8;">
+                    ${video.current_step || 'Preparing...'}
+                </div>
+            </div>
+            
+            <div class="agents-status">
+                ${this.renderAgentsStatus(video.agents_status || {})}
+            </div>
+            
+            ${video.error_message ? `
+                <div style="margin-top: 12px; padding: 12px; background: rgba(255,71,87,0.1); border-radius: 6px; border-left: 4px solid #ff4757;">
+                    <strong>Error:</strong> ${video.error_message}
+                </div>
+            ` : ''}
+        `;
+        
+        return div;
+    }
+
+    renderAgentsStatus(agentsStatus) {
+        const agents = [
+            { key: 'download_agent', name: 'Download' },
+            { key: 'transcript_agent', name: 'Transcript' },
+            { key: 'summarizer_agent', name: 'Summarize' },
+            { key: 'audio_agent', name: 'Audio' },
+            { key: 'search_agent', name: 'Search' }
+        ];
+        
+        return agents.map(agent => {
+            const status = agentsStatus[agent.key] || 'pending';
+            return `
+                <div class="agent-status">
+                    <div class="agent-indicator ${status}"></div>
+                    <span>${agent.name}</span>
+                </div>
+            `;
+        }).join('');
+    }
+
+    updateVideoItem(video) {
+        const element = document.getElementById(`video-${video.video_id}`);
+        if (element) {
+            element.className = `video-item status-${video.status}`;
+            element.classList.add('status-update-animation');
+            
+            // 更新内容
+            const newElement = this.createVideoElement(video);
+            element.innerHTML = newElement.innerHTML;
+            
+            // 移除动画类
+            setTimeout(() => {
+                element.classList.remove('status-update-animation');
+            }, 1000);
+        }
+    }
+
+    updateVideoProgress(videoId, progress, currentStep) {
+        const element = document.getElementById(`video-${videoId}`);
+        if (element) {
+            const progressFill = element.querySelector('.progress-fill');
+            const progressText = element.querySelector('.progress-header span:last-child');
+            const stepText = element.querySelector('.progress-section > div:last-child');
+            
+            if (progressFill) progressFill.style.width = `${progress}%`;
+            if (progressText) progressText.textContent = `${progress}%`;
+            if (stepText) stepText.textContent = currentStep || '处理中';
+        }
+    }
+
+    updateStatistics() {
+        const stats = this.calculateStatistics();
+        
+        document.getElementById('total-videos').textContent = stats.total;
+        document.getElementById('processing-videos').textContent = stats.processing;
+        document.getElementById('completed-videos').textContent = stats.completed;
+        document.getElementById('error-videos').textContent = stats.error;
+        document.getElementById('success-rate').textContent = `${stats.successRate}%`;
+    }
+
+    calculateStatistics() {
+        const videos = Array.from(this.videos.values());
+        const total = videos.length;
+        
+        const statusCounts = videos.reduce((acc, video) => {
+            acc[video.status] = (acc[video.status] || 0) + 1;
+            return acc;
+        }, {});
+        
+        const processing = (statusCounts.processing || 0) + 
+                          (statusCounts.downloading || 0) + 
+                          (statusCounts.transcribing || 0) + 
+                          (statusCounts.analyzing || 0) + 
+                          (statusCounts.summarizing || 0);
+        
+        const completed = statusCounts.completed || 0;
+        const error = statusCounts.error || 0;
+        const successRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+        
+        return { total, processing, completed, error, successRate };
+    }
+
+    getStatusIcon(status) {
+        const icons = {
+            pending: '⏳',
+            downloading: '⬇️',
+            processing: '⚙️',
+            transcribing: '🎙️',
+            analyzing: '🔍',
+            summarizing: '📝',
+            completed: '✅',
+            error: '❌',
+            paused: '⏸️',
+            cancelled: '🚫'
+        };
+        return icons[status] || '❓';
+    }
+
+    getStatusText(status) {
+        const texts = {
+            pending: 'Pending',
+            downloading: 'Downloading',
+            processing: 'Processing',
+            transcribing: 'Transcribing',
+            analyzing: 'Analyzing',
+            summarizing: 'Summarizing',
+            completed: 'Completed',
+            error: 'Failed',
+            paused: 'Paused',
+            cancelled: 'Cancelled'
+        };
+        return texts[status] || 'Unknown Status';
+    }
+
+    formatTime(isoString) {
+        if (!isoString) return 'Unknown';
+        try {
+            return new Date(isoString).toLocaleString('en-US');
+        } catch {
+            return 'Invalid time';
+        }
+    }
+
+    log(level, message) {
+        const timestamp = new Date().toLocaleTimeString();
+        const logEntry = { timestamp, level, message };
+        
+        this.logs.push(logEntry);
+        
+        if (!this.logsPaused) {
+            this.renderLogEntry(logEntry);
+        }
+        
+        // 限制日志数量
+        if (this.logs.length > 1000) {
+            this.logs = this.logs.slice(-500);
+        }
+    }
+
+    renderLogEntry(entry) {
+        const logContent = document.getElementById('log-content');
+        const logElement = document.createElement('div');
+        logElement.className = 'log-entry';
+        logElement.innerHTML = `
+            <span class="log-timestamp">[${entry.timestamp}]</span>
+            <span class="log-level-${entry.level}">[${entry.level.toUpperCase()}]</span>
+            ${entry.message}
+        `;
+        
+        logContent.appendChild(logElement);
+        
+        if (this.autoScroll) {
+            logContent.scrollTop = logContent.scrollHeight;
+        }
+    }
+
+    setupEventListeners() {
+        // 刷新按钮
+        document.getElementById('refresh-btn').addEventListener('click', () => {
+            this.sendMessage({ type: 'request_status' });
+            this.log('info', 'Manual status refresh requested');
+        });
+
+        // 清理完成的视频
+        document.getElementById('clear-completed').addEventListener('click', () => {
+            this.clearCompletedVideos();
+        });
+
+        // 自动滚动切换
+        document.getElementById('toggle-auto-scroll').addEventListener('click', (e) => {
+            this.autoScroll = !this.autoScroll;
+            const btn = e.target.closest('button');
+            btn.classList.toggle('active');
+            btn.dataset.active = this.autoScroll;
+            this.log('info', `Auto scroll: ${this.autoScroll ? 'enabled' : 'disabled'}`);
+        });
+
+        // 状态过滤器
+        document.getElementById('status-filter').addEventListener('change', (e) => {
+            this.filterVideosByStatus(e.target.value);
+        });
+
+        // 日志控制
+        document.getElementById('clear-logs').addEventListener('click', () => {
+            this.clearLogs();
+        });
+
+        document.getElementById('pause-logs').addEventListener('click', (e) => {
+            this.logsPaused = !this.logsPaused;
+            e.target.textContent = this.logsPaused ? 'Resume' : 'Pause';
+        });
+
+        document.getElementById('export-logs').addEventListener('click', () => {
+            this.exportLogs();
+        });
+    }
+
+    setupPeriodicUpdates() {
+        // 每30秒请求一次状态更新
+        setInterval(() => {
+            if (this.isConnected) {
+                this.sendMessage({ type: 'request_status' });
+            }
+        }, 30000);
+    }
+
+    sendMessage(message) {
+        if (this.websocket && this.isConnected) {
+            this.websocket.send(JSON.stringify(message));
+        }
+    }
+
+    updateConnectionStatus(status, text) {
+        const statusElement = document.getElementById('connection-status');
+        statusElement.className = `connection-status ${status}`;
+        statusElement.innerHTML = `<span class="status-dot"></span>${text}`;
+    }
+
+    scheduleReconnect() {
+        if (this.reconnectAttempts < this.maxReconnectAttempts) {
+            this.reconnectAttempts++;
+            this.updateConnectionStatus('reconnecting', `Reconnecting... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+            
+            setTimeout(() => {
+                this.setupWebSocket();
+            }, this.reconnectDelay * this.reconnectAttempts);
+        } else {
+            this.updateConnectionStatus('disconnected', 'Connection failed');
+            this.log('error', 'Maximum reconnection attempts reached, stopping reconnection');
+        }
+    }
+
+    pauseVideo(videoId) {
+        this.sendMessage({ type: 'pause_video', video_id: videoId });
+        this.log('info', `Pausing video: ${videoId}`);
+    }
+
+    resumeVideo(videoId) {
+        this.sendMessage({ type: 'resume_video', video_id: videoId });
+        this.log('info', `Resuming video: ${videoId}`);
+    }
+
+    showVideoDetails(videoId) {
+        const video = this.videos.get(videoId);
+        if (video) {
+            // 显示详细信息模态框
+            alert(`Video Details:\n${JSON.stringify(video, null, 2)}`);
+        }
+    }
+
+    clearCompletedVideos() {
+        Array.from(this.videos.values())
+            .filter(video => video.status === 'completed')
+            .forEach(video => {
+                this.videos.delete(video.video_id);
+                const element = document.getElementById(`video-${video.video_id}`);
+                if (element) {
+                    element.remove();
+                }
+            });
+        
+        this.updateStatistics();
+        this.log('info', 'Completed videos cleared');
+    }
+
+    filterVideosByStatus(status) {
+        const videoItems = document.querySelectorAll('.video-item');
+        
+        videoItems.forEach(item => {
+            if (status === 'all' || item.classList.contains(`status-${status}`)) {
+                item.style.display = 'block';
+            } else {
+                item.style.display = 'none';
+            }
+        });
+        
+        this.log('info', `Filter by status: ${status}`);
+    }
+
+    clearLogs() {
+        this.logs = [];
+        document.getElementById('log-content').innerHTML = '';
+        this.log('info', 'Logs cleared');
+    }
+
+    exportLogs() {
+        const logText = this.logs.map(entry => 
+            `[${entry.timestamp}] [${entry.level.toUpperCase()}] ${entry.message}`
+        ).join('\n');
+        
+        const blob = new Blob([logText], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `video-processing-logs-${new Date().toISOString().slice(0, 19)}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+        
+        this.log('info', 'Logs exported');
+    }
+}
+
+// 初始化监控器
+let monitor;
+document.addEventListener('DOMContentLoaded', () => {
+    monitor = new VideoProcessingMonitor();
+});
+</script>

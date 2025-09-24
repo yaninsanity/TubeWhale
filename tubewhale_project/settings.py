@@ -10,8 +10,28 @@ LANGUAGES = [
     ('zh-hant', '繁體中文'),
     ('ja', '日本語'),
     ('ko', '한국어'),
-    ('es', 'Español'),
-    ('fr', 'Français'),
+    ('es', 'Espa# ============== CACHES CONFIGURATION ==============
+# Use Redis for production-grade caching and channel layers
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/1'),
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'CONNECTION_POOL_KWARGS': {
+                'max_connections': 50,
+                'retry_on_timeout': True,
+            },
+        },
+        'KEY_PREFIX': 'tubewhale',
+        'TIMEOUT': 300,  # 5 minutes default timeout
+    },
+    # Fallback to local memory cache if Redis unavailable
+    'localmem': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+    }
+}r', 'Français'),
     ('de', 'Deutsch'),
     ('pt', 'Português'),
     ('ru', 'Русский'),
@@ -110,15 +130,18 @@ THIRD_PARTY_APPS = [
     'drf_spectacular',
     'django_redis',
     'django_celery_beat',
+    'channels',  # 🎯 WebSocket支持
 ]
 
 LOCAL_APPS = [
+    'tubewhale_project',  # 包含管理命令
     'apps.user_app',
     'apps.video_app', 
     'apps.analysis_app',
     'apps.api_app',
     'apps.tubewhale_engine',  
     'apps.templates_app',
+    'apps.dashboard_app',  # 添加dashboard_app
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -162,6 +185,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'django.template.context_processors.media',
             ],
         },
     },
@@ -393,3 +417,32 @@ CPU_CRIT_THRESHOLD = float(os.environ.get('CPU_CRIT_THRESHOLD', '90'))
 MEM_WARN_THRESHOLD = float(os.environ.get('MEM_WARN_THRESHOLD', '75'))
 MEM_CRIT_THRESHOLD = float(os.environ.get('MEM_CRIT_THRESHOLD', '90'))
 HOTSPOT_MIN_DURATION_SEC = int(os.environ.get('HOTSPOT_MIN_DURATION_SEC', '30'))  # consecutive seconds beyond crit to log event
+
+# ============== DJANGO CHANNELS & WEBSOCKET CONFIGURATION ==============
+# 🎯 ASGI Application for WebSocket support
+ASGI_APPLICATION = 'tubewhale_project.asgi.application'
+
+# 🎯 Channel Layers - Redis backend for real-time communication
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/1')],
+            "capacity": 1500,  # 🔥 High capacity for industrial-grade performance
+            "expiry": 60,      # 🔥 Message expiry time in seconds
+        },
+    },
+}
+
+# 🎯 WebSocket Authentication
+CHANNEL_ROUTING = {
+    # WebSocket routing will be handled in routing.py
+}
+
+# 🎯 Real-time Video Processing Configuration
+VIDEO_PROCESSING_CONFIG = {
+    'MAX_CONCURRENT_VIDEOS': int(os.environ.get('MAX_CONCURRENT_VIDEOS', '5')),
+    'STATUS_UPDATE_INTERVAL': float(os.environ.get('STATUS_UPDATE_INTERVAL', '0.5')),  # seconds
+    'WEBSOCKET_HEARTBEAT_INTERVAL': int(os.environ.get('WEBSOCKET_HEARTBEAT_INTERVAL', '30')),  # seconds
+    'DATABASE_MONITOR_INTERVAL': float(os.environ.get('DATABASE_MONITOR_INTERVAL', '1.0')),  # seconds
+}

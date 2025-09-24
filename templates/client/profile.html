@@ -1,0 +1,433 @@
+{% extends "client/base.html" %}
+
+{% block title %}My Profile - TubeWhale{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            
+            <!-- Profile Header -->
+            <div class="card border-0 shadow-lg mb-4">
+                <div class="card-header bg-primary text-white py-4">
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <div class="profile-avatar bg-white text-primary rounded-circle d-flex align-items-center justify-content-center" style="width: 80px; height: 80px; font-size: 2rem; font-weight: bold;">
+                                {{ user.username|first|upper }}
+                            </div>
+                        </div>
+                        <div class="col">
+                            <h1 class="h3 mb-1">{{ user.get_full_name|default:user.username }}</h1>
+                            <p class="mb-2 opacity-75">{{ user.email }}</p>
+                            <span class="badge bg-light text-primary px-3 py-2 fs-6">
+                                <i class="fas fa-crown me-2"></i>{{ user.tier|title }} Member
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card-body p-4">
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <div class="stat-card text-center p-3 bg-light rounded">
+                                <div class="stat-icon text-primary mb-2">
+                                    <i class="fas fa-calendar-alt fa-2x"></i>
+                                </div>
+                                <h4 class="h5 mb-1">Member Since</h4>
+                                <p class="text-muted mb-0">{{ user.date_joined|date:"F Y" }}</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="stat-card text-center p-3 bg-light rounded">
+                                <div class="stat-icon text-success mb-2">
+                                    <i class="fas fa-check-circle fa-2x"></i>
+                                </div>
+                                <h4 class="h5 mb-1">Account Status</h4>
+                                <p class="text-muted mb-0">
+                                    {% if user.is_active %}
+                                        <span class="text-success">Active</span>
+                                    {% else %}
+                                        <span class="text-warning">Inactive</span>
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tier Information and Upgrade -->
+            <div class="card border-0 shadow-lg mb-4">
+                <div class="card-header bg-gradient-primary text-white py-3">
+                    <h2 class="h4 mb-0">
+                        <i class="fas fa-layer-group me-2"></i>Membership Tier
+                    </h2>
+                </div>
+                <div class="card-body p-4">
+                    
+                    <!-- Current Tier Display -->
+                    <div class="current-tier mb-4 p-4 rounded" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);">
+                        <div class="row align-items-center">
+                            <div class="col-auto">
+                                {% if user.tier == 'premium' %}
+                                    <div class="tier-icon bg-warning text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                                        <i class="fas fa-crown fa-lg"></i>
+                                    </div>
+                                {% elif user.tier == 'standard' %}
+                                    <div class="tier-icon bg-info text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                                        <i class="fas fa-star fa-lg"></i>
+                                    </div>
+                                {% else %}
+                                    <div class="tier-icon bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                                        <i class="fas fa-user fa-lg"></i>
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col">
+                                <h3 class="h4 mb-1">{{ user.tier|title }} Membership</h3>
+                                <p class="text-muted mb-0">
+                                    {% if user.tier == 'premium' %}
+                                        Access to all premium features and templates
+                                    {% elif user.tier == 'standard' %}
+                                        Access to standard features and templates
+                                    {% else %}
+                                        Basic access with limited features
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tier Comparison -->
+                    <div class="tier-comparison">
+                        <h4 class="h5 mb-3">Tier Comparison</h4>
+                        <div class="row g-3">
+                            
+                            <!-- Basic Tier -->
+                            <div class="col-md-4">
+                                <div class="tier-card border rounded p-3 h-100 {% if user.tier == 'basic' %}border-primary bg-primary bg-opacity-10{% endif %}">
+                                    <div class="text-center mb-3">
+                                        <div class="tier-icon bg-secondary text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-2" style="width: 40px; height: 40px;">
+                                            <i class="fas fa-user"></i>
+                                        </div>
+                                        <h5 class="h6 mb-1">Basic</h5>
+                                        <p class="text-muted small mb-0">Free</p>
+                                    </div>
+                                    <ul class="list-unstyled small">
+                                        <li class="mb-1"><i class="fas fa-check text-success me-2"></i>Basic templates</li>
+                                        <li class="mb-1"><i class="fas fa-check text-success me-2"></i>Limited analysis</li>
+                                        <li class="mb-1"><i class="fas fa-times text-muted me-2"></i>Advanced features</li>
+                                    </ul>
+                                    {% if user.tier == 'basic' %}
+                                        <span class="badge bg-primary w-100 py-2">Current Plan</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <!-- Standard Tier -->
+                            <div class="col-md-4">
+                                <div class="tier-card border rounded p-3 h-100 {% if user.tier == 'standard' %}border-info bg-info bg-opacity-10{% endif %}">
+                                    <div class="text-center mb-3">
+                                        <div class="tier-icon bg-info text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-2" style="width: 40px; height: 40px;">
+                                            <i class="fas fa-star"></i>
+                                        </div>
+                                        <h5 class="h6 mb-1">Standard</h5>
+                                        <p class="text-muted small mb-0">$29/month</p>
+                                    </div>
+                                    <ul class="list-unstyled small">
+                                        <li class="mb-1"><i class="fas fa-check text-success me-2"></i>All basic features</li>
+                                        <li class="mb-1"><i class="fas fa-check text-success me-2"></i>Advanced templates</li>
+                                        <li class="mb-1"><i class="fas fa-check text-success me-2"></i>Priority support</li>
+                                    </ul>
+                                    {% if user.tier == 'standard' %}
+                                        <span class="badge bg-info w-100 py-2">Current Plan</span>
+                                    {% elif user.tier == 'basic' %}
+                                        <button type="button" class="btn btn-outline-info btn-sm w-100" onclick="upgradeToTier('standard')">
+                                            Upgrade to Standard
+                                        </button>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <!-- Premium Tier -->
+                            <div class="col-md-4">
+                                <div class="tier-card border rounded p-3 h-100 {% if user.tier == 'premium' %}border-warning bg-warning bg-opacity-10{% endif %}">
+                                    <div class="text-center mb-3">
+                                        <div class="tier-icon bg-warning text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-2" style="width: 40px; height: 40px;">
+                                            <i class="fas fa-crown"></i>
+                                        </div>
+                                        <h5 class="h6 mb-1">Premium</h5>
+                                        <p class="text-muted small mb-0">$99/month</p>
+                                    </div>
+                                    <ul class="list-unstyled small">
+                                        <li class="mb-1"><i class="fas fa-check text-success me-2"></i>All features</li>
+                                        <li class="mb-1"><i class="fas fa-check text-success me-2"></i>Premium templates</li>
+                                        <li class="mb-1"><i class="fas fa-check text-success me-2"></i>24/7 support</li>
+                                    </ul>
+                                    {% if user.tier == 'premium' %}
+                                        <span class="badge bg-warning w-100 py-2">Current Plan</span>
+                                    {% else %}
+                                        <button type="button" class="btn btn-outline-warning btn-sm w-100" onclick="upgradeToTier('premium')">
+                                            Upgrade to Premium
+                                        </button>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Account Actions -->
+            <div class="card border-0 shadow-lg">
+                <div class="card-header bg-light py-3">
+                    <h2 class="h4 mb-0">
+                        <i class="fas fa-cogs me-2"></i>Account Actions
+                    </h2>
+                </div>
+                <div class="card-body p-4">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <a href="{% url 'dashboard:template_selection' %}" class="btn btn-primary w-100 py-3">
+                                <i class="fas fa-play me-2"></i>Start Analysis
+                            </a>
+                        </div>
+                        <div class="col-md-6">
+                            <a href="{% url 'client:logout' %}" class="btn btn-outline-secondary w-100 py-3">
+                                <i class="fas fa-sign-out-alt me-2"></i>Sign Out
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- Upgrade Modal -->
+<div class="modal fade" id="upgradeModal" tabindex="-1" aria-labelledby="upgradeModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="upgradeModalLabel">
+                    <i class="fas fa-arrow-up me-2"></i>Upgrade Membership
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div id="upgradeContent">
+                    <!-- Content will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Modal -->
+<div class="modal fade" id="loadingModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content">
+            <div class="modal-body text-center p-4">
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mb-0">Processing upgrade...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Tier upgrade functionality
+function upgradeToTier(targetTier) {
+    // Show upgrade confirmation
+    const tierNames = {
+        'standard': 'Standard ($29/month)',
+        'premium': 'Premium ($99/month)'
+    };
+    
+    const tierBenefits = {
+        'standard': [
+            'Access to advanced templates',
+            'Priority customer support',
+            'Enhanced analysis features',
+            'Unlimited basic exports'
+        ],
+        'premium': [
+            'Access to all premium templates',
+            '24/7 dedicated support',
+            'Advanced AI capabilities',
+            'Unlimited exports and downloads',
+            'Custom template creation',
+            'API access'
+        ]
+    };
+    
+    const upgradeContent = `
+        <div class="upgrade-confirmation">
+            <div class="text-center mb-4">
+                <div class="tier-icon bg-${targetTier === 'premium' ? 'warning' : 'info'} text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
+                    <i class="fas fa-${targetTier === 'premium' ? 'crown' : 'star'} fa-lg"></i>
+                </div>
+                <h4>Upgrade to ${tierNames[targetTier]}</h4>
+                <p class="text-muted">Unlock premium features and capabilities</p>
+            </div>
+            
+            <div class="benefits-list mb-4">
+                <h5 class="h6 mb-3">What you'll get:</h5>
+                <ul class="list-unstyled">
+                    ${tierBenefits[targetTier].map(benefit => `
+                        <li class="mb-2">
+                            <i class="fas fa-check text-success me-2"></i>${benefit}
+                        </li>
+                    `).join('')}
+                </ul>
+            </div>
+            
+            <div class="payment-simulation bg-light p-3 rounded mb-4">
+                <h6 class="mb-3">
+                    <i class="fas fa-credit-card me-2"></i>Payment Simulation
+                </h6>
+                <p class="small text-muted mb-3">This is a demo payment system. No actual charges will be made.</p>
+                <div class="row g-2">
+                    <div class="col-12">
+                        <input type="text" class="form-control" placeholder="Card Number" value="4242 4242 4242 4242" readonly>
+                    </div>
+                    <div class="col-6">
+                        <input type="text" class="form-control" placeholder="MM/YY" value="12/25" readonly>
+                    </div>
+                    <div class="col-6">
+                        <input type="text" class="form-control" placeholder="CVC" value="123" readonly>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="d-grid gap-2">
+                <button type="button" class="btn btn-${targetTier === 'premium' ? 'warning' : 'info'} btn-lg" onclick="processUpgrade('${targetTier}')">
+                    <i class="fas fa-lock me-2"></i>Complete Upgrade - ${tierNames[targetTier]}
+                </button>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('upgradeContent').innerHTML = upgradeContent;
+    new bootstrap.Modal(document.getElementById('upgradeModal')).show();
+}
+
+// Process the upgrade
+function processUpgrade(targetTier) {
+    // Hide upgrade modal and show loading
+    bootstrap.Modal.getInstance(document.getElementById('upgradeModal')).hide();
+    new bootstrap.Modal(document.getElementById('loadingModal')).show();
+    
+    // Simulate processing time
+    setTimeout(() => {
+        // Make actual API call
+        fetch('{% url "client:upgrade_tier" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({
+                target_tier: targetTier
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Hide loading modal
+            bootstrap.Modal.getInstance(document.getElementById('loadingModal')).hide();
+            
+            if (data.status === 'success') {
+                // Show success message and reload page
+                showNotification('Upgrade successful! Welcome to ' + targetTier + ' membership!', 'success');
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
+            } else {
+                showNotification(data.message || 'Upgrade failed. Please try again.', 'error');
+            }
+        })
+        .catch(error => {
+            bootstrap.Modal.getInstance(document.getElementById('loadingModal')).hide();
+            showNotification('Network error. Please try again.', 'error');
+            console.error('Upgrade error:', error);
+        });
+    }, 1500);
+}
+
+// Show notification
+function showNotification(message, type) {
+    const alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
+    const icon = type === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-triangle';
+    
+    const notification = document.createElement('div');
+    notification.className = `alert ${alertClass} alert-dismissible fade show position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    notification.innerHTML = `
+        <i class="${icon} me-2"></i>${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 5000);
+}
+
+// Add CSRF token for API calls
+document.addEventListener('DOMContentLoaded', function() {
+    // Create hidden CSRF token input for JavaScript access
+    if (!document.querySelector('[name=csrfmiddlewaretoken]')) {
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrfmiddlewaretoken';
+        csrfInput.value = '{{ csrf_token }}';
+        document.body.appendChild(csrfInput);
+    }
+});
+</script>
+
+<style>
+.bg-gradient-primary {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    transition: transform 0.2s ease;
+}
+
+.tier-card {
+    transition: all 0.3s ease;
+}
+
+.tier-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+.profile-avatar {
+    font-family: 'Arial', sans-serif;
+    font-weight: 600;
+}
+
+@media (max-width: 768px) {
+    .row.g-4 {
+        --bs-gutter-x: 1rem;
+    }
+    
+    .tier-comparison .col-md-4 {
+        margin-bottom: 1rem;
+    }
+}
+</style>
+{% endblock %}

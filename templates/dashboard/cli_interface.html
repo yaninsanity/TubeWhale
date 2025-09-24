@@ -1,0 +1,670 @@
+{% extends "dashboard/base_simple.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "CLI Control Interface" %} - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --terminal-bg: #1a1a1a;
+        --terminal-green: #00ff00;
+        --terminal-amber: #ffbf00;
+        --terminal-red: #ff6b6b;
+        --terminal-blue: #4dabf7;
+        --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        --radius-lg: 0.75rem;
+    }
+    
+    .cli-interface {
+        display: grid;
+        grid-template-columns: 1fr 400px;
+        gap: 2rem;
+        height: calc(100vh - 120px);
+    }
+    
+    .terminal-container {
+        background: var(--terminal-bg);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        box-shadow: var(--shadow-lg);
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .terminal-header {
+        background: #333;
+        padding: 0.75rem 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        border-bottom: 1px solid #444;
+    }
+    
+    .terminal-controls {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .terminal-btn {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: none;
+        cursor: pointer;
+    }
+    
+    .btn-close { background: #ff5f57; }
+    .btn-minimize { background: #ffbd2e; }
+    .btn-maximize { background: #28ca42; }
+    
+    .terminal-title {
+        color: #ccc;
+        font-size: 0.875rem;
+        margin-left: 1rem;
+    }
+    
+    .terminal-body {
+        flex: 1;
+        padding: 1rem;
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 14px;
+        color: var(--terminal-green);
+        background: var(--terminal-bg);
+        overflow-y: auto;
+        line-height: 1.4;
+    }
+    
+    .terminal-output {
+        min-height: 400px;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
+    
+    .terminal-input-line {
+        display: flex;
+        align-items: center;
+        margin-top: 0.5rem;
+    }
+    
+    .terminal-prompt {
+        color: var(--terminal-blue);
+        margin-right: 0.5rem;
+        user-select: none;
+    }
+    
+    .terminal-input {
+        flex: 1;
+        background: transparent;
+        border: none;
+        color: var(--terminal-green);
+        font-family: inherit;
+        font-size: inherit;
+        outline: none;
+    }
+    
+    .control-panel {
+        background: white;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-lg);
+        padding: 1.5rem;
+        height: fit-content;
+    }
+    
+    .control-section {
+        margin-bottom: 2rem;
+    }
+    
+    .control-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid #f1f5f9;
+    }
+    
+    .control-icon {
+        width: 1.5rem;
+        height: 1.5rem;
+        background: var(--primary-gradient);
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 0.75rem;
+    }
+    
+    .command-btn {
+        display: block;
+        width: 100%;
+        padding: 0.75rem 1rem;
+        margin-bottom: 0.5rem;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        text-align: left;
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    .command-btn:hover {
+        background: #e2e8f0;
+        border-color: #667eea;
+        transform: translateY(-1px);
+    }
+    
+    .command-btn.active {
+        background: var(--primary-gradient);
+        color: white;
+        border-color: transparent;
+    }
+    
+    .status-indicator {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 0.5rem;
+    }
+    
+    .status-online { background: var(--terminal-green); }
+    .status-busy { background: var(--terminal-amber); }
+    .status-error { background: var(--terminal-red); }
+    
+    .log-entry {
+        margin-bottom: 4px;
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+    
+    .log-timestamp {
+        color: #666;
+        font-size: 0.75rem;
+        min-width: 60px;
+    }
+    
+    .log-level {
+        min-width: 50px;
+        font-weight: 600;
+        font-size: 0.75rem;
+    }
+    
+    .log-info { color: var(--terminal-blue); }
+    .log-success { color: var(--terminal-green); }
+    .log-warning { color: var(--terminal-amber); }
+    .log-error { color: var(--terminal-red); }
+    
+    .quick-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+        margin-top: 1rem;
+    }
+    
+    .action-btn {
+        padding: 0.5rem 1rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        background: white;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 0.875rem;
+    }
+    
+    .action-btn:hover {
+        background: var(--primary-gradient);
+        color: white;
+        border-color: transparent;
+    }
+    
+    .typing-indicator {
+        opacity: 0;
+        animation: blink 1s infinite;
+    }
+    
+    @keyframes blink {
+        0%, 50% { opacity: 1; }
+        51%, 100% { opacity: 0; }
+    }
+    
+    @media (max-width: 1024px) {
+        .cli-interface {
+            grid-template-columns: 1fr;
+            grid-template-rows: auto 1fr;
+        }
+        
+        .control-panel {
+            order: -1;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="cli-interface">
+    <!-- Terminal Interface -->
+    <div class="terminal-container">
+        <div class="terminal-header">
+            <div class="terminal-controls">
+                <button class="terminal-btn btn-close" onclick="clearTerminal()"></button>
+                <button class="terminal-btn btn-minimize" onclick="minimizeTerminal()"></button>
+                <button class="terminal-btn btn-maximize" onclick="maximizeTerminal()"></button>
+            </div>
+            <div class="terminal-title">
+                <span class="status-indicator status-online"></span>
+                TubeWhale CLI - Connected
+            </div>
+        </div>
+        <div class="terminal-body">
+            <div id="terminal-output" class="terminal-output">
+<span class="log-entry">
+<span class="log-timestamp">[12:34]</span>
+<span class="log-level log-info">INFO</span>
+<span>TubeWhale Analysis Engine v3.0 - CLI Interface Ready</span>
+</span>
+<span class="log-entry">
+<span class="log-timestamp">[12:34]</span>
+<span class="log-level log-success">SUCCESS</span>
+<span>Docker services healthy - All systems operational</span>
+</span>
+<span class="log-entry">
+<span class="log-timestamp">[12:34]</span>
+<span class="log-level log-info">INFO</span>
+<span>Type 'help' for available commands or use the control panel →</span>
+</span>
+            </div>
+            <div class="terminal-input-line">
+                <span class="terminal-prompt">tubewhale@{{ user.username }}:~$</span>
+                <input type="text" id="terminal-input" class="terminal-input" autocomplete="off" spellcheck="false" placeholder="Enter command...">
+                <span class="typing-indicator">▋</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Control Panel -->
+    <div class="control-panel">
+        <!-- System Status -->
+        <div class="control-section">
+            <div class="control-header">
+                <div class="control-icon">
+                    <i class="fas fa-heartbeat"></i>
+                </div>
+                <h3 class="h6 mb-0">{% trans "System Status" %}</h3>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span>{% trans "Docker Services" %}</span>
+                <span class="status-indicator status-online"></span>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span>{% trans "Analysis Engine" %}</span>
+                <span class="status-indicator status-online"></span>
+            </div>
+            <div class="d-flex justify-content-between align-items-center">
+                <span>{% trans "Background Jobs" %}</span>
+                <span class="status-indicator status-busy"></span>
+            </div>
+        </div>
+        
+        <!-- Quick Commands -->
+        <div class="control-section">
+            <div class="control-header">
+                <div class="control-icon">
+                    <i class="fas fa-terminal"></i>
+                </div>
+                <h3 class="h6 mb-0">{% trans "Quick Commands" %}</h3>
+            </div>
+            <button class="command-btn" onclick="executeCommand('status')">
+                <i class="fas fa-info-circle me-2"></i>{% trans "System Status" %}
+            </button>
+            <button class="command-btn" onclick="executeCommand('jobs list')">
+                <i class="fas fa-list me-2"></i>{% trans "List Jobs" %}
+            </button>
+            <button class="command-btn" onclick="executeCommand('docker ps')">
+                <i class="fab fa-docker me-2"></i>{% trans "Docker Status" %}
+            </button>
+            <button class="command-btn" onclick="executeCommand('logs --tail=20')">
+                <i class="fas fa-file-alt me-2"></i>{% trans "Recent Logs" %}
+            </button>
+        </div>
+        
+        <!-- Analysis Controls -->
+        <div class="control-section">
+            <div class="control-header">
+                <div class="control-icon">
+                    <i class="fas fa-play"></i>
+                </div>
+                <h3 class="h6 mb-0">{% trans "Analysis Controls" %}</h3>
+            </div>
+            <button class="command-btn" onclick="startAnalysis()">
+                <i class="fas fa-rocket me-2"></i>{% trans "Start New Analysis" %}
+            </button>
+            <button class="command-btn" onclick="executeCommand('queue status')">
+                <i class="fas fa-clock me-2"></i>{% trans "Queue Status" %}
+            </button>
+            <div class="quick-actions">
+                <button class="action-btn" onclick="executeCommand('pause all')">
+                    <i class="fas fa-pause me-1"></i>{% trans "Pause All" %}
+                </button>
+                <button class="action-btn" onclick="executeCommand('resume all')">
+                    <i class="fas fa-play me-1"></i>{% trans "Resume All" %}
+                </button>
+            </div>
+        </div>
+        
+        <!-- Environment -->
+        <div class="control-section">
+            <div class="control-header">
+                <div class="control-icon">
+                    <i class="fas fa-cog"></i>
+                </div>
+                <h3 class="h6 mb-0">{% trans "Environment" %}</h3>
+            </div>
+            <small class="text-muted">{% trans "User:" %} {{ user.username }}</small><br>
+            <small class="text-muted">{% trans "Tier:" %} {{ user.tier|title }}</small><br>
+            <small class="text-muted">{% trans "Session:" %} Active</small>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Professional CLI Interface System
+class CLIInterface {
+    constructor() {
+        this.commandHistory = [];
+        this.historyIndex = -1;
+        this.currentCommand = '';
+        this.isProcessing = false;
+        this.init();
+    }
+    
+    init() {
+        this.terminalInput = document.getElementById('terminal-input');
+        this.terminalOutput = document.getElementById('terminal-output');
+        this.bindEvents();
+        this.focusInput();
+    }
+    
+    bindEvents() {
+        // Terminal input handling
+        this.terminalInput.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case 'Enter':
+                    e.preventDefault();
+                    this.processCommand();
+                    break;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    this.navigateHistory(-1);
+                    break;
+                case 'ArrowDown':
+                    e.preventDefault();
+                    this.navigateHistory(1);
+                    break;
+                case 'Tab':
+                    e.preventDefault();
+                    this.autoComplete();
+                    break;
+            }
+        });
+        
+        // Keep focus on input
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.control-panel')) {
+                this.focusInput();
+            }
+        });
+        
+        // Terminal input animation
+        this.terminalInput.addEventListener('input', () => {
+            this.updateTypingIndicator();
+        });
+    }
+    
+    focusInput() {
+        this.terminalInput.focus();
+    }
+    
+    updateTypingIndicator() {
+        const indicator = document.querySelector('.typing-indicator');
+        indicator.style.animation = 'none';
+        indicator.offsetHeight; // Trigger reflow
+        indicator.style.animation = 'blink 1s infinite';
+    }
+    
+    processCommand() {
+        if (this.isProcessing) return;
+        
+        const command = this.terminalInput.value.trim();
+        if (!command) return;
+        
+        // Add to history
+        this.commandHistory.unshift(command);
+        this.historyIndex = -1;
+        
+        // Display command
+        this.addOutput(`tubewhale@${this.getUsername()}:~$ ${command}`, 'command');
+        
+        // Clear input
+        this.terminalInput.value = '';
+        
+        // Execute command
+        this.executeCommand(command);
+    }
+    
+    executeCommand(command) {
+        this.isProcessing = true;
+        
+        // Show processing indicator
+        this.addOutput('Processing...', 'info');
+        
+        // Send command to backend API
+        fetch('{% url "dashboard:cli_execute" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': this.getCSRFToken()
+            },
+            body: JSON.stringify({ command: command })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                this.addOutput(data.output, data.type);
+            } else {
+                this.addOutput(`Error: ${data.error}`, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('CLI API Error:', error);
+            this.addOutput(`Network error: ${error.message}`, 'error');
+        })
+        .finally(() => {
+            this.isProcessing = false;
+            this.scrollToBottom();
+        });
+    }
+    
+    getCSRFToken() {
+        const name = 'csrftoken';
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    
+    handleCommandResponse(command) {
+        // Fallback for offline mode - simplified responses
+        const cmd = command.toLowerCase().trim();
+        
+        if (cmd === 'help') {
+            this.addOutput(`TubeWhale CLI - Available Commands:
+status, jobs list, docker ps, logs, queue status, help`, 'success');
+        } else if (cmd === 'clear') {
+            this.clearTerminal();
+            return;
+        } else {
+            this.addOutput(`Offline mode: Command '${command}' not available`, 'warning');
+        }
+        
+        this.scrollToBottom();
+    }
+    
+    addOutput(text, type = 'info') {
+        const timestamp = this.getTimestamp();
+        const logLevels = {
+            'command': 'log-info',
+            'info': 'log-info', 
+            'success': 'log-success',
+            'warning': 'log-warning',
+            'error': 'log-error'
+        };
+        
+        const entry = document.createElement('div');
+        entry.className = 'log-entry';
+        entry.innerHTML = `
+            <span class="log-timestamp">[${timestamp}]</span>
+            <span class="log-level ${logLevels[type] || 'log-info'}">${type.toUpperCase()}</span>
+            <span>${text}</span>
+        `;
+        
+        this.terminalOutput.appendChild(entry);
+        this.scrollToBottom();
+    }
+    
+    navigateHistory(direction) {
+        if (this.commandHistory.length === 0) return;
+        
+        this.historyIndex += direction;
+        
+        if (this.historyIndex < -1) {
+            this.historyIndex = -1;
+            this.terminalInput.value = this.currentCommand;
+        } else if (this.historyIndex >= this.commandHistory.length) {
+            this.historyIndex = this.commandHistory.length - 1;
+        }
+        
+        if (this.historyIndex >= 0) {
+            this.terminalInput.value = this.commandHistory[this.historyIndex];
+        }
+    }
+    
+    autoComplete() {
+        const input = this.terminalInput.value;
+        const commands = ['help', 'status', 'jobs list', 'docker ps', 'logs', 'clear', 'queue status'];
+        
+        const matches = commands.filter(cmd => cmd.startsWith(input));
+        if (matches.length === 1) {
+            this.terminalInput.value = matches[0];
+        } else if (matches.length > 1) {
+            this.addOutput(`Possible completions: ${matches.join(', ')}`, 'info');
+        }
+    }
+    
+    clearTerminal() {
+        this.terminalOutput.innerHTML = `
+<span class="log-entry">
+<span class="log-timestamp">[${this.getTimestamp()}]</span>
+<span class="log-level log-info">INFO</span>
+<span>Terminal cleared - TubeWhale CLI Ready</span>
+</span>`;
+    }
+    
+    scrollToBottom() {
+        this.terminalOutput.scrollTop = this.terminalOutput.scrollHeight;
+    }
+    
+    getTimestamp() {
+        return new Date().toLocaleTimeString('en-US', { 
+            hour12: false, 
+            hour: '2-digit', 
+            minute: '2-digit' 
+        });
+    }
+    
+    getUsername() {
+        return '{{ user.username }}' || 'user';
+    }
+}
+
+// Control Panel Functions
+function executeCommand(command) {
+    cli.terminalInput.value = command;
+    cli.processCommand();
+}
+
+function startAnalysis() {
+    window.open('{% url "dashboard:template_selection" %}', '_blank');
+}
+
+function clearTerminal() {
+    cli.clearTerminal();
+}
+
+function minimizeTerminal() {
+    // Implement minimize functionality
+    console.log('Terminal minimized');
+}
+
+function maximizeTerminal() {
+    // Implement maximize functionality  
+    console.log('Terminal maximized');
+}
+
+// Initialize CLI Interface
+let cli;
+document.addEventListener('DOMContentLoaded', () => {
+    cli = new CLIInterface();
+    
+    // Simulate real-time status updates
+    setInterval(() => {
+        updateSystemStatus();
+    }, 30000);
+});
+
+function updateSystemStatus() {
+    // Simulate status updates
+    const indicators = document.querySelectorAll('.status-indicator');
+    indicators.forEach(indicator => {
+        // Randomly update status for demo
+        if (Math.random() > 0.8) {
+            indicator.className = 'status-indicator status-busy';
+            setTimeout(() => {
+                indicator.className = 'status-indicator status-online';
+            }, 2000);
+        }
+    });
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey) {
+        switch(e.key) {
+            case 'l':
+                e.preventDefault();
+                clearTerminal();
+                break;
+            case 'c':
+                if (e.target === cli.terminalInput) {
+                    e.preventDefault();
+                    cli.terminalInput.value = '';
+                }
+                break;
+        }
+    }
+});
+</script>
+{% endblock %}

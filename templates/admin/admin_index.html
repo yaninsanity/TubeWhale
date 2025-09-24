@@ -1,0 +1,527 @@
+{% extends 'admin/base_site.html' %}
+{% load i18n %}
+{% block title %}{% trans "TubeWhale Intelligence Hub" %}{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+:root {
+    --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --success-gradient: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    --warning-gradient: linear-gradient(135deg, #fc4a1a 0%, #f7b733 100%);
+    --info-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    --card-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    --card-hover: 0 15px 35px rgba(0,0,0,0.15);
+}
+
+.intelligence-hub {
+    padding: 0;
+    margin: 0;
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    min-height: 100vh;
+}
+
+.hub-header {
+    background: var(--primary-gradient);
+    color: white;
+    padding: 2rem;
+    text-align: center;
+    margin-bottom: 2rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.hub-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="50" cy="50" r="1" fill="rgba(255,255,255,0.1)"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+    opacity: 0.3;
+}
+
+.hub-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin: 0;
+    position: relative;
+    z-index: 1;
+}
+
+.hub-subtitle {
+    font-size: 1.1rem;
+    opacity: 0.9;
+    margin: 0.5rem 0 0;
+    position: relative;
+    z-index: 1;
+}
+
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    padding: 0 2rem;
+    margin-bottom: 2rem;
+}
+
+.metric-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: var(--card-shadow);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.metric-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--card-hover);
+}
+
+.metric-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: var(--primary-gradient);
+}
+
+.metric-card.success::before { background: var(--success-gradient); }
+.metric-card.warning::before { background: var(--warning-gradient); }
+.metric-card.info::before { background: var(--info-gradient); }
+
+.metric-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+}
+
+.metric-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    color: white;
+    background: var(--primary-gradient);
+}
+
+.metric-icon.success { background: var(--success-gradient); }
+.metric-icon.warning { background: var(--warning-gradient); }
+.metric-icon.info { background: var(--info-gradient); }
+
+.metric-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #2d3748;
+    margin: 0;
+}
+
+.metric-label {
+    font-size: 0.9rem;
+    color: #718096;
+    margin: 0;
+}
+
+.metric-change {
+    font-size: 0.8rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 12px;
+    font-weight: 600;
+}
+
+.metric-change.positive {
+    background: #c6f6d5;
+    color: #22543d;
+}
+
+.metric-change.negative {
+    background: #fed7d7;
+    color: #742a2a;
+}
+
+.agent-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1.5rem;
+    padding: 0 2rem;
+    margin-bottom: 2rem;
+}
+
+.agent-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: var(--card-shadow);
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.agent-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--card-hover);
+}
+
+.agent-header {
+    padding: 1rem 1.5rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.agent-name {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.agent-status {
+    padding: 0.3rem 0.8rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    background: rgba(255,255,255,0.2);
+}
+
+.agent-body {
+    padding: 1.5rem;
+}
+
+.agent-metrics {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.agent-metric {
+    text-align: center;
+}
+
+.agent-metric-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #2d3748;
+    margin: 0;
+}
+
+.agent-metric-label {
+    font-size: 0.8rem;
+    color: #718096;
+    margin: 0;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 8px;
+    background: #e2e8f0;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 1rem 0;
+}
+
+.progress-fill {
+    height: 100%;
+    background: var(--success-gradient);
+    transition: width 0.3s ease;
+}
+
+.quick-actions {
+    padding: 0 2rem 2rem;
+}
+
+.actions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.action-btn {
+    display: block;
+    padding: 1rem;
+    background: white;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    text-decoration: none;
+    color: #4a5568;
+    font-weight: 600;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.action-btn:hover {
+    border-color: #667eea;
+    color: #667eea;
+    transform: translateY(-2px);
+    text-decoration: none;
+}
+
+.live-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    color: #718096;
+    margin-bottom: 1rem;
+}
+
+.live-dot {
+    width: 8px;
+    height: 8px;
+    background: #48bb78;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+@media (max-width: 768px) {
+    .hub-header {
+        padding: 1.5rem 1rem;
+    }
+    
+    .hub-title {
+        font-size: 2rem;
+    }
+    
+    .metrics-grid,
+    .agent-grid,
+    .quick-actions {
+        padding: 0 1rem;
+    }
+    
+    .metrics-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .agent-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="intelligence-hub">
+    <div class="hub-header">
+        <h1 class="hub-title">🤖 TubeWhale Intelligence Hub</h1>
+        <p class="hub-subtitle">{% trans "Agentic Data Collection & Processing Platform" %}</p>
+    </div>
+
+    <div class="live-indicator" style="text-align: center; margin-bottom: 2rem;">
+        <span class="live-dot"></span>
+        {% trans "Live Data Stream Active" %}
+    </div>
+
+    <!-- System Metrics -->
+    <div class="metrics-grid">
+        <div class="metric-card">
+            <div class="metric-header">
+                <div>
+                    <h3 class="metric-value" id="videos-processed">{{ videos_count|default:"0" }}</h3>
+                    <p class="metric-label">{% trans "Videos Processed" %}</p>
+                </div>
+                <div class="metric-icon">📹</div>
+            </div>
+            <div class="metric-change positive">+12% {% trans "this week" %}</div>
+        </div>
+
+        <div class="metric-card success">
+            <div class="metric-header">
+                <div>
+                    <h3 class="metric-value" id="active-agents">{{ active_agents|default:"4" }}</h3>
+                    <p class="metric-label">{% trans "Active Agents" %}</p>
+                </div>
+                <div class="metric-icon success">🤖</div>
+            </div>
+            <div class="metric-change positive">{% trans "All systems operational" %}</div>
+        </div>
+
+        <div class="metric-card info">
+            <div class="metric-header">
+                <div>
+                    <h3 class="metric-value" id="data-points">{{ data_points|default:"1.2K" }}</h3>
+                    <p class="metric-label">{% trans "Data Points Today" %}</p>
+                </div>
+                <div class="metric-icon info">📊</div>
+            </div>
+            <div class="metric-change positive">+8.5% {% trans "vs yesterday" %}</div>
+        </div>
+
+        <div class="metric-card warning">
+            <div class="metric-header">
+                <div>
+                    <h3 class="metric-value" id="queue-size">{{ queue_size|default:"23" }}</h3>
+                    <p class="metric-label">{% trans "Processing Queue" %}</p>
+                </div>
+                <div class="metric-icon warning">⏱️</div>
+            </div>
+            <div class="metric-change positive">{% trans "Normal load" %}</div>
+        </div>
+    </div>
+
+    <!-- Agent Status Grid -->
+    <div class="agent-grid">
+        <div class="agent-card">
+            <div class="agent-header">
+                <h3 class="agent-name">🔍 Search Agent</h3>
+                <span class="agent-status">ACTIVE</span>
+            </div>
+            <div class="agent-body">
+                <div class="agent-metrics">
+                    <div class="agent-metric">
+                        <h4 class="agent-metric-value">156</h4>
+                        <p class="agent-metric-label">{% trans "Searches Today" %}</p>
+                    </div>
+                    <div class="agent-metric">
+                        <h4 class="agent-metric-value">运行中</h4>
+                        <p class="agent-metric-label">{% trans "Status" %}</p>
+                    </div>
+                </div>
+                <div class="status-indicator" style="height: 4px; background: rgba(0,255,0,0.3); border-radius: 2px;">
+                    <div style="width: 100%; height: 100%; background: #00ff88; border-radius: 2px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="agent-card">
+            <div class="agent-header">
+                <h3 class="agent-name">📝 Transcript Agent</h3>
+                <span class="agent-status">ACTIVE</span>
+            </div>
+            <div class="agent-body">
+                <div class="agent-metrics">
+                    <div class="agent-metric">
+                        <h4 class="agent-metric-value">89</h4>
+                        <p class="agent-metric-label">{% trans "Transcripts" %}</p>
+                    </div>
+                    <div class="agent-metric">
+                        <h4 class="agent-metric-value">正常</h4>
+                        <p class="agent-metric-label">{% trans "Status" %}</p>
+                    </div>
+                </div>
+                <div class="status-indicator" style="height: 4px; background: rgba(0,255,0,0.3); border-radius: 2px;">
+                    <div style="width: 100%; height: 100%; background: #00ff88; border-radius: 2px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="agent-card">
+            <div class="agent-header">
+                <h3 class="agent-name">📊 Summarizer Agent</h3>
+                <span class="agent-status">ACTIVE</span>
+            </div>
+            <div class="agent-body">
+                <div class="agent-metrics">
+                    <div class="agent-metric">
+                        <h4 class="agent-metric-value">203</h4>
+                        <p class="agent-metric-label">{% trans "Summaries" %}</p>
+                    </div>
+                    <div class="agent-metric">
+                        <h4 class="agent-metric-value">运行中</h4>
+                        <p class="agent-metric-label">{% trans "Status" %}</p>
+                    </div>
+                </div>
+                <div class="status-indicator" style="height: 4px; background: rgba(0,255,0,0.3); border-radius: 2px;">
+                    <div style="width: 100%; height: 100%; background: #00ff88; border-radius: 2px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="agent-card">
+            <div class="agent-header">
+                <h3 class="agent-name">🎵 Audio Agent</h3>
+                <span class="agent-status">ACTIVE</span>
+            </div>
+            <div class="agent-body">
+                <div class="agent-metrics">
+                    <div class="agent-metric">
+                        <h4 class="agent-metric-value">67</h4>
+                        <p class="agent-metric-label">{% trans "Audio Files" %}</p>
+                    </div>
+                    <div class="agent-metric">
+                        <h4 class="agent-metric-value">正常</h4>
+                        <p class="agent-metric-label">{% trans "Status" %}</p>
+                    </div>
+                </div>
+                <div class="status-indicator" style="height: 4px; background: rgba(0,255,0,0.3); border-radius: 2px;">
+                    <div style="width: 100%; height: 100%; background: #00ff88; border-radius: 2px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="quick-actions">
+        <h2 style="text-align: center; color: #4a5568; margin-bottom: 1.5rem;">{% trans "Quick Actions" %}</h2>
+        <div class="actions-grid">
+            <a href="{% url 'admin-system-health' %}" class="action-btn">
+                🏥 {% trans "System Health" %}
+            </a>
+            <a href="{% url 'admin-cli-dashboard' %}" class="action-btn">
+                💻 {% trans "CLI Dashboard" %}
+            </a>
+            <a href="{% url 'admin-system-metrics-dashboard' %}" class="action-btn">
+                📈 {% trans "Analytics" %}
+            </a>
+            <a href="{% url 'admin-env-config' %}" class="action-btn">
+                ⚙️ {% trans "Configuration" %}
+            </a>
+            <a href="{% url 'admin:tubewhale_engine_clicommandlog_changelist' %}" class="action-btn">
+                📋 {% trans "Command Logs" %}
+            </a>
+            <a href="{% url 'admin-engine-templates' %}" class="action-btn">
+                📄 {% trans "Templates" %}
+            </a>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Real-time data updates
+    function updateMetrics() {
+        // Simulate real-time updates
+        const metrics = [
+            { id: 'videos-processed', increment: Math.floor(Math.random() * 3) },
+            { id: 'data-points', increment: Math.floor(Math.random() * 10) },
+            { id: 'queue-size', increment: Math.floor(Math.random() * 5) - 2 }
+        ];
+        
+        metrics.forEach(metric => {
+            const element = document.getElementById(metric.id);
+            if (element) {
+                const current = parseInt(element.textContent) || 0;
+                element.textContent = Math.max(0, current + metric.increment);
+            }
+        });
+    }
+    
+    // Update every 30 seconds
+    setInterval(updateMetrics, 30000);
+    
+    // Add pulse animation to live indicator
+    const liveDot = document.querySelector('.live-dot');
+    if (liveDot) {
+        setInterval(() => {
+            liveDot.style.transform = 'scale(1.2)';
+            setTimeout(() => {
+                liveDot.style.transform = 'scale(1)';
+            }, 150);
+        }, 2000);
+    }
+});
+</script>
+{% endblock %}

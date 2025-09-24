@@ -1,0 +1,887 @@
+{% load static %}
+<!-- 🎯 Video Processing Job Configuration -->
+<div id="job-config-container" class="job-config-container">
+    <div class="config-header">
+        <h2 class="config-title">
+            <span class="config-icon">⚙️</span>
+            Video Processing Job Configuration
+        </h2>
+        <div class="config-subtitle">
+            Create a new video processing job with custom parameters and topic selection
+        </div>
+    </div>
+
+    <div class="config-content">
+        <form id="job-config-form" class="job-config-form">
+            <!-- Job Basic Information -->
+            <div class="config-section">
+                <h3 class="section-title">
+                    <span class="section-icon">📝</span>
+                    Job Information
+                </h3>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="job-name" class="form-label">Job Name</label>
+                        <input type="text" id="job-name" name="job_name" class="form-input" 
+                               placeholder="e.g., Tech Trends Analysis" required>
+                        <div class="form-help">A descriptive name for your video processing job</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="job-description" class="form-label">Description</label>
+                        <textarea id="job-description" name="job_description" class="form-textarea"
+                                  placeholder="Brief description of what this job will accomplish" rows="3"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search Keywords and Topics -->
+            <div class="config-section">
+                <h3 class="section-title">
+                    <span class="section-icon">🔍</span>
+                    Search Configuration
+                </h3>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="search-keywords" class="form-label">Keywords</label>
+                        <input type="text" id="search-keywords" name="search_keywords" class="form-input"
+                               placeholder="machine learning, AI, technology" required>
+                        <div class="form-help">Comma-separated keywords for video search</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="topic-category" class="form-label">Topic Category</label>
+                        <select id="topic-category" name="topic_category" class="form-select" required>
+                            <option value="">Select a category</option>
+                            <option value="technology">Technology & Science</option>
+                            <option value="education">Education & Learning</option>
+                            <option value="business">Business & Finance</option>
+                            <option value="entertainment">Entertainment & Media</option>
+                            <option value="health">Health & Wellness</option>
+                            <option value="news">News & Current Events</option>
+                            <option value="lifestyle">Lifestyle & Culture</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Processing Parameters -->
+            <div class="config-section">
+                <h3 class="section-title">
+                    <span class="section-icon">⚡</span>
+                    Processing Parameters
+                </h3>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="max-videos" class="form-label">Maximum Videos</label>
+                        <input type="number" id="max-videos" name="max_videos" class="form-input"
+                               value="10" min="1" max="100" required>
+                        <div class="form-help">Number of videos to process (1-100)</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="video-duration" class="form-label">Duration Filter</label>
+                        <select id="video-duration" name="video_duration" class="form-select">
+                            <option value="any">Any Duration</option>
+                            <option value="short">Short (< 4 minutes)</option>
+                            <option value="medium">Medium (4-20 minutes)</option>
+                            <option value="long">Long (> 20 minutes)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="language-filter" class="form-label">Language</label>
+                        <select id="language-filter" name="language_filter" class="form-select">
+                            <option value="any">Any Language</option>
+                            <option value="en">English</option>
+                            <option value="es">Spanish</option>
+                            <option value="fr">French</option>
+                            <option value="de">German</option>
+                            <option value="zh">Chinese</option>
+                            <option value="ja">Japanese</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="quality-filter" class="form-label">Video Quality</label>
+                        <select id="quality-filter" name="quality_filter" class="form-select">
+                            <option value="any">Any Quality</option>
+                            <option value="720p">720p or higher</option>
+                            <option value="1080p">1080p or higher</option>
+                            <option value="4k">4K</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Advanced Options -->
+            <div class="config-section">
+                <h3 class="section-title">
+                    <span class="section-icon">🔧</span>
+                    Advanced Options
+                </h3>
+                <div class="advanced-options">
+                    <div class="option-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="enable-sentiment" name="enable_sentiment" checked>
+                            <label for="enable-sentiment" class="checkbox-label">
+                                <span class="checkbox-icon">📊</span>
+                                Sentiment Analysis
+                            </label>
+                            <div class="option-description">Analyze emotional tone of video content</div>
+                        </div>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="enable-keywords" name="enable_keywords" checked>
+                            <label for="enable-keywords" class="checkbox-label">
+                                <span class="checkbox-icon">🏷️</span>
+                                Keyword Extraction
+                            </label>
+                            <div class="option-description">Extract key terms and phrases</div>
+                        </div>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="enable-summary" name="enable_summary" checked>
+                            <label for="enable-summary" class="checkbox-label">
+                                <span class="checkbox-icon">📝</span>
+                                Content Summarization
+                            </label>
+                            <div class="option-description">Generate concise summaries</div>
+                        </div>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="enable-transcription" name="enable_transcription" checked>
+                            <label for="enable-transcription" class="checkbox-label">
+                                <span class="checkbox-icon">🎙️</span>
+                                Audio Transcription
+                            </label>
+                            <div class="option-description">Convert speech to text</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="config-actions">
+                <button type="button" id="preview-job" class="btn btn-secondary">
+                    <span class="btn-icon">👁️</span>
+                    Preview Configuration
+                </button>
+                <button type="button" id="save-template" class="btn btn-outline">
+                    <span class="btn-icon">💾</span>
+                    Save as Template
+                </button>
+                <button type="submit" id="create-job" class="btn btn-primary">
+                    <span class="btn-icon">🚀</span>
+                    Create & Start Job
+                </button>
+            </div>
+        </form>
+
+        <!-- Configuration Preview -->
+        <div id="config-preview" class="config-preview" style="display: none;">
+            <h4 class="preview-title">Configuration Preview</h4>
+            <div class="preview-content">
+                <div class="preview-section">
+                    <h5>Job Details</h5>
+                    <div id="preview-job-details"></div>
+                </div>
+                <div class="preview-section">
+                    <h5>Search Parameters</h5>
+                    <div id="preview-search-params"></div>
+                </div>
+                <div class="preview-section">
+                    <h5>Processing Options</h5>
+                    <div id="preview-processing-options"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Job Status Indicator -->
+    <div id="job-status" class="job-status" style="display: none;">
+        <div class="status-content">
+            <div class="status-icon">⏳</div>
+            <div class="status-message">Creating job...</div>
+            <div class="status-progress">
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* 🎨 Professional Job Configuration Styles */
+.job-config-container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 24px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 16px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+    color: white;
+    position: relative;
+    overflow: hidden;
+}
+
+.job-config-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(45deg, rgba(255,255,255,0.1) 0%, transparent 100%);
+    pointer-events: none;
+}
+
+.config-header {
+    text-align: center;
+    margin-bottom: 32px;
+    position: relative;
+    z-index: 1;
+}
+
+.config-title {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 8px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+}
+
+.config-icon {
+    font-size: 32px;
+    animation: pulse 2s infinite;
+}
+
+.config-subtitle {
+    font-size: 16px;
+    opacity: 0.9;
+    margin: 0;
+}
+
+.config-content {
+    position: relative;
+    z-index: 1;
+}
+
+.job-config-form {
+    background: rgba(255,255,255,0.05);
+    border-radius: 12px;
+    padding: 24px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+.config-section {
+    margin-bottom: 32px;
+}
+
+.section-title {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0 0 20px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid rgba(255,255,255,0.1);
+}
+
+.section-icon {
+    font-size: 20px;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.form-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.9);
+}
+
+.form-input,
+.form-textarea,
+.form-select {
+    padding: 12px 16px;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 8px;
+    background: rgba(255,255,255,0.1);
+    color: white;
+    font-size: 14px;
+    backdrop-filter: blur(5px);
+    transition: all 0.3s ease;
+}
+
+.form-input:focus,
+.form-textarea:focus,
+.form-select:focus {
+    outline: none;
+    border-color: rgba(255,255,255,0.4);
+    background: rgba(255,255,255,0.15);
+    box-shadow: 0 0 0 3px rgba(255,255,255,0.1);
+}
+
+.form-input::placeholder,
+.form-textarea::placeholder {
+    color: rgba(255,255,255,0.6);
+}
+
+.form-help {
+    font-size: 12px;
+    color: rgba(255,255,255,0.7);
+    margin-top: 4px;
+}
+
+.advanced-options {
+    background: rgba(0,0,0,0.1);
+    border-radius: 8px;
+    padding: 20px;
+}
+
+.option-group {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+.checkbox-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 6px;
+    transition: background 0.2s ease;
+}
+
+.checkbox-label:hover {
+    background: rgba(255,255,255,0.1);
+}
+
+.checkbox-icon {
+    font-size: 16px;
+}
+
+.option-description {
+    font-size: 12px;
+    color: rgba(255,255,255,0.7);
+    margin-left: 32px;
+}
+
+input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: #00ff88;
+}
+
+.config-actions {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+}
+
+.btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #00ff88, #00d4ff);
+    color: #1a1a1a;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0,255,136,0.3);
+}
+
+.btn-secondary {
+    background: rgba(255,255,255,0.15);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.3);
+}
+
+.btn-secondary:hover {
+    background: rgba(255,255,255,0.25);
+}
+
+.btn-outline {
+    background: transparent;
+    color: white;
+    border: 2px solid rgba(255,255,255,0.3);
+}
+
+.btn-outline:hover {
+    background: rgba(255,255,255,0.1);
+    border-color: rgba(255,255,255,0.5);
+}
+
+.btn-icon {
+    font-size: 16px;
+}
+
+.config-preview {
+    margin-top: 24px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+.preview-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 16px 0;
+    color: #00ff88;
+}
+
+.preview-section {
+    margin-bottom: 16px;
+}
+
+.preview-section h5 {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0 0 8px 0;
+    color: rgba(255,255,255,0.9);
+}
+
+.preview-section div {
+    font-size: 13px;
+    color: rgba(255,255,255,0.8);
+    background: rgba(255,255,255,0.05);
+    padding: 8px 12px;
+    border-radius: 6px;
+    border-left: 3px solid #00ff88;
+}
+
+.job-status {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.9);
+    border-radius: 12px;
+    padding: 24px;
+    z-index: 1000;
+    min-width: 300px;
+    text-align: center;
+    backdrop-filter: blur(10px);
+}
+
+.status-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+
+.status-icon {
+    font-size: 32px;
+    animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.status-message {
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.status-progress {
+    width: 100%;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 6px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #00ff88, #00d4ff);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+    position: relative;
+}
+
+.progress-fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    animation: progress-shine 2s infinite;
+}
+
+@keyframes progress-shine {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .job-config-container {
+        margin: 16px;
+        padding: 16px;
+    }
+    
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .option-group {
+        grid-template-columns: 1fr;
+    }
+    
+    .config-actions {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .btn {
+        width: 100%;
+        max-width: 300px;
+        justify-content: center;
+    }
+}
+</style>
+
+<script>
+// 🚀 Job Configuration JavaScript
+class JobConfigurator {
+    constructor() {
+        this.formData = {};
+        this.isSubmitting = false;
+        this.init();
+    }
+
+    init() {
+        this.setupEventListeners();
+        this.setupFormValidation();
+        console.log('Job Configurator initialized');
+    }
+
+    setupEventListeners() {
+        // Form submission
+        document.getElementById('job-config-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.handleFormSubmission();
+        });
+
+        // Preview button
+        document.getElementById('preview-job').addEventListener('click', () => {
+            this.showConfigPreview();
+        });
+
+        // Save template button
+        document.getElementById('save-template').addEventListener('click', () => {
+            this.saveAsTemplate();
+        });
+
+        // Form field changes
+        const formInputs = document.querySelectorAll('input, select, textarea');
+        formInputs.forEach(input => {
+            input.addEventListener('change', () => {
+                this.updateFormData();
+                this.validateForm();
+            });
+        });
+
+        // Real-time keyword validation
+        document.getElementById('search-keywords').addEventListener('input', (e) => {
+            this.validateKeywords(e.target.value);
+        });
+    }
+
+    setupFormValidation() {
+        const requiredFields = document.querySelectorAll('[required]');
+        requiredFields.forEach(field => {
+            field.addEventListener('blur', () => {
+                this.validateField(field);
+            });
+        });
+    }
+
+    validateField(field) {
+        const isValid = field.checkValidity();
+        const formGroup = field.closest('.form-group');
+        
+        if (isValid) {
+            formGroup.classList.remove('error');
+            formGroup.classList.add('valid');
+        } else {
+            formGroup.classList.add('error');
+            formGroup.classList.remove('valid');
+        }
+        
+        return isValid;
+    }
+
+    validateKeywords(keywords) {
+        const keywordArray = keywords.split(',').map(k => k.trim()).filter(k => k.length > 0);
+        const keywordCount = keywordArray.length;
+        const helpText = document.querySelector('#search-keywords').nextElementSibling;
+        
+        if (keywordCount === 0) {
+            helpText.textContent = 'Please enter at least one keyword';
+            helpText.style.color = '#ff4757';
+        } else if (keywordCount > 10) {
+            helpText.textContent = 'Too many keywords. Maximum 10 recommended';
+            helpText.style.color = '#ffa500';
+        } else {
+            helpText.textContent = `${keywordCount} keyword${keywordCount > 1 ? 's' : ''} entered`;
+            helpText.style.color = '#00ff88';
+        }
+    }
+
+    validateForm() {
+        const form = document.getElementById('job-config-form');
+        const isValid = form.checkValidity();
+        const submitBtn = document.getElementById('create-job');
+        
+        submitBtn.disabled = !isValid;
+        submitBtn.style.opacity = isValid ? '1' : '0.6';
+        
+        return isValid;
+    }
+
+    updateFormData() {
+        const form = document.getElementById('job-config-form');
+        const formData = new FormData(form);
+        
+        this.formData = {};
+        for (let [key, value] of formData.entries()) {
+            this.formData[key] = value;
+        }
+        
+        // Handle checkboxes
+        const checkboxes = form.querySelectorAll('input[type="checkbox"]');
+        checkboxes.forEach(checkbox => {
+            this.formData[checkbox.name] = checkbox.checked;
+        });
+    }
+
+    showConfigPreview() {
+        this.updateFormData();
+        
+        const preview = document.getElementById('config-preview');
+        const jobDetails = document.getElementById('preview-job-details');
+        const searchParams = document.getElementById('preview-search-params');
+        const processingOptions = document.getElementById('preview-processing-options');
+        
+        // Job Details
+        jobDetails.innerHTML = `
+            <strong>Name:</strong> ${this.formData.job_name || 'Untitled Job'}<br>
+            <strong>Description:</strong> ${this.formData.job_description || 'No description provided'}
+        `;
+        
+        // Search Parameters
+        searchParams.innerHTML = `
+            <strong>Keywords:</strong> ${this.formData.search_keywords || 'No keywords'}<br>
+            <strong>Category:</strong> ${this.formData.topic_category || 'No category selected'}<br>
+            <strong>Max Videos:</strong> ${this.formData.max_videos || '10'}<br>
+            <strong>Duration:</strong> ${this.formData.video_duration || 'Any'}<br>
+            <strong>Language:</strong> ${this.formData.language_filter || 'Any'}<br>
+            <strong>Quality:</strong> ${this.formData.quality_filter || 'Any'}
+        `;
+        
+        // Processing Options
+        const enabledOptions = [];
+        if (this.formData.enable_sentiment) enabledOptions.push('Sentiment Analysis');
+        if (this.formData.enable_keywords) enabledOptions.push('Keyword Extraction');
+        if (this.formData.enable_summary) enabledOptions.push('Content Summarization');
+        if (this.formData.enable_transcription) enabledOptions.push('Audio Transcription');
+        
+        processingOptions.innerHTML = `
+            <strong>Enabled Features:</strong> ${enabledOptions.length > 0 ? enabledOptions.join(', ') : 'None selected'}
+        `;
+        
+        preview.style.display = 'block';
+        preview.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    async saveAsTemplate() {
+        this.updateFormData();
+        
+        try {
+            const response = await fetch('/api/job-templates/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': this.getCSRFToken()
+                },
+                body: JSON.stringify({
+                    name: this.formData.job_name,
+                    configuration: this.formData
+                })
+            });
+            
+            if (response.ok) {
+                this.showNotification('Template saved successfully!', 'success');
+            } else {
+                throw new Error('Failed to save template');
+            }
+        } catch (error) {
+            this.showNotification('Failed to save template: ' + error.message, 'error');
+        }
+    }
+
+    async handleFormSubmission() {
+        if (this.isSubmitting) return;
+        
+        if (!this.validateForm()) {
+            this.showNotification('Please fill in all required fields', 'error');
+            return;
+        }
+        
+        this.isSubmitting = true;
+        this.updateFormData();
+        this.showJobStatus('Creating job...', 0);
+        
+        try {
+            // Create the job
+            const response = await this.createJob();
+            
+            if (response.ok) {
+                const jobData = await response.json();
+                this.showJobStatus('Job created successfully!', 100);
+                
+                // Redirect to monitoring page after short delay
+                setTimeout(() => {
+                    window.location.href = `/dashboard/?job_id=${jobData.job_id}`;
+                }, 2000);
+            } else {
+                throw new Error('Failed to create job');
+            }
+        } catch (error) {
+            this.hideJobStatus();
+            this.showNotification('Failed to create job: ' + error.message, 'error');
+        } finally {
+            this.isSubmitting = false;
+        }
+    }
+
+    async createJob() {
+        // Simulate job creation progress
+        this.showJobStatus('Validating configuration...', 20);
+        await this.delay(1000);
+        
+        this.showJobStatus('Setting up search parameters...', 40);
+        await this.delay(1000);
+        
+        this.showJobStatus('Initializing processing agents...', 60);
+        await this.delay(1000);
+        
+        this.showJobStatus('Starting job execution...', 80);
+        await this.delay(1000);
+        
+        // Actual API call would go here
+        return await fetch('/api/video-processing-jobs/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': this.getCSRFToken()
+            },
+            body: JSON.stringify(this.formData)
+        });
+    }
+
+    showJobStatus(message, progress) {
+        const statusEl = document.getElementById('job-status');
+        const messageEl = statusEl.querySelector('.status-message');
+        const progressEl = statusEl.querySelector('.progress-fill');
+        
+        messageEl.textContent = message;
+        progressEl.style.width = `${progress}%`;
+        statusEl.style.display = 'block';
+    }
+
+    hideJobStatus() {
+        document.getElementById('job-status').style.display = 'none';
+    }
+
+    showNotification(message, type = 'info') {
+        // Create a simple notification
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type}`;
+        notification.textContent = message;
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 16px 24px;
+            border-radius: 8px;
+            color: white;
+            z-index: 1001;
+            font-weight: 500;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            ${type === 'success' ? 'background: #00ff88;' : ''}
+            ${type === 'error' ? 'background: #ff4757;' : ''}
+            ${type === 'info' ? 'background: #3742fa;' : ''}
+        `;
+        
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            notification.remove();
+        }, 5000);
+    }
+
+    getCSRFToken() {
+        return document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+    }
+
+    delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+}
+
+// Initialize job configurator when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    window.jobConfig = new JobConfigurator();
+});
+</script>

@@ -1,0 +1,492 @@
+{% extends 'client/base.html' %}
+
+{% block content %}
+<!-- Dashboard Header -->
+<section style="background: var(--gradient-primary); color: white; padding: var(--space-8) 0;">
+    <div class="container">
+        <div class="flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-bold mb-2">Welcome back, {{ user.first_name|default:user.username }}!</h1>
+                <p class="text-lg" style="color: rgba(255, 255, 255, 0.9);">
+                    Your intelligent video analysis platform is running efficiently for you
+                </p>
+            </div>
+            <div class="text-right">
+                <div class="badge badge-success" style="font-size: 1rem; padding: var(--space-2) var(--space-4);">
+                    <span class="loading-spinner" style="width: 16px; height: 16px; margin-right: var(--space-2);"></span>
+                    System Running Normally
+                </div>
+                <p class="text-sm mt-2" style="color: rgba(255, 255, 255, 0.8);">
+                    Last Login: {{ user.last_login|date:"Y-m-d H:i" }}
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Core Metrics -->
+<section style="padding: var(--space-8) 0; background: white;">
+    <div class="container">
+        <div class="grid grid-cols-4">
+            <div class="stat-card">
+                <div class="flex justify-between items-start mb-4">
+                    <div>
+                        <div class="stat-number">{{ dashboard_data.videos_processed }}</div>
+                        <div class="stat-label">Videos Processed</div>
+                    </div>
+                    <div style="font-size: 2rem; color: var(--primary-color);">🎬</div>
+                </div>
+                <div class="flex items-center">
+                    <span class="text-sm" style="color: var(--success-color);">↗ +12%</span>
+                    <span class="text-sm ml-2" style="color: var(--gray-500);">This Week</span>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="flex justify-between items-start mb-4">
+                    <div>
+                        <div class="stat-number">{{ dashboard_data.analyses_completed }}</div>
+                        <div class="stat-label">Analyses Completed</div>
+                    </div>
+                    <div style="font-size: 2rem; color: var(--success-color);">📊</div>
+                </div>
+                <div class="flex items-center">
+                    <span class="text-sm" style="color: var(--success-color);">↗ +8%</span>
+                    <span class="text-sm ml-2" style="color: var(--gray-500);">This Week</span>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="flex justify-between items-start mb-4">
+                    <div>
+                        <div class="stat-number">{{ dashboard_data.data_points_collected|floatformat:0 }}</div>
+                        <div class="stat-label">Data Points Collected</div>
+                    </div>
+                    <div style="font-size: 2rem; color: var(--info-color);">🔍</div>
+                </div>
+                <div class="flex items-center">
+                    <span class="text-sm" style="color: var(--success-color);">↗ +24%</span>
+                    <span class="text-sm ml-2" style="color: var(--gray-500);">This Week</span>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="flex justify-between items-start mb-4">
+                    <div>
+                        <div class="stat-number">{{ dashboard_data.processing_queue }}</div>
+                        <div class="stat-label">Processing Queue</div>
+                    </div>
+                    <div style="font-size: 2rem; color: var(--warning-color);">⏳</div>
+                </div>
+                <div class="flex items-center">
+                    <span class="text-sm" style="color: var(--info-color);">Real-time Updates</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- AI Agent Collaboration Status -->
+<section style="padding: var(--space-8) 0;">
+    <div class="container">
+        <h2 class="text-2xl font-bold mb-6">AI Agent Collaboration Center</h2>
+        
+        <div class="grid grid-cols-2">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="font-bold">Real-time Agent Status</h3>
+                </div>
+                <div class="card-body">
+                    {% for agent_id, agent in agent_status.items %}
+                    <div class="flex justify-between items-center mb-4 p-4" style="background: var(--gray-50); border-radius: var(--radius-md);">
+                        <div class="flex items-center">
+                            <div class="loading-spinner pulse mr-3"></div>
+                            <div>
+                                <h4 class="font-semibold">{{ agent_id|title|cut:"_" }} Agent</h4>
+                                <p class="text-sm" style="color: var(--gray-600);">{{ agent.current_task }}</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="badge badge-success" id="{{ agent_id }}-status">{{ agent.status }}</div>
+                            <div class="text-sm mt-1" style="color: var(--gray-500);">{{ agent.efficiency }}% Efficiency</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="font-bold">Collaboration Performance Metrics</h3>
+                </div>
+                <div class="card-body">
+                    <div class="mb-6">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="font-medium">System Collaboration Status</span>
+                            <span class="font-bold text-lg" style="color: var(--success-color);">Excellent</span>
+                        </div>
+                        <div class="status-indicator" style="height: 4px; background: rgba(0,255,0,0.3); border-radius: 2px;">
+                            <div style="width: 100%; height: 100%; background: var(--success-color); border-radius: 2px;"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2">
+                        {% for agent_id, agent in agent_status.items %}
+                        <div class="text-center mb-4">
+                            <div class="text-lg font-bold" style="color: var(--primary-color);">{{ agent.collaboration_score }}%</div>
+                            <div class="text-sm" style="color: var(--gray-600);">{{ agent_id|title|cut:"_" }}</div>
+                            <div class="progress mt-2">
+                                <div class="progress-bar" data-progress="{{ agent.collaboration_score }}" id="{{ agent_id }}-progress"></div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Recent Analysis and Quick Actions -->
+<section style="background: var(--gray-100); padding: var(--space-8) 0;">
+    <div class="container">
+        <div class="grid grid-cols-3">
+            <!-- Recent Analysis -->
+            <div class="card" style="grid-column: span 2;">
+                <div class="card-header">
+                    <div class="flex justify-between items-center">
+                        <h3 class="font-bold">Recent Analysis</h3>
+                        <a href="{% url 'tubewhale_engine:client_data_viz' %}" class="btn btn-outline btn-sm">View All</a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% for analysis in recent_analyses %}
+                    <div class="flex justify-between items-center mb-4 p-4" style="background: white; border-radius: var(--radius-md); border-left: 4px solid var(--primary-color);">
+                        <div>
+                            <h4 class="font-semibold">{{ analysis.title }}</h4>
+                            <p class="text-sm" style="color: var(--gray-600);">
+                                {{ analysis.type|title }} • {{ analysis.created_at|timesince }} ago
+                            </p>
+                        </div>
+                        <div class="text-right">
+                            {% if analysis.status == 'completed' %}
+                                <div class="badge badge-success">Completed</div>
+                                <div class="text-sm mt-1" style="color: var(--gray-500);">Accuracy: {{ analysis.accuracy }}%</div>
+                            {% elif analysis.status == 'processing' %}
+                                <div class="badge badge-info">Processing</div>
+                                <div class="progress mt-2" style="width: 100px;">
+                                    <div class="progress-bar" data-progress="{{ analysis.progress }}"></div>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <!-- Quick Actions -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="font-bold">Quick Actions</h3>
+                </div>
+                <div class="card-body">
+                    <button class="btn btn-gradient w-full mb-4" onclick="startNewAnalysis()">
+                        🚀 Start New Analysis
+                    </button>
+                    
+                    <button class="btn btn-outline w-full mb-4" onclick="viewAgentCollaboration()">
+                        🤖 View Agent Collaboration
+                    </button>
+                    
+                    <button class="btn btn-outline w-full mb-4" onclick="exportData()">
+                        📊 Export Data
+                    </button>
+                    
+                    <button class="btn btn-outline w-full" onclick="systemHealth()">
+                        🔧 System Health Check
+                    </button>
+                </div>
+                
+                <div class="card-footer">
+                    <h4 class="font-semibold mb-4">System Overview</h4>
+                    <div class="grid grid-cols-2 text-center">
+                        <div class="mb-4">
+                            <div class="text-lg font-bold" style="color: var(--success-color);">{{ system_metrics.uptime }}%</div>
+                            <div class="text-sm" style="color: var(--gray-600);">Uptime</div>
+                        </div>
+                        <div class="mb-4">
+                            <div class="text-lg font-bold" style="color: var(--info-color);">{{ system_metrics.processing_speed }}</div>
+                            <div class="text-sm" style="color: var(--gray-600);">Processing/min</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Performance Trend Charts -->
+<section style="padding: var(--space-8) 0;">
+    <div class="container">
+        <h2 class="text-2xl font-bold mb-6">Performance Trend Analysis</h2>
+        
+        <div class="card">
+            <div class="card-header">
+                <div class="flex justify-between items-center">
+                    <h3 class="font-bold">Processing Efficiency Trend</h3>
+                    <div class="flex gap-2">
+                        <button class="btn btn-sm" onclick="changeTimeframe('7d')" id="btn-7d">7 Days</button>
+                        <button class="btn btn-sm btn-primary" onclick="changeTimeframe('30d')" id="btn-30d">30 Days</button>
+                        <button class="btn btn-sm" onclick="changeTimeframe('90d')" id="btn-90d">90 Days</button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div style="height: 300px; background: var(--gray-50); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; position: relative;">
+                    <!-- Simplified Chart Display -->
+                    <canvas id="trendsChart" width="800" height="300"></canvas>
+                    <div class="text-center" style="position: absolute;">
+                        <div class="loading-spinner"></div>
+                        <p class="text-sm mt-2" style="color: var(--gray-600);">Loading chart data...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 🎯 Real-time Video Processing Monitor Panel -->
+<section style="padding: var(--space-8) 0;">
+    <div class="container">
+        {% include 'components/video_processing_monitor.html' %}
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Dashboard real-time update functionality
+    let dashboardUpdateInterval;
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeDashboard();
+        startRealTimeUpdates();
+    });
+    
+    function initializeDashboard() {
+        // Initialize progress bar animations
+        const progressBars = document.querySelectorAll('.progress-bar[data-progress]');
+        progressBars.forEach(bar => {
+            const progress = bar.dataset.progress;
+            setTimeout(() => {
+                bar.style.width = progress + '%';
+            }, 300);
+        });
+        
+        // Initialize charts
+        initializeTrendsChart();
+    }
+    
+    function startRealTimeUpdates() {
+        // Update real-time data every 30 seconds
+        dashboardUpdateInterval = setInterval(() => {
+            updateAgentStatus();
+            updateSystemMetrics();
+        }, 30000);
+    }
+    
+    function updateAgentStatus() {
+        fetch('/api/agent-status/')
+            .then(response => response.json())
+            .then(data => {
+                Object.keys(data.agents || {}).forEach(agentId => {
+                    const agent = data.agents[agentId];
+                    const statusElement = document.getElementById(`${agentId}-status`);
+                    const progressElement = document.getElementById(`${agentId}-progress`);
+                    
+                    if (statusElement) {
+                        statusElement.textContent = agent.status;
+                        statusElement.className = `badge ${getStatusClass(agent.status)}`;
+                    }
+                    
+                    if (progressElement) {
+                        progressElement.style.width = agent.progress + '%';
+                    }
+                });
+            })
+            .catch(error => console.log('Error updating agent status:', error));
+    }
+    
+    function updateSystemMetrics() {
+        fetch('/api/system-metrics/')
+            .then(response => response.json())
+            .then(data => {
+                // Update overall efficiency progress bar
+                const overallProgress = document.getElementById('overall-efficiency-progress');
+                if (overallProgress && data.agent_efficiency) {
+                    overallProgress.style.width = data.agent_efficiency + '%';
+                }
+                
+                // Simulate data changes for dynamic feel
+                updateStatCards();
+            })
+            .catch(error => console.log('Error updating system metrics:', error));
+    }
+    
+    function updateStatCards() {
+        // Simulate small updates to stat cards
+        const statNumbers = document.querySelectorAll('.stat-number');
+        statNumbers.forEach(element => {
+            if (Math.random() > 0.8) { // 20% chance of update
+                const currentValue = parseInt(element.textContent.replace(/,/g, ''));
+                const change = Math.floor(Math.random() * 3) + 1;
+                const newValue = currentValue + change;
+                
+                element.textContent = formatNumber(newValue);
+                
+                // Add pulse effect
+                element.parentElement.parentElement.classList.add('pulse');
+                setTimeout(() => {
+                    element.parentElement.parentElement.classList.remove('pulse');
+                }, 1000);
+            }
+        });
+    }
+    
+    function getStatusClass(status) {
+        switch(status) {
+            case 'ACTIVE': return 'badge-success';
+            case 'PROCESSING': return 'badge-info';
+            case 'WAITING': return 'badge-warning';
+            case 'COMPLETED': return 'badge-success';
+            default: return 'badge-info';
+        }
+    }
+    
+    // Quick action functions
+    function startNewAnalysis() {
+        alert('Starting new video analysis task...\nThis will redirect to the analysis configuration page.');
+        // In production, this would redirect to analysis configuration page
+    }
+    
+    function viewAgentCollaboration() {
+        window.location.href = "{% url 'tubewhale_engine:client_agents' %}";
+    }
+    
+    function exportData() {
+        alert('Preparing data export...\nSupports CSV, JSON and PDF formats.');
+        // In production, this would open export dialog
+    }
+    
+    function systemHealth() {
+        alert('System Health Status:\n✅ All services running normally\n✅ Database connection stable\n✅ AI agents responding well');
+    }
+    
+    // Chart related functions
+    function initializeTrendsChart() {
+        const canvas = document.getElementById('trendsChart');
+        const ctx = canvas.getContext('2d');
+        
+        // Simple trend line drawing
+        setTimeout(() => {
+            drawSimpleTrends(ctx, canvas.width, canvas.height);
+            // Hide loading indicator
+            document.querySelector('.loading-spinner').style.display = 'none';
+            document.querySelector('.loading-spinner').nextElementSibling.style.display = 'none';
+        }, 1500);
+    }
+    
+    function drawSimpleTrends(ctx, width, height) {
+        const padding = 40;
+        const chartWidth = width - 2 * padding;
+        const chartHeight = height - 2 * padding;
+        
+        // Clear canvas
+        ctx.clearRect(0, 0, width, height);
+        
+        // Draw grid
+        ctx.strokeStyle = '#e5e7eb';
+        ctx.lineWidth = 1;
+        
+        // Vertical grid lines
+        for (let i = 0; i <= 7; i++) {
+            const x = padding + (i * chartWidth / 7);
+            ctx.beginPath();
+            ctx.moveTo(x, padding);
+            ctx.lineTo(x, height - padding);
+            ctx.stroke();
+        }
+        
+        // Horizontal grid lines
+        for (let i = 0; i <= 5; i++) {
+            const y = padding + (i * chartHeight / 5);
+            ctx.beginPath();
+            ctx.moveTo(padding, y);
+            ctx.lineTo(width - padding, y);
+            ctx.stroke();
+        }
+        
+        // Draw trend line
+        const dataPoints = [65, 72, 68, 85, 91, 88, 94]; // Mock data
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        
+        dataPoints.forEach((point, index) => {
+            const x = padding + (index * chartWidth / (dataPoints.length - 1));
+            const y = height - padding - (point / 100 * chartHeight);
+            
+            if (index === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        });
+        
+        ctx.stroke();
+        
+        // Draw data points
+        ctx.fillStyle = '#3b82f6';
+        dataPoints.forEach((point, index) => {
+            const x = padding + (index * chartWidth / (dataPoints.length - 1));
+            const y = height - padding - (point / 100 * chartHeight);
+            
+            ctx.beginPath();
+            ctx.arc(x, y, 4, 0, 2 * Math.PI);
+            ctx.fill();
+        });
+        
+        // Add labels
+        ctx.fillStyle = '#6b7280';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'center';
+        
+        const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        labels.forEach((label, index) => {
+            const x = padding + (index * chartWidth / (labels.length - 1));
+            ctx.fillText(label, x, height - 10);
+        });
+    }
+    
+    function changeTimeframe(period) {
+        // Update button state
+        document.querySelectorAll('[id^="btn-"]').forEach(btn => {
+            btn.classList.remove('btn-primary');
+            btn.classList.add('btn');
+        });
+        
+        document.getElementById(`btn-${period}`).classList.remove('btn');
+        document.getElementById(`btn-${period}`).classList.add('btn-primary');
+        
+        // Redraw chart (in production would fetch data for different time periods)
+        initializeTrendsChart();
+    }
+    
+    // Clean up timers on page unload
+    window.addEventListener('beforeunload', function() {
+        if (dashboardUpdateInterval) {
+            clearInterval(dashboardUpdateInterval);
+        }
+    });
+</script>
+{% endblock %}

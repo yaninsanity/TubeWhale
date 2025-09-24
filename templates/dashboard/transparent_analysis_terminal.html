@@ -1,0 +1,613 @@
+{% extends "dashboard/base_simple.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Analysis Terminal" %} - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+:root {
+    --terminal-bg: #0d1117;
+    --terminal-surface: #21262d;
+    --terminal-border: #30363d;
+    --terminal-text: #c9d1d9;
+    --terminal-text-dim: #7d8590;
+    --terminal-success: #3fb950;
+    --terminal-warning: #f85149;
+    --terminal-info: #58a6ff;
+    --terminal-process: #f0883e;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    background: var(--terminal-bg);
+    color: var(--terminal-text);
+    height: 100vh;
+    overflow: hidden;
+}
+
+.terminal-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background: var(--terminal-bg);
+}
+
+.terminal-header {
+    background: var(--terminal-surface);
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--terminal-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.terminal-title {
+    color: var(--terminal-info);
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.user-info {
+    color: var(--terminal-text-dim);
+    font-size: 12px;
+}
+
+.terminal-body {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.log-line {
+    margin-bottom: 8px;
+    display: flex;
+    align-items: flex-start;
+}
+
+.timestamp {
+    color: var(--terminal-text-dim);
+    margin-right: 12px;
+    min-width: 80px;
+}
+
+.log-content {
+    flex: 1;
+}
+
+.status-success { color: var(--terminal-success); }
+.status-warning { color: var(--terminal-warning); }
+.status-info { color: var(--terminal-info); }
+.status-process { color: var(--terminal-process); }
+
+.progress-bar {
+    background: var(--terminal-surface);
+    height: 6px;
+    border-radius: 3px;
+    margin: 8px 0;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--terminal-info), var(--terminal-success));
+    width: 0%;
+    transition: width 0.3s ease;
+}
+
+.input-section {
+    background: var(--terminal-surface);
+    padding: 20px;
+    border-top: 1px solid var(--terminal-border);
+}
+
+.input-group {
+    margin-bottom: 15px;
+}
+
+.input-label {
+    color: #f0f6fc;
+    margin-bottom: 5px;
+    display: block;
+    font-size: 13px;
+}
+
+.input-field {
+    width: 100%;
+    background: var(--terminal-bg);
+    border: 1px solid var(--terminal-border);
+    color: var(--terminal-text);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 13px;
+}
+
+.input-field:focus {
+    outline: none;
+    border-color: var(--terminal-info);
+}
+
+.button-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.btn {
+    border: none;
+    padding: 10px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: bold;
+    transition: all 0.2s ease;
+}
+
+.btn-primary {
+    background: #238636;
+    color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: #2ea043;
+}
+
+.btn-secondary {
+    background: var(--terminal-border);
+    color: var(--terminal-text);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: #484f58;
+}
+
+.btn:disabled {
+    background: var(--terminal-border);
+    color: var(--terminal-text-dim);
+    cursor: not-allowed;
+}
+
+.sample-data {
+    background: #161b22;
+    border: 1px solid var(--terminal-border);
+    padding: 15px;
+    border-radius: 6px;
+    margin-top: 10px;
+}
+
+.sample-title {
+    color: var(--terminal-info);
+    margin-bottom: 10px;
+    font-weight: bold;
+    font-size: 13px;
+}
+
+.sample-item {
+    color: var(--terminal-text-dim);
+    padding: 5px 0;
+    cursor: pointer;
+    font-size: 12px;
+    border-left: 2px solid transparent;
+    padding-left: 8px;
+    transition: all 0.2s ease;
+}
+
+.sample-item:hover {
+    color: var(--terminal-text);
+    border-left-color: var(--terminal-info);
+}
+
+.animate-typing {
+    border-right: 2px solid var(--terminal-info);
+    animation: typing 0.8s infinite;
+}
+
+@keyframes typing {
+    0%, 50% { border-color: var(--terminal-info); }
+    51%, 100% { border-color: transparent; }
+}
+
+.status-panel {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 15px;
+    font-size: 12px;
+}
+
+.status-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 8px;
+    background: var(--terminal-bg);
+    border-radius: 4px;
+    border: 1px solid var(--terminal-border);
+}
+
+.status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--terminal-success);
+}
+
+.status-dot.warning { background: var(--terminal-warning); }
+.status-dot.info { background: var(--terminal-info); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="terminal-container">
+    <div class="terminal-header">
+        <div class="terminal-title">
+            🐋 TubeWhale Analysis Terminal
+            <span style="color: var(--terminal-text-dim); font-weight: normal; margin-left: 10px;">
+                - Real-time Video Analysis
+            </span>
+        </div>
+        <div class="user-info">
+            👤 {{ user.username|default:"Guest" }} | 
+            🔗 Backend: Connected | 
+            ⏰ {{ "now"|date:"H:i:s" }}
+        </div>
+    </div>
+
+    <div class="terminal-body" id="terminal-output">
+        <div class="log-line">
+            <span class="timestamp">{{ "now"|date:"H:i:s" }}</span>
+            <span class="log-content status-info">🔧 Analysis Terminal Initialized</span>
+        </div>
+        <div class="log-line">
+            <span class="timestamp">{{ "now"|date:"H:i:s" }}</span>
+            <span class="log-content status-success">✅ Backend services connected {% if api_key_status.all_configured %}(Full API access){% else %}(Limited mode - configure API keys){% endif %}</span>
+        </div>
+        <div class="log-line">
+            <span class="timestamp">{{ "now"|date:"H:i:s" }}</span>
+            <span class="log-content status-info">📋 Analysis mode ready. Configure video URL and template below</span>
+        </div>
+    </div>
+
+    <div class="input-section">
+        <!-- 系统状态面板 -->
+        <div class="status-panel">
+            <div class="status-item">
+                <span class="status-dot"></span>
+                <span>Backend Ready</span>
+            </div>
+            <div class="status-item">
+                <span class="status-dot"></span>
+                <span>Analysis Engine</span>
+            </div>
+            <div class="status-item">
+                <span class="status-dot"></span>
+                <span>WebSocket Live</span>
+            </div>
+        </div>
+
+        <div class="input-group">
+            <label class="input-label">🎬 YouTube Video URL or Video ID:</label>
+            <input type="text" id="video-url" class="input-field" 
+                   placeholder="e.g., https://www.youtube.com/watch?v=dQw4w9WgXcQ or dQw4w9WgXcQ">
+        </div>
+        
+        <div class="input-group">
+            <label class="input-label">🎯 Analysis Template:</label>
+            <select id="analysis-template" class="input-field">
+                <option value="general-analyst">🔍 General Analyst - Comprehensive content analysis</option>
+                <option value="academic-scholar">📚 Academic Scholar - Educational content analysis</option>
+                <option value="business-consultant">💼 Business Consultant - Market insights & strategy</option>
+                <option value="content-creator">🎬 Content Creator - Creative insights & optimization</option>
+            </select>
+        </div>
+
+        <div class="button-group">
+            <button id="start-analysis" class="btn btn-primary">🚀 Start Analysis</button>
+            <button id="clear-log" class="btn btn-secondary">🧹 Clear Log</button>
+        </div>
+
+        <div class="sample-data">
+            <div class="sample-title">📊 Recent Analysis History (click to rerun):</div>
+            <div class="sample-item" data-url="dQw4w9WgXcQ" data-type="music">
+                🎵 Rick Astley - Never Gonna Give You Up (Music Video Analysis)
+            </div>
+            <div class="sample-item" data-url="jNQXAC9IVRw" data-type="education">
+                🤖 MIT OpenCourseWare - Machine Learning Introduction (Educational Content)
+            </div>
+            <div class="sample-item" data-url="fJ9rUzIMcZQ" data-type="business">
+                💼 TED Talk - How Great Leaders Inspire Action (Business Analysis)
+            </div>
+            <div class="sample-item" data-url="9bZkp7q19f0" data-type="tech">
+                💻 Google I/O Keynote - Latest Tech Trends (Technology Analysis)
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+class TransparentAnalysisTerminal {
+    constructor() {
+        this.output = document.getElementById('terminal-output');
+        this.videoUrl = document.getElementById('video-url');
+        this.template = document.getElementById('analysis-template');
+        this.startBtn = document.getElementById('start-analysis');
+        this.demoBtn = document.getElementById('demo-mode');
+        this.clearBtn = document.getElementById('clear-log');
+        this.currentStep = 0;
+        this.totalSteps = 0;
+        this.isAnalyzing = false;
+        this.websocket = null;
+        
+        this.init();
+        this.connectWebSocket();
+    }
+
+    init() {
+        // Sample data click events
+        document.querySelectorAll('.sample-item').forEach(item => {
+            item.addEventListener('click', () => {
+                this.videoUrl.value = item.dataset.url;
+                const type = item.dataset.type;
+                this.autoSelectTemplate(type);
+                this.log('info', `📋 Selected from history: ${item.textContent.substring(2)}`);
+                this.log('success', `🎯 Auto-matched optimal analysis template`);
+            });
+        });
+
+        // Button events
+        this.startBtn.addEventListener('click', () => this.startAnalysis());
+        this.clearBtn.addEventListener('click', () => this.clearLog());
+
+        // 输入框实时验证
+        this.videoUrl.addEventListener('input', () => this.validateInput());
+    }
+
+    connectWebSocket() {
+        // Connect WebSocket for real-time updates
+        try {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws/analysis/`;
+            this.websocket = new WebSocket(wsUrl);
+            
+            this.websocket.onopen = () => {
+                this.log('success', '🔌 WebSocket connected - Real-time updates enabled');
+            };
+            
+            this.websocket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                this.handleWebSocketMessage(data);
+            };
+            
+            this.websocket.onerror = () => {
+                this.log('warning', '⚠️ WebSocket connection failed - Using HTTP polling');
+            };
+        } catch (error) {
+            this.log('info', '📡 Using HTTP polling for status updates');
+        }
+    }
+
+    handleWebSocketMessage(data) {
+        switch(data.type) {
+            case 'progress':
+                this.updateProgress(data.step, data.total, data.message);
+                break;
+            case 'log':
+                this.log(data.level, data.message);
+                break;
+            case 'complete':
+                this.showRealResults(data.results);
+                break;
+        }
+    }
+
+    autoSelectTemplate(type) {
+        const templateMap = {
+            'music': 'general-analyst',
+            'education': 'academic-scholar', 
+            'business': 'business-consultant',
+            'tech': 'general-analyst'
+        };
+        this.template.value = templateMap[type] || 'general-analyst';
+    }
+
+    validateInput() {
+        const url = this.videoUrl.value.trim();
+        const isValid = url && (url.includes('youtube.com') || url.includes('youtu.be') || /^[a-zA-Z0-9_-]{11}$/.test(url));
+        
+        if (url && !isValid) {
+            this.videoUrl.style.borderColor = 'var(--terminal-warning)';
+        } else {
+            this.videoUrl.style.borderColor = 'var(--terminal-border)';
+        }
+    }
+
+    log(type, message, showProgress = false, progress = 0) {
+        const timestamp = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+        const logLine = document.createElement('div');
+        logLine.className = 'log-line';
+        
+        logLine.innerHTML = `
+            <span class="timestamp">${timestamp}</span>
+            <span class="log-content status-${type}">${message}</span>
+        `;
+        
+        this.output.appendChild(logLine);
+        
+        if (showProgress) {
+            const progressBar = document.createElement('div');
+            progressBar.className = 'progress-bar';
+            progressBar.innerHTML = `<div class="progress-fill" style="width: ${progress}%"></div>`;
+            this.output.appendChild(progressBar);
+        }
+        
+        this.output.scrollTop = this.output.scrollHeight;
+    }
+
+    async startAnalysis() {
+        const url = this.videoUrl.value.trim();
+        const template = this.template.value;
+        
+        if (!url) {
+            this.log('warning', '⚠️ Please enter a video URL or select from history');
+            return;
+        }
+
+        this.setAnalyzing(true);
+        this.log('process', '🚀 Starting analysis pipeline...');
+        this.log('info', `📺 Target video: ${url}`);
+        this.log('info', `🎯 Analysis template: ${this.getTemplateName(template)}`);
+        
+        try {
+            // Send real request to backend
+            const response = await fetch('/dashboard/api/transparent-analysis/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': this.getCsrfToken()
+                },
+                body: JSON.stringify({
+                    video_url: url,
+                    template: template,
+                    analysis_type: 'comprehensive'
+                })
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                this.log('success', `✅ Analysis task submitted - Job ID: ${result.job_id}`);
+                this.pollJobStatus(result.job_id);
+            } else {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `HTTP ${response.status}`);
+            }
+        } catch (error) {
+            this.log('warning', `⚠️ Request failed: ${error.message}`);
+            this.setAnalyzing(false);
+        }
+    }
+
+    async pollJobStatus(jobId) {
+        const maxAttempts = 60; // 5 minute maximum wait time
+        let attempts = 0;
+
+        const poll = async () => {
+            try {
+                const response = await fetch(`/api/v1/analysis/${jobId}/`);
+                const data = await response.json();
+
+                if (data.status === 'completed') {
+                    this.log('success', '🎉 Analysis completed successfully');
+                    this.showRealResults(data.results);
+                    this.setAnalyzing(false);
+                } else if (data.status === 'failed') {
+                    this.log('warning', `❌ Analysis failed: ${data.error || 'Unknown error'}`);
+                    this.setAnalyzing(false);
+                } else if (attempts < maxAttempts) {
+                    this.log('process', `⏳ Analysis in progress... (${data.status})`, true, Math.round((attempts / maxAttempts) * 100));
+                    attempts++;
+                    setTimeout(poll, 5000);
+                } else {
+                    this.log('warning', '⏰ Analysis timeout - Please check results later');
+                    this.setAnalyzing(false);
+                }
+            } catch (error) {
+                this.log('warning', `⚠️ Status check failed: ${error.message}`);
+                this.setAnalyzing(false);
+            }
+        };
+
+        poll();
+    }
+
+
+
+
+
+    showRealResults(results) {
+        this.log('success', '🎉 Analysis completed successfully');
+        
+        if (results && typeof results === 'object') {
+            // Display analysis summary
+            if (results.summary) {
+                this.log('info', `📋 Analysis Summary: ${results.summary}`);
+            }
+            
+            // Display key insights
+            if (results.insights && Array.isArray(results.insights)) {
+                this.log('info', '🔍 Key Insights:');
+                results.insights.forEach((insight, index) => {
+                    setTimeout(() => {
+                        this.log('success', `  • ${insight}`);
+                    }, (index + 1) * 200);
+                });
+            }
+            
+            // Display metrics
+            if (results.metrics) {
+                setTimeout(() => {
+                    this.log('info', '📊 Analysis Metrics:');
+                    Object.entries(results.metrics).forEach(([key, value], index) => {
+                        setTimeout(() => {
+                            this.log('success', `  • ${key}: ${value}`);
+                        }, (index + 1) * 150);
+                    });
+                }, results.insights ? results.insights.length * 200 + 500 : 500);
+            }
+        }
+        
+        setTimeout(() => {
+            this.log('info', '📁 Full report saved to analysis history');
+            this.log('info', '🔗 Ready for new analysis or export results');
+        }, 2000);
+    }
+
+    setAnalyzing(analyzing) {
+        this.isAnalyzing = analyzing;
+        this.startBtn.disabled = analyzing;
+        this.startBtn.textContent = analyzing ? '🔄 Analyzing...' : '🚀 Start Analysis';
+    }
+
+    clearLog() {
+        // Keep system initialization logs
+        const logs = this.output.querySelectorAll('.log-line');
+        for (let i = 3; i < logs.length; i++) {
+            logs[i].remove();
+        }
+        this.log('info', '🧹 Log cleared - Ready for new analysis');
+    }
+
+    getTemplateName(template) {
+        const names = {
+            'general-analyst': 'General Analyst',
+            'academic-scholar': 'Academic Scholar',
+            'business-consultant': 'Business Consultant',
+            'content-creator': 'Content Creator'
+        };
+        return names[template] || template;
+    }
+
+    getCsrfToken() {
+        return document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+    }
+
+    sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+}
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    new TransparentAnalysisTerminal();
+});
+</script>
+{% endblock %}

@@ -4,6 +4,7 @@ Sends CLI command logs to Django backend via HTTP API
 """
 
 import json
+import os
 import time
 import requests
 from typing import List, Dict, Any, Optional
@@ -16,7 +17,11 @@ class CLILogger:
     Works with both local and containerized Django deployments
     """
     
-    def __init__(self, api_base_url: str = "http://localhost:8000"):
+    def __init__(self, api_base_url: str = None):
+        # Auto-detect backend URL with fallback priority
+        if api_base_url is None:
+            api_base_url = os.environ.get('BACKEND_URL', 'http://localhost:8001')
+        
         self.api_base_url = api_base_url.rstrip('/')
         self.logger = logging.getLogger(__name__)
         self.session = requests.Session()

@@ -1,0 +1,530 @@
+{% extends 'client/base.html' %}
+
+{% block content %}
+<!-- AI Agent Collaboration Center Header -->
+<section style="background: var(--gradient-primary); color: white; padding: var(--space-8) 0;">
+    <div class="container">
+        <div class="text-center">
+            <h1 class="text-4xl font-bold mb-4">AI Agent Collaboration Center</h1>
+            <p class="text-xl mb-6" style="color: rgba(255, 255, 255, 0.9);">
+                Experience intelligent collaboration of multiple professional AI agents for efficient video content processing and analysis
+            </p>            <!-- Collaboration efficiency metrics -->
+            <div class="grid grid-cols-4">
+                <div class="text-center">
+                    <div class="text-3xl font-bold">{{ collaboration_metrics.overall_efficiency }}%</div>
+                    <div class="text-sm" style="color: rgba(255, 255, 255, 0.8);">Overall Efficiency</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-3xl font-bold">{{ collaboration_metrics.inter_agent_communication }}%</div>
+                    <div class="text-sm" style="color: rgba(255, 255, 255, 0.8);">Inter-Agent Communication</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-3xl font-bold">{{ collaboration_metrics.task_completion_rate }}%</div>
+                    <div class="text-sm" style="color: rgba(255, 255, 255, 0.8);">Task Completion Rate</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-3xl font-bold pulse">+{{ collaboration_metrics.learning_improvement }}%</div>
+                    <div class="text-sm" style="color: rgba(255, 255, 255, 0.8);">Monthly Improvement</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Real-time Workflow Visualization -->
+<section style="padding: var(--space-8) 0; background: white;">
+    <div class="container">
+        <h2 class="text-2xl font-bold mb-6 text-center">Real-time Collaboration Workflow</h2>
+        
+        <div class="grid grid-cols-4">
+            {% for stage in workflow_stages %}
+            <div class="text-center mb-8">
+                <div class="card" style="min-height: 200px;">
+                    <div class="card-header">
+                        <h3 class="font-bold">{{ stage.name }}</h3>
+                        <div class="badge {% if stage.status == 'ACTIVE' %}badge-success{% else %}badge-info{% endif %}">
+                            {{ stage.status }}
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-sm mb-4" style="color: var(--gray-600);">{{ stage.description }}</p>
+                        
+                        <!-- Participating agents -->
+                        <div class="mb-4">
+                            <h4 class="font-semibold mb-2">Participating Agents:</h4>
+                            {% for agent in stage.agents %}
+                            <div class="badge badge-gradient mb-1">{{ agent|title|cut:"_" }}</div>
+                            {% endfor %}
+                        </div>
+                        
+                        <!-- Stage progress -->
+                        <div class="progress">
+                            <div class="progress-bar" data-progress="{% if stage.status == 'ACTIVE' %}75{% elif stage.status == 'COMPLETED' %}100{% else %}0{% endif %}"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Connection line (except for the last one) -->
+                {% if not forloop.last %}
+                <div style="margin: var(--space-4) 0; color: var(--primary-color); font-size: 1.5rem;">→</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+<!-- Detailed Agent Status -->
+<section style="background: var(--gray-100); padding: var(--space-8) 0;">
+    <div class="container">
+        <h2 class="text-2xl font-bold mb-6">Detailed Agent Status & Capabilities</h2>
+        
+        <div class="grid grid-cols-2">
+            {% for agent_id, agent in agents.autonomous_agents.items %}
+            <div class="card mb-6">
+                <div class="card-header">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h3 class="font-bold">{{ agent.name }}</h3>
+                            <p class="text-sm" style="color: var(--gray-600);">{{ agent.role }}</p>
+                        </div>
+                        <div class="text-right">
+                            <div class="badge badge-success">{{ agent.autonomy_level }}</div>
+                            <div class="text-sm mt-1" style="color: var(--gray-500);">{{ agent.current_efficiency }}% Efficiency</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card-body">
+                    <!-- Core capabilities -->
+                    <div class="mb-6">
+                        <h4 class="font-semibold mb-3">Core Capabilities:</h4>
+                        <div class="grid grid-cols-2">
+                            {% for capability in agent.capabilities %}
+                            <div class="flex items-center mb-2">
+                                <div style="width: 8px; height: 8px; background: var(--success-color); border-radius: 50%; margin-right: var(--space-2);"></div>
+                                <span class="text-sm">{{ capability }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <!-- Collaboration partners -->
+                    <div class="mb-6">
+                        <h4 class="font-semibold mb-3">Collaboration Partners:</h4>
+                        <div class="flex gap-2">
+                            {% for partner in agent.collaboration_partners %}
+                            <div class="badge badge-info">{{ partner|title|cut:"_" }}</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <!-- Performance metrics -->
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm">Current Efficiency</span>
+                            <span class="font-bold">{{ agent.current_efficiency }}%</span>
+                        </div>
+                        <div class="progress mb-4">
+                            <div class="progress-bar" data-progress="{{ agent.current_efficiency }}" id="{{ agent_id }}-efficiency"></div>
+                        </div>
+                        
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm">Learning Status</span>
+                            <div class="badge {% if agent.learning_status == 'ACTIVE' %}badge-success{% else %}badge-info{% endif %}">
+                                {{ agent.learning_status }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+<!-- Real-time Collaboration Monitoring -->
+<section style="padding: var(--space-8) 0;">
+    <div class="container">
+        <h2 class="text-2xl font-bold mb-6">Real-time Collaboration Monitoring</h2>
+        
+        <div class="grid grid-cols-3">
+            <!-- Real-time status panel -->
+            <div class="card" style="grid-column: span 2;">
+                <div class="card-header">
+                    <div class="flex justify-between items-center">
+                        <h3 class="font-bold">Real-time Agent Activity</h3>
+                        <div class="flex items-center">
+                            <div class="loading-spinner pulse mr-2"></div>
+                            <span class="text-sm" style="color: var(--gray-600);">Live Updates</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% for agent_id, status in real_time_status.agents.items %}
+                    {% if status.status == 'PROCESSING' %}
+                    <div class="flex justify-between items-center mb-4 p-4" style="background: var(--gray-50); border-radius: var(--radius-md); border-left: 4px solid var(--info-color);">
+                        <div class="flex items-center">
+                            <div style="width: 40px; height: 40px; background: var(--info-color); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; margin-right: var(--space-4);">
+                                {% if agent_id == 'search_agent' %}🔍
+                                {% elif agent_id == 'transcript_agent' %}📝
+                                {% elif agent_id == 'summarizer_agent' %}🧠
+                                {% elif agent_id == 'audio_agent' %}🎙️
+                                {% endif %}
+                            </div>
+                            <div>
+                                <h4 class="font-semibold">{{ agent_id|title|cut:"_" }} Agent</h4>
+                                <p class="text-sm" style="color: var(--gray-600);">{{ status.current_operation }}</p>
+                                <p class="text-sm" style="color: var(--gray-500);">ETA: {{ status.eta }}</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="badge badge-info" id="{{ agent_id }}-status-badge">
+                                {{ status.status }}
+                            </div>
+                            <div class="progress mt-2" style="width: 120px;">
+                                <div class="progress-bar" data-progress="{{ status.progress }}" id="{{ agent_id }}-realtime-progress"></div>
+                            </div>
+                        </div>
+                    </div>
+                    {% elif status.status == 'ACTIVE' %}
+                    <div class="flex justify-between items-center mb-4 p-4" style="background: var(--gray-50); border-radius: var(--radius-md); border-left: 4px solid var(--success-color);">
+                        <div class="flex items-center">
+                            <div style="width: 40px; height: 40px; background: var(--success-color); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; margin-right: var(--space-4);">
+                                {% if agent_id == 'search_agent' %}🔍
+                                {% elif agent_id == 'transcript_agent' %}📝
+                                {% elif agent_id == 'summarizer_agent' %}🧠
+                                {% elif agent_id == 'audio_agent' %}🎙️
+                                {% endif %}
+                            </div>
+                            <div>
+                                <h4 class="font-semibold">{{ agent_id|title|cut:"_" }} Agent</h4>
+                                <p class="text-sm" style="color: var(--gray-600);">{{ status.current_operation }}</p>
+                                <p class="text-sm" style="color: var(--gray-500);">ETA: {{ status.eta }}</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="badge badge-success" id="{{ agent_id }}-status-badge">
+                                {{ status.status }}
+                            </div>
+                            <div class="progress mt-2" style="width: 120px;">
+                                <div class="progress-bar" data-progress="{{ status.progress }}" id="{{ agent_id }}-realtime-progress"></div>
+                            </div>
+                        </div>
+                    </div>
+                    {% elif status.status == 'COMPLETED' %}
+                    <div class="flex justify-between items-center mb-4 p-4" style="background: var(--gray-50); border-radius: var(--radius-md); border-left: 4px solid var(--success-color);">
+                        <div class="flex items-center">
+                            <div style="width: 40px; height: 40px; background: var(--success-color); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; margin-right: var(--space-4);">
+                                {% if agent_id == 'search_agent' %}🔍
+                                {% elif agent_id == 'transcript_agent' %}📝
+                                {% elif agent_id == 'summarizer_agent' %}🧠
+                                {% elif agent_id == 'audio_agent' %}🎙️
+                                {% endif %}
+                            </div>
+                            <div>
+                                <h4 class="font-semibold">{{ agent_id|title|cut:"_" }} Agent</h4>
+                                <p class="text-sm" style="color: var(--gray-600);">{{ status.current_operation }}</p>
+                                <p class="text-sm" style="color: var(--gray-500);">ETA: {{ status.eta }}</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="badge badge-success" id="{{ agent_id }}-status-badge">
+                                {{ status.status }}
+                            </div>
+                            <div class="progress mt-2" style="width: 120px;">
+                                <div class="progress-bar" data-progress="{{ status.progress }}" id="{{ agent_id }}-realtime-progress"></div>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="flex justify-between items-center mb-4 p-4" style="background: var(--gray-50); border-radius: var(--radius-md); border-left: 4px solid var(--warning-color);">
+                        <div class="flex items-center">
+                            <div style="width: 40px; height: 40px; background: var(--warning-color); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; margin-right: var(--space-4);">
+                                {% if agent_id == 'search_agent' %}🔍
+                                {% elif agent_id == 'transcript_agent' %}📝
+                                {% elif agent_id == 'summarizer_agent' %}🧠
+                                {% elif agent_id == 'audio_agent' %}🎙️
+                                {% endif %}
+                            </div>
+                            <div>
+                                <h4 class="font-semibold">{{ agent_id|title|cut:"_" }} Agent</h4>
+                                <p class="text-sm" style="color: var(--gray-600);">{{ status.current_operation }}</p>
+                                <p class="text-sm" style="color: var(--gray-500);">ETA: {{ status.eta }}</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="badge badge-warning" id="{{ agent_id }}-status-badge">
+                                {{ status.status }}
+                            </div>
+                            <div class="progress mt-2" style="width: 120px;">
+                                <div class="progress-bar" data-progress="{{ status.progress }}" id="{{ agent_id }}-realtime-progress"></div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <!-- Collaboration network diagram -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="font-bold">Collaboration Network</h3>
+                </div>
+                <div class="card-body">
+                    <div style="height: 300px; display: flex; align-items: center; justify-content: center; position: relative;">
+                        <!-- Simplified network diagram -->
+                        <svg width="200" height="200" style="overflow: visible;">
+                            <!-- Central node -->
+                            <circle cx="100" cy="100" r="20" fill="var(--primary-color)" />
+                            <text x="100" y="105" text-anchor="middle" fill="white" font-size="12" font-weight="bold">Hub</text>
+                            
+                            <!-- Peripheral agent nodes -->
+                            <circle cx="100" cy="50" r="15" fill="var(--success-color)" class="pulse" />
+                            <text x="100" y="35" text-anchor="middle" font-size="10">Search</text>
+                            
+                            <circle cx="150" cy="100" r="15" fill="var(--info-color)" />
+                            <text x="150" y="125" text-anchor="middle" font-size="10">Audio</text>
+                            
+                            <circle cx="100" cy="150" r="15" fill="var(--warning-color)" />
+                            <text x="100" y="170" text-anchor="middle" font-size="10">Transcript</text>
+                            
+                            <circle cx="50" cy="100" r="15" fill="var(--success-color)" />
+                            <text x="50" y="125" text-anchor="middle" font-size="10">Summary</text>
+                            
+                            <!-- Connection lines -->
+                            <line x1="100" y1="80" x2="100" y2="65" stroke="var(--primary-color)" stroke-width="2" />
+                            <line x1="120" y1="100" x2="135" y2="100" stroke="var(--primary-color)" stroke-width="2" />
+                            <line x1="100" y1="120" x2="100" y2="135" stroke="var(--primary-color)" stroke-width="2" />
+                            <line x1="80" y1="100" x2="65" y2="100" stroke="var(--primary-color)" stroke-width="2" />
+                        </svg>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <h4 class="font-semibold mb-2">Collaboration Statistics:</h4>
+                        <div class="text-sm">
+                            <div class="flex justify-between mb-1">
+                                <span>Active Connections:</span>
+                                <span class="font-bold" style="color: var(--success-color);">12</span>
+                            </div>
+                            <div class="flex justify-between mb-1">
+                                <span>Messages/sec:</span>
+                                <span class="font-bold" style="color: var(--info-color);">847</span>
+                            </div>
+                            <div class="flex justify-between mb-1">
+                                <span>Sync Events:</span>
+                                <span class="font-bold" style="color: var(--warning-color);">23</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Best Practices Showcase -->
+<section style="background: var(--gradient-secondary); color: white; padding: var(--space-8) 0;">
+    <div class="container">
+        <div class="text-center mb-8">
+            <h2 class="text-3xl font-bold mb-4">Intelligent Collaboration Best Practices</h2>
+            <p class="text-lg" style="color: rgba(255, 255, 255, 0.9);">
+                Based on advanced technology architecture, providing professional and reliable video analysis services
+            </p>
+        </div>
+        
+        <div class="grid grid-cols-3">
+            <div class="card" style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2);">
+                <div class="card-body text-center">
+                    <div style="font-size: 3rem; margin-bottom: var(--space-4);">🤖</div>
+                    <h3 class="font-bold mb-4" style="color: white;">Autonomous</h3>
+                    <ul class="text-sm" style="color: rgba(255, 255, 255, 0.9); text-align: left;">
+                        <li class="mb-2">• Independent decision making</li>
+                        <li class="mb-2">• Self-monitoring & diagnosis</li>
+                        <li class="mb-2">• Dynamic resource allocation</li>
+                        <li class="mb-2">• Automatic error recovery</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="card" style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2);">
+                <div class="card-body text-center">
+                    <div style="font-size: 3rem; margin-bottom: var(--space-4);">🔄</div>
+                    <h3 class="font-bold mb-4" style="color: white;">Adaptive</h3>
+                    <ul class="text-sm" style="color: rgba(255, 255, 255, 0.9); text-align: left;">
+                        <li class="mb-2">• Performance optimization</li>
+                        <li class="mb-2">• Environment awareness</li>
+                        <li class="mb-2">• Dynamic tuning</li>
+                        <li class="mb-2">• Continuous improvement</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="card" style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2);">
+                <div class="card-body text-center">
+                    <div style="font-size: 3rem; margin-bottom: var(--space-4);">🤝</div>
+                    <h3 class="font-bold mb-4" style="color: white;">Collaborative</h3>
+                    <ul class="text-sm" style="color: rgba(255, 255, 255, 0.9); text-align: left;">
+                        <li class="mb-2">• Multi-agent coordination</li>
+                        <li class="mb-2">• Intelligent task allocation</li>
+                        <li class="mb-2">• Real-time synchronization</li>
+                        <li class="mb-2">• Collective intelligence</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Agent collaboration page real-time updates
+    let agentCollaborationInterval;
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeAgentCollaboration();
+        startAgentCollaborationUpdates();
+    });
+    
+    function initializeAgentCollaboration() {
+        // Initialize all progress bars
+        const progressBars = document.querySelectorAll('.progress-bar[data-progress]');
+        progressBars.forEach((bar, index) => {
+            const progress = bar.dataset.progress;
+            setTimeout(() => {
+                bar.style.width = progress + '%';
+            }, index * 200);
+        });
+        
+        // Add network node pulse effects
+        animateNetworkNodes();
+    }
+    
+    function startAgentCollaborationUpdates() {
+        // Update agent status every 15 seconds
+        agentCollaborationInterval = setInterval(() => {
+            updateRealTimeAgentStatus();
+            updateCollaborationMetrics();
+        }, 15000);
+    }
+    
+    function updateRealTimeAgentStatus() {
+        fetch('/api/agent-status/')
+            .then(response => response.json())
+            .then(data => {
+                if (data.agents) {
+                    Object.keys(data.agents).forEach(agentId => {
+                        const agent = data.agents[agentId];
+                        
+                        // Update status badge
+                        const statusBadge = document.getElementById(`${agentId}-status-badge`);
+                        if (statusBadge) {
+                            statusBadge.textContent = agent.status;
+                            statusBadge.className = `badge ${getStatusClass(agent.status)}`;
+                        }
+                        
+                        // Update real-time progress bar
+                        const progressBar = document.getElementById(`${agentId}-realtime-progress`);
+                        if (progressBar) {
+                            progressBar.style.width = agent.progress + '%';
+                        }
+                        
+                        // Update efficiency progress bar
+                        const efficiencyBar = document.getElementById(`${agentId}-efficiency`);
+                        if (efficiencyBar && agent.efficiency) {
+                            efficiencyBar.style.width = agent.efficiency + '%';
+                        }
+                    });
+                }
+            })
+            .catch(error => console.log('Error updating agent collaboration status:', error));
+    }
+    
+    function updateCollaborationMetrics() {
+        // Simulate small variations in collaboration metrics
+        const metrics = document.querySelectorAll('.text-3xl.font-bold');
+        metrics.forEach(metric => {
+            if (metric.textContent.includes('%') && Math.random() > 0.7) {
+                const currentValue = parseFloat(metric.textContent);
+                const change = (Math.random() - 0.5) * 0.6; // ±0.3% variation
+                const newValue = Math.max(90, Math.min(100, currentValue + change));
+                metric.textContent = newValue.toFixed(1) + '%';
+                
+                // Add pulse effect
+                metric.classList.add('pulse');
+                setTimeout(() => {
+                    metric.classList.remove('pulse');
+                }, 1000);
+            }
+        });
+    }
+    
+    function animateNetworkNodes() {
+        // Add dynamic effects to network nodes
+        const networkSvg = document.querySelector('svg');
+        if (networkSvg) {
+            const circles = networkSvg.querySelectorAll('circle');
+            
+            setInterval(() => {
+                // Randomly select a node to add pulse effect
+                const randomCircle = circles[Math.floor(Math.random() * circles.length)];
+                if (randomCircle && !randomCircle.classList.contains('pulse')) {
+                    randomCircle.classList.add('pulse');
+                    setTimeout(() => {
+                        randomCircle.classList.remove('pulse');
+                    }, 2000);
+                }
+            }, 3000);
+        }
+    }
+    
+    function getStatusClass(status) {
+        switch(status) {
+            case 'ACTIVE': return 'badge-success';
+            case 'PROCESSING': return 'badge-info';
+            case 'WAITING': return 'badge-warning';
+            case 'COMPLETED': return 'badge-success';
+            case 'ERROR': return 'badge-error';
+            default: return 'badge-info';
+        }
+    }
+    
+    // Simulate data flow in collaboration network
+    function simulateDataFlow() {
+        const lines = document.querySelectorAll('svg line');
+        lines.forEach((line, index) => {
+            setTimeout(() => {
+                // Create data flow effect
+                line.style.stroke = 'var(--success-color)';
+                line.style.strokeWidth = '4';
+                
+                setTimeout(() => {
+                    line.style.stroke = 'var(--primary-color)';
+                    line.style.strokeWidth = '2';
+                }, 500);
+            }, index * 200);
+        });
+    }
+    
+    // Simulate data flow periodically
+    setInterval(simulateDataFlow, 8000);
+    
+    // Clean up timers when page unloads
+    window.addEventListener('beforeunload', function() {
+        if (agentCollaborationInterval) {
+            clearInterval(agentCollaborationInterval);
+        }
+    });
+    
+    // Add keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'r' && e.ctrlKey) {
+            e.preventDefault();
+            updateRealTimeAgentStatus();
+            console.log('Manual agent status refresh');
+        }
+    });
+</script>
+{% endblock %}

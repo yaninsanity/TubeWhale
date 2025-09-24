@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% load i18n %}{% trans "Admin CLI Control Panel" %} - TubeWhale</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .control-panel-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem 0;
+        }
+        .stats-card {
+            border-left: 4px solid #007bff;
+            transition: transform 0.2s;
+        }
+        .stats-card:hover {
+            transform: translateY(-2px);
+        }
+        .cli-terminal {
+            background: #1e1e1e;
+            color: #00ff00;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            min-height: 200px;
+        }
+        .command-input {
+            background: transparent;
+            border: none;
+            color: #00ff00;
+            outline: none;
+            width: 100%;
+        }
+        .execution-log {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .tier-badge {
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <!-- Header -->
+    <div class="control-panel-header">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col">
+                    <h1 class="mb-0">
+                        <i class="fas fa-terminal me-2"></i>
+                        {% trans "Admin CLI Control Panel" %}
+                    </h1>
+                    <p class="mb-0 opacity-75">{% trans "Central command interface for TubeWhale administration" %}</p>
+                </div>
+                <div class="col-auto">
+                    <a href="/admin/" class="btn btn-light">
+                        <i class="fas fa-arrow-left me-1"></i>
+                        {% trans "Back to Admin" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container-fluid py-4">
+        <!-- System Statistics -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card stats-card h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-grow-1">
+                                <h6 class="card-title text-muted mb-1">{% trans "Total Users" %}</h6>
+                                <h3 class="mb-0">{{ total_users }}</h3>
+                            </div>
+                            <div class="text-primary fs-2">
+                                <i class="fas fa-users"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-grow-1">
+                                <h6 class="card-title text-muted mb-1">{% trans "Total Jobs" %}</h6>
+                                <h3 class="mb-0">{{ job_stats.total_jobs }}</h3>
+                            </div>
+                            <div class="text-success fs-2">
+                                <i class="fas fa-tasks"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-grow-1">
+                                <h6 class="card-title text-muted mb-1">{% trans "Running Jobs" %}</h6>
+                                <h3 class="mb-0 text-warning">{{ job_stats.running_jobs }}</h3>
+                            </div>
+                            <div class="text-warning fs-2">
+                                <i class="fas fa-play-circle"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-grow-1">
+                                <h6 class="card-title text-muted mb-1">{% trans "Failed Jobs" %}</h6>
+                                <h3 class="mb-0 text-danger">{{ job_stats.failed_jobs }}</h3>
+                            </div>
+                            <div class="text-danger fs-2">
+                                <i class="fas fa-exclamation-triangle"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- User Tier Distribution -->
+        <div class="row mb-4">
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-chart-pie me-2"></i>
+                            {% trans "User Tier Distribution" %}
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-4">
+                                <h4 class="text-secondary">{{ tier_stats.basic }}</h4>
+                                <small class="text-muted">{% trans "Basic" %}</small>
+                            </div>
+                            <div class="col-4">
+                                <h4 class="text-primary">{{ tier_stats.standard }}</h4>
+                                <small class="text-muted">{% trans "Standard" %}</small>
+                            </div>
+                            <div class="col-4">
+                                <h4 class="text-warning">{{ tier_stats.premium }}</h4>
+                                <small class="text-muted">{% trans "Premium" %}</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-cogs me-2"></i>
+                            {% trans "Quick Actions" %}
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <a href="{% url 'admin_control:job_management' %}" class="btn btn-outline-primary">
+                                <i class="fas fa-list me-2"></i>
+                                {% trans "Manage All Jobs" %}
+                            </a>
+                            <a href="{% url 'admin_control:system_metrics' %}" class="btn btn-outline-info">
+                                <i class="fas fa-chart-line me-2"></i>
+                                {% trans "System Metrics" %}
+                            </a>
+                            <a href="/admin/user_app/user/" class="btn btn-outline-success">
+                                <i class="fas fa-users-cog me-2"></i>
+                                {% trans "Manage Users" %}
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CLI Terminal -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-terminal me-2"></i>
+                            {% trans "CLI Terminal" %}
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="cli-terminal p-3">
+                            <div id="terminal-output" class="execution-log mb-2"></div>
+                            <div class="d-flex">
+                                <span class="text-info me-2">admin@tubewhale:~$</span>
+                                <input type="text" id="command-input" class="command-input" 
+                                       placeholder="Enter CLI command..." 
+                                       aria-label="CLI Command Input">
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle me-1"></i>
+                                {% trans "Allowed commands: tubewhale, python manage.py, celery, docker" %}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Executions -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-history me-2"></i>
+                            {% trans "Recent Command Executions" %}
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        {% if recent_executions %}
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>{% trans "Command" %}</th>
+                                            <th>{% trans "User" %}</th>
+                                            <th>{% trans "Status" %}</th>
+                                            <th>{% trans "Executed" %}</th>
+                                            <th>{% trans "Actions" %}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for execution in recent_executions %}
+                                        <tr>
+                                            <td>
+                                                <code class="text-break">{{ execution.command|truncatechars:50 }}</code>
+                                            </td>
+                                            <td>
+                                                {{ execution.user.username }}
+                                                {% if execution.user.tier %}
+                                                    <span class="badge bg-secondary tier-badge ms-1">
+                                                        {{ execution.user.get_tier_display_name }}
+                                                    </span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if execution.status == 'completed' %}
+                                                    <span class="badge bg-success">{% trans "Success" %}</span>
+                                                {% elif execution.status == 'failed' %}
+                                                    <span class="badge bg-danger">{% trans "Failed" %}</span>
+                                                {% elif execution.status == 'running' %}
+                                                    <span class="badge bg-warning">{% trans "Running" %}</span>
+                                                {% else %}
+                                                    <span class="badge bg-secondary">{{ execution.status|title }}</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>{{ execution.created_at|timesince }} {% trans "ago" %}</td>
+                                            <td>
+                                                <button class="btn btn-sm btn-outline-primary" 
+                                                        onclick="viewExecutionDetails({{ execution.id }})">
+                                                    <i class="fas fa-eye"></i>
+                                                </button>
+                                                {% if execution.status == 'running' %}
+                                                    <form method="post" action="{% url 'admin_control:cancel_job' execution.id %}" 
+                                                          class="d-inline">
+                                                        {% csrf_token %}
+                                                        <button type="submit" class="btn btn-sm btn-outline-danger"
+                                                                onclick="return confirm('{% trans "Cancel this job?" %}')">
+                                                            <i class="fas fa-stop"></i>
+                                                        </button>
+                                                    </form>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="text-center py-4">
+                                <i class="fas fa-inbox fs-1 text-muted mb-3"></i>
+                                <p class="text-muted">{% trans "No recent command executions found." %}</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // CLI Terminal functionality
+        const commandInput = document.getElementById('command-input');
+        const terminalOutput = document.getElementById('terminal-output');
+        
+        commandInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                executeCommand();
+            }
+        });
+        
+        function executeCommand() {
+            const command = commandInput.value.trim();
+            if (!command) return;
+            
+            // Add command to output
+            addToTerminal(`admin@tubewhale:~$ ${command}`, 'text-info');
+            
+            // Clear input
+            commandInput.value = '';
+            
+            // Show loading
+            addToTerminal('Executing...', 'text-warning');
+            
+            // Execute command
+            fetch('{% url "admin_control:execute_cli_command" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ command: command })
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Remove loading message
+                removeLastTerminalLine();
+                
+                if (data.success) {
+                    if (data.output) {
+                        addToTerminal(data.output, 'text-success');
+                    }
+                    if (data.error) {
+                        addToTerminal(data.error, 'text-danger');
+                    }
+                    addToTerminal(`Exit code: ${data.return_code}`, 'text-muted');
+                } else {
+                    addToTerminal(`Error: ${data.error}`, 'text-danger');
+                }
+            })
+            .catch(error => {
+                removeLastTerminalLine();
+                addToTerminal(`Network error: ${error.message}`, 'text-danger');
+            });
+        }
+        
+        function addToTerminal(text, className = '') {
+            const div = document.createElement('div');
+            div.className = className;
+            div.textContent = text;
+            terminalOutput.appendChild(div);
+            terminalOutput.scrollTop = terminalOutput.scrollHeight;
+        }
+        
+        function removeLastTerminalLine() {
+            const lastChild = terminalOutput.lastElementChild;
+            if (lastChild) {
+                lastChild.remove();
+            }
+        }
+        
+        function viewExecutionDetails(executionId) {
+            // Implement execution details modal or redirect
+            alert(`View details for execution ID: ${executionId}`);
+        }
+        
+        // Auto-refresh page every 30 seconds for live updates
+        setTimeout(() => {
+            location.reload();
+        }, 30000);
+    </script>
+</body>
+</html>
