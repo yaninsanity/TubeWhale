@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TubeWhale - 增强任务管理中心</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .task-card {
+            transition: all 0.3s ease;
+            border-left: 4px solid #007bff;
+        }
+        .task-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .status-pending { border-left-color: #ffc107; }
+        .status-queued { border-left-color: #17a2b8; }
+        .status-processing { border-left-color: #007bff; }
+        .status-paused { border-left-color: #fd7e14; }
+        .status-completed { border-left-color: #28a745; }
+        .status-failed { border-left-color: #dc3545; }
+        .status-cancelled { border-left-color: #6c757d; }
+        .status-timeout { border-left-color: #e83e8c; }
+        
+        .progress-ring {
+            width: 60px;
+            height: 60px;
+            transform: rotate(-90deg);
+        }
+        
+        .progress-ring-circle {
+            stroke-dasharray: 188.4;
+            stroke-dashoffset: 188.4;
+            transition: stroke-dashoffset 0.3s ease;
+        }
+        
+        .realtime-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: #28a745;
+            border-radius: 50%;
+            animation: pulse 1.5s ease-in-out infinite alternate;
+        }
+        
+        @keyframes pulse {
+            from { opacity: 1; }
+            to { opacity: 0.3; }
+        }
+        
+        .control-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .queue-metrics {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .task-timeline {
+            position: relative;
+            padding-left: 30px;
+        }
+        
+        .task-timeline::before {
+            content: '';
+            position: absolute;
+            left: 10px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #e9ecef;
+        }
+        
+        .timeline-item {
+            position: relative;
+            margin-bottom: 15px;
+        }
+        
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -24px;
+            top: 5px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #007bff;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-whale"></i> TubeWhale - 增强任务管理
+            </a>
+            <div class="navbar-nav ms-auto">
+                <span class="realtime-indicator"></span>
+                <span class="text-light ms-2">实时监控</span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- 队列状态概览 -->
+        <div class="queue-metrics">
+            <div class="row">
+                <div class="col-md-2">
+                    <h4 id="pending-count">0</h4>
+                    <small>等待中</small>
+                </div>
+                <div class="col-md-2">
+                    <h4 id="active-count">0</h4>
+                    <small>处理中</small>
+                </div>
+                <div class="col-md-2">
+                    <h4 id="paused-count">0</h4>
+                    <small>已暂停</small>
+                </div>
+                <div class="col-md-2">
+                    <h4 id="completed-count">0</h4>
+                    <small>已完成</small>
+                </div>
+                <div class="col-md-2">
+                    <h4 id="failed-count">0</h4>
+                    <small>失败</small>
+                </div>
+                <div class="col-md-2">
+                    <h4 id="max-concurrent">5</h4>
+                    <small>最大并发</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- 快速操作面板 -->
+        <div class="row mb-4">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-plus-circle"></i> 创建新任务</h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="task-form">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <label class="form-label">命令</label>
+                                    <select class="form-select" id="command" required>
+                                        <option value="">选择命令...</option>
+                                        <option value="analyze_videos">分析视频</option>
+                                        <option value="generate_report">生成报告</option>
+                                        <option value="download_audio">下载音频</option>
+                                        <option value="update_database">更新数据库</option>
+                                        <option value="health_check">健康检查</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">优先级</label>
+                                    <select class="form-select" id="priority">
+                                        <option value="normal">普通</option>
+                                        <option value="high">高</option>
+                                        <option value="critical">紧急</option>
+                                        <option value="low">低</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">模板ID</label>
+                                    <input type="text" class="form-control" id="template-id" placeholder="选填">
+                                </div>
+                            </div>
+                            <div class="row mt-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">专家领域</label>
+                                    <input type="text" class="form-control" id="expert-slug" placeholder="选填">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">参数 (JSON)</label>
+                                    <input type="text" class="form-control" id="variables" placeholder='{"key": "value"}'>
+                                </div>
+                            </div>
+                            <div class="mt-3">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-rocket"></i> 提交任务
+                                </button>
+                                <button type="button" class="btn btn-secondary ms-2" onclick="refreshTasks()">
+                                    <i class="fas fa-sync-alt"></i> 刷新
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-chart-line"></i> 系统状态</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>任务管理器</span>
+                            <span class="badge bg-success" id="manager-status">运行中</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>上次更新</span>
+                            <span id="last-update">-</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span>自动刷新</span>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="auto-refresh" checked>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 任务列表 -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5><i class="fas fa-tasks"></i> 任务列表</h5>
+                <div>
+                    <select class="form-select form-select-sm" id="status-filter" style="width: auto; display: inline-block;">
+                        <option value="">所有状态</option>
+                        <option value="pending">等待中</option>
+                        <option value="queued">队列中</option>
+                        <option value="processing">处理中</option>
+                        <option value="paused">已暂停</option>
+                        <option value="completed">已完成</option>
+                        <option value="failed">失败</option>
+                        <option value="cancelled">已取消</option>
+                    </select>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="tasks-container">
+                    <div class="text-center text-muted">
+                        <i class="fas fa-spinner fa-spin fa-2x"></i>
+                        <p class="mt-2">加载任务中...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 任务详情模态框 -->
+    <div class="modal fade" id="task-detail-modal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">任务详情</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="task-detail-content">
+                    <!-- 任务详情内容 -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 全局变量
+        let tasks = [];
+        let autoRefreshInterval;
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeTaskManager();
+            setupEventListeners();
+            startAutoRefresh();
+        });
+
+        // 初始化任务管理器
+        function initializeTaskManager() {
+            refreshQueueStatus();
+            refreshTasks();
+        }
+
+        // 设置事件监听器
+        function setupEventListeners() {
+            // 任务表单提交
+            document.getElementById('task-form').addEventListener('submit', submitTask);
+            
+            // 状态过滤
+            document.getElementById('status-filter').addEventListener('change', filterTasks);
+            
+            // 自动刷新开关
+            document.getElementById('auto-refresh').addEventListener('change', function() {
+                if (this.checked) {
+                    startAutoRefresh();
+                } else {
+                    stopAutoRefresh();
+                }
+            });
+        }
+
+        // 提交任务
+        async function submitTask(event) {
+            event.preventDefault();
+            
+            const formData = {
+                command: document.getElementById('command').value,
+                priority: document.getElementById('priority').value,
+                template_id: document.getElementById('template-id').value,
+                expert_slug: document.getElementById('expert-slug').value,
+                variables: {}
+            };
+
+            // 解析变量JSON
+            const variablesInput = document.getElementById('variables').value.trim();
+            if (variablesInput) {
+                try {
+                    formData.variables = JSON.parse(variablesInput);
+                } catch (e) {
+                    alert('变量格式错误，请输入有效的JSON格式');
+                    return;
+                }
+            }
+
+            try {
+                const response = await fetch('/api/v1/enhanced/tasks/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken()
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(`任务提交成功！任务ID: ${result.task_id}`);
+                    document.getElementById('task-form').reset();
+                    refreshTasks();
+                } else {
+                    alert(`任务提交失败: ${result.error}`);
+                }
+            } catch (error) {
+                console.error('提交任务错误:', error);
+                alert('提交任务失败，请稍后重试');
+            }
+        }
+
+        // 刷新队列状态
+        async function refreshQueueStatus() {
+            try {
+                const response = await fetch('/api/v1/enhanced/queue/status/');
+                const result = await response.json();
+                
+                if (result.success) {
+                    const status = result.queue_status;
+                    document.getElementById('pending-count').textContent = status.pending_count;
+                    document.getElementById('active-count').textContent = status.active_count;
+                    document.getElementById('paused-count').textContent = status.paused_count;
+                    document.getElementById('completed-count').textContent = status.completed_count;
+                    document.getElementById('failed-count').textContent = status.failed_count;
+                    document.getElementById('max-concurrent').textContent = status.max_concurrent;
+                    
+                    // 更新管理器状态
+                    const statusBadge = document.getElementById('manager-status');
+                    if (status.running) {
+                        statusBadge.textContent = '运行中';
+                        statusBadge.className = 'badge bg-success';
+                    } else {
+                        statusBadge.textContent = '已停止';
+                        statusBadge.className = 'badge bg-danger';
+                    }
+                }
+            } catch (error) {
+                console.error('刷新队列状态错误:', error);
+            }
+        }
+
+        // 刷新任务列表
+        async function refreshTasks() {
+            // 这里需要实现获取任务列表的逻辑
+            // 由于当前API没有提供列表接口，我们先显示占位内容
+            
+            const container = document.getElementById('tasks-container');
+            container.innerHTML = `
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    任务列表功能正在开发中。请使用任务ID查询具体任务状态。
+                </div>
+                <div class="row">
+                    <div class="col-md-6">
+                        <label class="form-label">任务ID查询</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="task-id-input" placeholder="输入任务ID">
+                            <button class="btn btn-primary" onclick="queryTaskById()">查询</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // 更新最后更新时间
+            document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+        }
+
+        // 根据ID查询任务
+        async function queryTaskById() {
+            const taskId = document.getElementById('task-id-input').value.trim();
+            if (!taskId) {
+                alert('请输入任务ID');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/v1/enhanced/tasks/${taskId}/`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    showTaskDetail(result.task_status);
+                } else {
+                    alert(`查询失败: ${result.error}`);
+                }
+            } catch (error) {
+                console.error('查询任务错误:', error);
+                alert('查询失败，请稍后重试');
+            }
+        }
+
+        // 显示任务详情
+        function showTaskDetail(taskStatus) {
+            const content = document.getElementById('task-detail-content');
+            content.innerHTML = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>基本信息</h6>
+                        <table class="table table-sm">
+                            <tr><td>任务ID</td><td>${taskStatus.task_id}</td></tr>
+                            <tr><td>状态</td><td><span class="badge bg-primary">${taskStatus.status}</span></td></tr>
+                            <tr><td>进度</td><td>${taskStatus.progress.toFixed(1)}%</td></tr>
+                            <tr><td>创建时间</td><td>${new Date(taskStatus.created_at).toLocaleString()}</td></tr>
+                            <tr><td>更新时间</td><td>${new Date(taskStatus.updated_at).toLocaleString()}</td></tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>操作</h6>
+                        <div class="control-buttons">
+                            <button class="btn btn-warning btn-sm" onclick="pauseTask('${taskStatus.task_id}')">
+                                <i class="fas fa-pause"></i> 暂停
+                            </button>
+                            <button class="btn btn-success btn-sm" onclick="resumeTask('${taskStatus.task_id}')">
+                                <i class="fas fa-play"></i> 恢复
+                            </button>
+                            <button class="btn btn-danger btn-sm" onclick="cancelTask('${taskStatus.task_id}')">
+                                <i class="fas fa-stop"></i> 取消
+                            </button>
+                            <button class="btn btn-info btn-sm" onclick="downloadResults('${taskStatus.task_id}')">
+                                <i class="fas fa-download"></i> 下载
+                            </button>
+                            <button class="btn btn-secondary btn-sm" onclick="downloadPartialResults('${taskStatus.task_id}')">
+                                <i class="fas fa-file-export"></i> 部分结果
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <h6>部分结果</h6>
+                    <pre class="bg-light p-3 rounded" style="max-height: 300px; overflow-y: auto;">${JSON.stringify(taskStatus.partial_results, null, 2)}</pre>
+                </div>
+                ${taskStatus.error_message ? `
+                <div class="mt-3">
+                    <h6>错误信息</h6>
+                    <div class="alert alert-danger">${taskStatus.error_message}</div>
+                </div>
+                ` : ''}
+            `;
+            
+            // 显示模态框
+            const modal = new bootstrap.Modal(document.getElementById('task-detail-modal'));
+            modal.show();
+        }
+
+        // 任务控制函数
+        async function pauseTask(taskId) {
+            await controlTask(taskId, 'pause', '暂停');
+        }
+
+        async function resumeTask(taskId) {
+            await controlTask(taskId, 'resume', '恢复');
+        }
+
+        async function cancelTask(taskId) {
+            if (confirm('确定要取消这个任务吗？')) {
+                await controlTask(taskId, 'cancel', '取消');
+            }
+        }
+
+        async function controlTask(taskId, action, actionName) {
+            try {
+                const response = await fetch(`/api/v1/enhanced/tasks/${taskId}/${action}/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken()
+                    }
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(`任务${actionName}成功`);
+                    // 重新查询任务状态
+                    setTimeout(() => queryTaskById(), 1000);
+                } else {
+                    alert(`任务${actionName}失败: ${result.message}`);
+                }
+            } catch (error) {
+                console.error(`${actionName}任务错误:`, error);
+                alert(`${actionName}任务失败，请稍后重试`);
+            }
+        }
+
+        // 下载结果
+        function downloadResults(taskId) {
+            window.open(`/api/v1/enhanced/tasks/${taskId}/download/?format=json`, '_blank');
+        }
+
+        function downloadPartialResults(taskId) {
+            window.open(`/enhanced/download/${taskId}/?partial=true`, '_blank');
+        }
+
+        // 过滤任务
+        function filterTasks() {
+            // 实现任务过滤逻辑
+        }
+
+        // 启动自动刷新
+        function startAutoRefresh() {
+            stopAutoRefresh(); // 先停止现有的
+            autoRefreshInterval = setInterval(() => {
+                refreshQueueStatus();
+                // refreshTasks(); // 暂时注释掉，因为任务列表功能还未完整实现
+            }, 5000); // 每5秒刷新一次
+        }
+
+        // 停止自动刷新
+        function stopAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+            }
+        }
+
+        // 获取CSRF Token
+        function getCsrfToken() {
+            const name = 'csrftoken';
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+    </script>
+</body>
+</html>

@@ -89,7 +89,7 @@ def check_wizard_templates():
     print("\n📄 Checking Wizard Templates...")
     
     templates_to_check = [
-        'templates/dashboard/wizard.html',
+        'templates/dashboard/wizard_enhanced.html',
         'templates/onboarding/welcome.html',
         'templates/dashboard/jobs.html',
         'templates/dashboard/job_runner.html'

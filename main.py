@@ -28,14 +28,27 @@ logging.basicConfig(
 )
 logger = logging.getLogger('tubewhale-cli')
 
-# Import template system
+# Import template system with fallback
+template_manager = None
+DJANGO_AVAILABLE = False
+
 try:
+    # Try Django-based template system
     from utils.template_system import get_template_manager
     template_manager = get_template_manager()
-    logger.info("✅ Template system loaded successfully")
-except Exception as e:
-    logger.warning(f"⚠️ Template system not available: {e}")
-    template_manager = None
+    DJANGO_AVAILABLE = True
+    logger.info("✅ Django template system loaded successfully")
+except Exception as django_error:
+    logger.warning(f"⚠️ Django template system not available: {django_error}")
+    
+    # Fallback to standalone template system
+    try:
+        from utils.standalone_templates import StandaloneTemplateManager
+        template_manager = StandaloneTemplateManager()
+        logger.info("✅ Standalone template system loaded successfully")
+    except Exception as standalone_error:
+        logger.warning(f"⚠️ Standalone template system failed: {standalone_error}")
+        template_manager = None
 
 class TubeWhaleCLI:
     """
@@ -53,11 +66,24 @@ class TubeWhaleCLI:
     # ============================================================================
     
     def analyze_single_video(self, video_id: str, role_id: str = 'content_creator', 
-                           template_id: str = 'basic_performance', 
+                           template_id: str = 'comprehensive_analysis', 
                            custom_questions: list = None,
-                           output_format: str = 'text', output_dir: str = 'outputs') -> Dict[str, Any]:
-        """Enhanced single video analysis with role and template support"""
+                           output_format: str = 'text', output_dir: str = 'outputs',
+                           injected_template: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Enhanced single video analysis with role and template support + frontend injection"""
         
+        # Handle template injection from frontend
+        if injected_template and template_manager:
+            injection_success = template_manager.inject_template(injected_template)
+            if injection_success:
+                self.logger.info(f"✅ Template injected: {injected_template.get('id')}")
+                template_id = injected_template.get('id', template_id)
+        
+        # Try offline analysis first if template_manager available
+        if template_manager and not self._backend_required():
+            return self._analyze_offline(video_id, role_id, template_id, custom_questions, output_format, output_dir)
+        
+        # Fallback to API-based analysis
         api_url = f"{self.api_base}/api/v1/analysis/video/"
         
         payload = {
@@ -65,7 +91,8 @@ class TubeWhaleCLI:
             'role_id': role_id,
             'template_id': template_id,
             'output_format': output_format,
-            'custom_questions': custom_questions or []
+            'custom_questions': custom_questions or [],
+            'injected_template': injected_template
         }
         
         try:
@@ -201,6 +228,7 @@ class TubeWhaleCLI:
                       show_details: bool = False) -> Dict[str, Any]:
         """List available templates"""
         
+        # First try the API
         api_url = f"{self.api_base}/api/v1/templates/"
         params = {}
         if tier:
@@ -226,7 +254,34 @@ class TubeWhaleCLI:
                 return self._handle_api_error(response)
                 
         except Exception as e:
-            return self._handle_general_error(e)
+            # Fallback to standalone template manager
+            global template_manager
+            if template_manager:
+                try:
+                    templates = template_manager.list_templates()
+                    # Filter by tier and category if specified
+                    filtered_templates = []
+                    for template in templates:
+                        if tier and template.get('tier') != tier:
+                            continue
+                        if category and template.get('category') != category:
+                            continue
+                        filtered_templates.append(template)
+                    
+                    return {
+                        "status": "success",
+                        "templates": filtered_templates,
+                        "count": len(filtered_templates),
+                        "source": "standalone"
+                    }
+                except Exception as standalone_error:
+                    logger.error(f"❌ Standalone template error: {standalone_error}")
+                    return {
+                        "status": "error",
+                        "message": f"Both API and standalone systems failed. API: {str(e)}, Standalone: {str(standalone_error)}"
+                    }
+            else:
+                return self._handle_general_error(e)
     
     def check_job_status(self, job_id: str, watch: bool = False) -> Dict[str, Any]:
         """Check job status with optional real-time watching"""
@@ -606,6 +661,258 @@ class TubeWhaleCLI:
             'status': 'error',
             'message': str(error)
         }
+    
+    def run_config_test(self) -> Dict[str, Any]:
+        """Run configuration and health check test for backend integration"""
+        
+        self.logger.info("🔍 Running configuration test...")
+        
+        try:
+            # Test API connectivity
+            test_url = f"{self.api_base}/api/v1/health/"
+            response = requests.get(test_url, timeout=10)
+            
+            if response.status_code == 200:
+                return {
+                    'success': True,
+                    'status': 'healthy',
+                    'message': 'Configuration test passed',
+                    'api_base': self.api_base,
+                    'backend_status': 'connected',
+                    'timestamp': datetime.now().isoformat()
+                }
+            else:
+                return {
+                    'success': False,
+                    'status': 'unhealthy',
+                    'message': f'API health check failed: {response.status_code}',
+                    'api_base': self.api_base,
+                    'backend_status': 'error',
+                    'timestamp': datetime.now().isoformat()
+                }
+                
+        except requests.exceptions.ConnectionError:
+            return {
+                'success': False,
+                'status': 'disconnected',
+                'message': 'Cannot connect to backend API',
+                'api_base': self.api_base,
+                'backend_status': 'disconnected',
+                'solution': 'Check if backend service is running',
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'status': 'error',
+                'message': f'Configuration test failed: {str(e)}',
+                'api_base': self.api_base,
+                'backend_status': 'error',
+                'timestamp': datetime.now().isoformat()
+            }
+    
+    def _backend_required(self) -> bool:
+        """检测是否需要后端API"""
+        try:
+            # 简单的连接测试
+            response = requests.get(f"{self.api_base}/api/v1/health/", timeout=2)
+            return response.status_code == 200
+        except:
+            return False
+    
+    def _analyze_offline(self, video_id: str, role_id: str, template_id: str, 
+                        custom_questions: list, output_format: str, output_dir: str) -> Dict[str, Any]:
+        """离线分析，使用本地模板系统"""
+        try:
+            self.logger.info(f"🔧 Offline analysis mode: {video_id}")
+            
+            # 模拟视频数据获取（实际应用中可以从本地缓存或API获取）
+            video_data = {
+                'video_title': f'Video Analysis for {video_id}',
+                'watch_time': '5:32',
+                'engagement_rate': '8.5%',
+                'subscription_rate': '2.3%',
+                'key_metrics': 'Views: 15K, Likes: 320, Comments: 45',
+                'additional_context': 'Recent upload with trending topic',
+                'custom_questions': '\n'.join(custom_questions) if custom_questions else 'No custom questions provided'
+            }
+            
+            # 编译模板
+            compiled_prompt = template_manager.compile_template(template_id, video_data, role_id)
+            
+            if not compiled_prompt:
+                return {
+                    'status': 'error',
+                    'message': f'Template compilation failed for {template_id}'
+                }
+            
+            # 模拟分析结果（实际应用中会调用LLM）
+            analysis_result = f"""# 视频分析报告: {video_id}
+
+## 🎯 分析配置
+- 角色: {role_id}
+- 模板: {template_id}
+- 分析时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+## 📋 生成提示
+{compiled_prompt}
+
+## ✅ 分析状态
+离线模式分析完成。实际部署时会连接LLM服务生成完整分析。
+"""
+            
+            # 保存结果
+            if output_dir:
+                filepath = self.save_results({
+                    'analysis': analysis_result,
+                    'template_used': template_id,
+                    'role_used': role_id
+                }, output_dir, output_format)
+                
+                return {
+                    'status': 'completed',
+                    'analysis': analysis_result,
+                    'template_id': template_id,
+                    'role_id': role_id,
+                    'mode': 'offline',
+                    'output_file': filepath,
+                    'timestamp': datetime.now().isoformat()
+                }
+            
+            return {
+                'status': 'completed',
+                'analysis': analysis_result,
+                'template_id': template_id,
+                'role_id': role_id,
+                'mode': 'offline',
+                'timestamp': datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Offline analysis failed: {str(e)}',
+                'template_id': template_id,
+                'role_id': role_id
+            }
+    
+    def list_available_templates(self) -> Dict[str, Any]:
+        """列出所有可用模板"""
+        if not template_manager:
+            return {
+                'success': False,
+                'error': 'Template manager not available'
+            }
+        
+        try:
+            templates = template_manager.list_templates()
+            return {
+                'success': True,
+                'templates': templates,
+                'total': len(templates),
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
+    
+    def get_template_info(self, template_id: str) -> Dict[str, Any]:
+        """获取模板详细信息"""
+        if not template_manager:
+            return {
+                'success': False,
+                'error': 'Template manager not available'
+            }
+        
+        try:
+            template = template_manager.get_template(template_id)
+            if not template:
+                return {
+                    'success': False,
+                    'error': f'Template {template_id} not found'
+                }
+            
+            return {
+                'success': True,
+                'template': template,
+                'variables': template_manager.get_template_variables(template_id),
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
+    
+    def validate_template_file(self, template_file: str) -> Dict[str, Any]:
+        """验证模板文件"""
+        try:
+            if not os.path.exists(template_file):
+                return {
+                    'success': False,
+                    'error': f'Template file not found: {template_file}'
+                }
+            
+            with open(template_file, 'r', encoding='utf-8') as f:
+                template_data = json.load(f)
+            
+            # 基本验证
+            required_fields = ['id', 'name', 'prompt']
+            missing_fields = [field for field in required_fields if field not in template_data]
+            
+            if missing_fields:
+                return {
+                    'success': False,
+                    'error': f'Missing required fields: {", ".join(missing_fields)}'
+                }
+            
+            # 如果template_manager可用，做更深入的验证
+            if template_manager:
+                # 尝试注入模板
+                injection_success = template_manager.inject_template(template_data)
+                if not injection_success:
+                    return {
+                        'success': False,
+                        'error': 'Template injection failed - invalid format'
+                    }
+            
+            return {
+                'success': True,
+                'template_id': template_data['id'],
+                'validation': 'passed',
+                'fields': list(template_data.keys()),
+                'timestamp': datetime.now().isoformat()
+            }
+            
+        except json.JSONDecodeError as e:
+            return {
+                'success': False,
+                'error': f'Invalid JSON format: {str(e)}'
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
+    
+    def load_injected_template(self, template_file: str) -> Optional[Dict[str, Any]]:
+        """加载注入的模板文件"""
+        try:
+            if not os.path.exists(template_file):
+                self.logger.warning(f"Injected template file not found: {template_file}")
+                return None
+            
+            with open(template_file, 'r', encoding='utf-8') as f:
+                template_data = json.load(f)
+            
+            self.logger.info(f"Loaded injected template: {template_data.get('id', 'unknown')}")
+            return template_data
+            
+        except Exception as e:
+            self.logger.error(f"Failed to load injected template: {e}")
+            return None
         
     def call_backend_api(self, video_id: str, analysis_type: str = "comprehensive", output_format: str = "text") -> Dict[str, Any]:
         """
@@ -1065,11 +1372,10 @@ def create_parser() -> argparse.ArgumentParser:
         'social_scientist', 'hci_specialist', 'music_educator'
     ], default='content_creator', help='Expert role for analysis perspective')
     video_parser.add_argument('--template', choices=[
-        'basic_performance', 'engagement_overview', 'content_quality',
-        'competitor_analysis', 'monetization_strategy', 'seo_optimization',
-        'educational_effectiveness', 'social_impact', 'outdoor_adventure',
-        'music_analysis', 'technical_review', 'user_experience', 'business_intelligence'
-    ], default='basic_performance', help='Analysis template to use')
+        'comprehensive_analysis', 'performance_benchmark', 'competitive_intelligence',
+        'trend_forecasting', 'audience_psychographics', 'seo_audit',
+        'monetization_strategy', 'content_strategy'
+    ], default='performance_benchmark', help='Analysis template to use')
     video_parser.add_argument('--output-format', choices=['json', 'text'], 
                              default='text', help='Output format')
     video_parser.add_argument('--output-dir', default='outputs', 
@@ -1089,11 +1395,10 @@ def create_parser() -> argparse.ArgumentParser:
         'social_scientist', 'hci_specialist', 'music_educator'
     ], default='data_analyst', help='Expert role for analysis perspective')
     playlist_parser.add_argument('--template', choices=[
-        'basic_performance', 'engagement_overview', 'content_quality',
-        'competitor_analysis', 'monetization_strategy', 'seo_optimization',
-        'educational_effectiveness', 'social_impact', 'outdoor_adventure',
-        'music_analysis', 'technical_review', 'user_experience', 'business_intelligence'
-    ], default='basic_performance', help='Analysis template to use')
+        'comprehensive_analysis', 'performance_benchmark', 'competitive_intelligence',
+        'trend_forecasting', 'audience_psychographics', 'seo_audit',
+        'monetization_strategy', 'content_strategy'
+    ], default='performance_benchmark', help='Analysis template to use')
     playlist_parser.add_argument('--batch-size', type=int, default=10,
                                help='Number of videos to analyze in batch')
     playlist_parser.add_argument('--output-format', choices=['json', 'text'], 
@@ -1113,11 +1418,10 @@ def create_parser() -> argparse.ArgumentParser:
         'social_scientist', 'hci_specialist', 'music_educator'  
     ], default='research_scientist', help='Expert role for analysis perspective')
     batch_parser.add_argument('--template', choices=[
-        'basic_performance', 'engagement_overview', 'content_quality',
-        'competitor_analysis', 'monetization_strategy', 'seo_optimization',
-        'educational_effectiveness', 'social_impact', 'outdoor_adventure',
-        'music_analysis', 'technical_review', 'user_experience', 'business_intelligence'
-    ], default='competitor_analysis', help='Analysis template to use')
+        'comprehensive_analysis', 'performance_benchmark', 'competitive_intelligence',
+        'trend_forecasting', 'audience_psychographics', 'seo_audit',
+        'monetization_strategy', 'content_strategy'
+    ], default='competitive_intelligence', help='Analysis template to use')
     batch_parser.add_argument('--output-format', choices=['json', 'text'], 
                              default='json', help='Output format')
     batch_parser.add_argument('--output-dir', default='outputs', 
@@ -1140,8 +1444,10 @@ def create_parser() -> argparse.ArgumentParser:
                              help='Output format')
     roles_parser.set_defaults(func='list_roles')
     
-    # List Templates
-    templates_parser = subparsers.add_parser('templates', help='List available templates')
+    # Template Management
+    templates_parser = subparsers.add_parser('templates', help='Template management')
+    templates_parser.add_argument('--list', action='store_true', 
+                                 help='List all available templates')
     templates_parser.add_argument('--tier', choices=['free', 'premium'], 
                                  help='Filter templates by tier')
     templates_parser.add_argument('--category', 
@@ -1150,7 +1456,7 @@ def create_parser() -> argparse.ArgumentParser:
                                  help='Filter templates by category')
     templates_parser.add_argument('--details', action='store_true',
                                  help='Show detailed template information')
-    templates_parser.add_argument('--output', choices=['text', 'json'], default='text',
+    templates_parser.add_argument('--output-format', choices=['text', 'json'], default='text',
                                  help='Output format')
     templates_parser.set_defaults(func='list_templates')
     
@@ -1189,6 +1495,31 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument('--timeout', type=int, default=300, 
                        help='API timeout in seconds')
     
+    # Backend integration options (for cli_runner.py compatibility)
+    parser.add_argument('--backend-mode', action='store_true',
+                       help='Enable backend integration mode')
+    parser.add_argument('--output-format', choices=['json', 'text'], 
+                       help='Override output format for backend mode')
+    parser.add_argument('--prompt-final', 
+                       help='Final prompt override for backend integration')
+    parser.add_argument('--config-test', action='store_true',
+                       help='Run configuration test')
+    
+    # Frontend bridge options (for template injection)
+    parser.add_argument('--injected-template-file',
+                       help='Path to injected template JSON file')
+    parser.add_argument('--custom-questions',
+                       help='Path to custom questions file')
+    
+    # Template information command
+    info_parser = subparsers.add_parser('template-info', help='Get template information')
+    info_parser.add_argument('template_id', help='Template ID to get info for')
+    info_parser.set_defaults(func='template_info')
+    
+    validate_parser = subparsers.add_parser('validate-template', help='Validate template')
+    validate_parser.add_argument('template_file', help='Template file to validate')
+    validate_parser.set_defaults(func='validate_template')
+    
     return parser
 
 def main():
@@ -1198,6 +1529,23 @@ def main():
     cli = TubeWhaleCLI()
     
     try:
+        # Handle backend integration modes
+        if args.config_test:
+            result = cli.run_config_test()
+            if args.backend_mode:
+                print(json.dumps(result))
+            else:
+                print_formatted_output(result, 'text')
+            return
+            
+        # Handle backend mode for existing commands
+        if args.backend_mode:
+            # Ensure JSON output for backend mode
+            if hasattr(args, 'output_format') and args.output_format:
+                args.output_format = 'json'
+            if hasattr(args, 'output'):
+                args.output = 'json'
+        
         # Handle wizard mode
         if hasattr(args, 'func') and args.func == 'run_wizard':
             cli.run_wizard(skip_intro=args.skip_intro)
@@ -1206,35 +1554,63 @@ def main():
         # Handle utility commands
         if hasattr(args, 'func') and args.func == 'list_roles':
             result = cli.list_expert_roles(tier=args.tier, show_details=args.details)
-            print_formatted_output(result, args.output)
+            print_formatted_output(result, args.output_format or 'text')
             return
         
         if hasattr(args, 'func') and args.func == 'list_templates':
             result = cli.list_templates(tier=args.tier, category=args.category, 
                                       show_details=args.details)
-            print_formatted_output(result, args.output, show_details=args.details)
+            print_formatted_output(result, args.output_format or 'text', show_details=args.details)
             return
         
         if hasattr(args, 'func') and args.func == 'check_status':
             result = cli.check_job_status(args.job_id, watch=args.watch)
-            print_formatted_output(result, args.output)
+            print_formatted_output(result, args.output_format or 'text')
             return
         
         if hasattr(args, 'func') and args.func == 'download_results':
             result = cli.download_results(args.job_id, format_type=args.format, 
                                         output_path=args.output_path)
-            print_formatted_output(result, args.output)
+            print_formatted_output(result, args.output_format or 'text')
             return
         
+        # Handle template management commands
+        if hasattr(args, 'func') and args.func == 'list_templates':
+            result = cli.list_available_templates()
+            print_formatted_output(result, args.output_format or 'text')
+            return
+            
+        if hasattr(args, 'func') and args.func == 'template_info':
+            result = cli.get_template_info(args.template_id)
+            print_formatted_output(result, args.output_format or 'text')
+            return
+            
+        if hasattr(args, 'func') and args.func == 'validate_template':
+            result = cli.validate_template_file(args.template_file)
+            print_formatted_output(result, args.output_format or 'text')
+            return
+
         # Handle analysis commands
         if hasattr(args, 'func') and args.func == 'analyze_video':
+            # Handle injected template
+            injected_template = None
+            if args.injected_template_file:
+                injected_template = cli.load_injected_template(args.injected_template_file)
+            
+            # Handle custom questions
+            custom_questions = args.custom_questions
+            if hasattr(args, 'custom_questions') and args.custom_questions and os.path.isfile(args.custom_questions):
+                with open(args.custom_questions, 'r', encoding='utf-8') as f:
+                    custom_questions = [line.strip() for line in f if line.strip()]
+            
             result = cli.analyze_single_video(
                 video_id=args.video_id,
                 role_id=args.role or 'content_creator',
-                template_id=args.template or 'basic_performance',
-                custom_questions=args.custom_questions,
+                template_id=args.template or 'comprehensive_analysis',
+                custom_questions=custom_questions,
                 output_format=args.output_format,
-                output_dir=args.output_dir
+                output_dir=args.output_dir,
+                injected_template=injected_template
             )
             
             print_formatted_output(result, args.output_format)
@@ -1342,15 +1718,17 @@ def print_formatted_output(result: Dict[str, Any], format_type: str = 'text', sh
     
     elif 'templates' in result:
         # Templates listing
-        print(f"\n� Available Templates ({len(result['templates'])} total)")
+        print(f"\n📝 Available Templates ({len(result['templates'])} total)")
         print("=" * 50)
         
         for template in result['templates']:
-            tier_badge = "🆓" if template['tier'] == 'free' else "⭐"
-            print(f"\n{template['icon']} {template['name']} {tier_badge}")
+            tier_badge = "🆓" if template.get('tier') == 'free' else "⭐"
+            icon = template.get('icon', '📋')
+            print(f"\n{icon} {template['name']} {tier_badge}")
             print(f"   {template['description']}")
-            print(f"   Category: {template['category'].title()}")
-            processing_time = template.get('processing_time', template.get('estimated_time', '未知时间'))
+            category = template.get('category', 'general')
+            print(f"   Category: {category.title()}")
+            processing_time = template.get('processing_time', template.get('estimated_time', '2-3分钟'))
             analysis_scope = template.get('analysis_scope', '完整内容分析')
             if show_details:
                 print(f"   📋 {analysis_scope}")

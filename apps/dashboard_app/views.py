@@ -5,15 +5,20 @@ User onboarding and environment configuration
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
+from django.utils import timezone
+from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
+from django.utils.timesince import timesince
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.core.paginator import Paginator
-from django.db.models import Q
+from django.db.models import Q, Count
 from apps.user_app.decorators import scientist_login_required
 from .models import TemplateCategory, AnalysisTemplate
+from apps.tubewhale_engine.models import AnalysisJob
 import os
 import json
+from urllib.parse import urlparse, parse_qs
 
 
 def home_view(request):
@@ -127,10 +132,10 @@ def job_runner_view(request):
     
     # Calculate job statistics
     job_stats = {
-        'pending': 0,
-        'running': len(active_jobs),
-        'completed': len(recent_jobs),
-        'failed': 0
+        'pending': sum(1 for job in active_jobs if job['status'] == 'queued'),
+        'running': sum(1 for job in active_jobs if job['status'] == 'processing'),
+        'completed': sum(1 for job in recent_jobs if job['status'] == 'completed'),
+        'failed': sum(1 for job in recent_jobs if job['status'] == 'failed'),
     }
     
     context = {
@@ -231,15 +236,217 @@ def get_user_template_selection(user):
 
 
 def get_user_active_jobs(user):
-    """Get user's currently running jobs"""
-    # TODO: Implement job tracking
-    return []
+    """Get user's currently running or queued jobs"""
+    jobs = AnalysisJob.objects.filter(
+        user=user,
+        status__in=['queued', 'processing']
+    ).order_by('-created_at')[:20]
+    return [serialize_analysis_job(job) for job in jobs]
 
 
 def get_user_completed_jobs(user):
-    """Get user's completed jobs"""
-    # TODO: Implement job history
-    return []
+    """Get user's recently completed or failed jobs"""
+    jobs = AnalysisJob.objects.filter(
+        user=user,
+        status__in=['completed', 'failed', 'cancelled']
+    ).order_by('-created_at')[:20]
+    return [serialize_analysis_job(job) for job in jobs]
+
+
+def extract_youtube_video_id(video_input: str) -> str:
+    """Extract YouTube video ID from various input formats"""
+    if not video_input:
+        return ''
+    value = video_input.strip()
+    if len(value) == 11 and value.replace('_', '').replace('-', '').isalnum():
+        return value
+    try:
+        parsed = urlparse(value)
+    except Exception:
+        return value
+
+    host = parsed.netloc.lower()
+    if host in {'youtu.be', 'www.youtu.be'}:
+        return parsed.path.strip('/')
+
+    if 'youtube.com' in host:
+        query = parse_qs(parsed.query)
+        if 'v' in query and query['v']:
+            return query['v'][0]
+        path_parts = [segment for segment in parsed.path.split('/') if segment]
+        if path_parts:
+            if path_parts[0] == 'shorts' and len(path_parts) > 1:
+                return path_parts[1]
+            if path_parts[0] == 'embed' and len(path_parts) > 1:
+                return path_parts[1]
+
+    return value
+
+
+def extract_youtube_playlist_id(playlist_input: str) -> str:
+    """Extract YouTube playlist ID from input"""
+    if not playlist_input:
+        return ''
+    value = playlist_input.strip()
+    try:
+        parsed = urlparse(value)
+    except Exception:
+        return value
+
+    query = parse_qs(parsed.query)
+    if 'list' in query and query['list']:
+        return query['list'][0]
+
+    path = parsed.path.strip('/') if parsed.path else ''
+    if path:
+        return path.split('/')[-1]
+
+    return value
+
+
+def parse_job_input(tool_type: str, input_value: str) -> tuple[str, str]:
+    """Normalize content ID and URL based on selected tool"""
+    input_value = (input_value or '').strip()
+
+    if tool_type == 'single_video':
+        video_id = extract_youtube_video_id(input_value)
+        content_url = input_value if input_value.startswith('http') else (
+            f"https://www.youtube.com/watch?v={video_id}" if video_id else ''
+        )
+        return video_id or slugify(input_value)[:32] or 'video-analysis', content_url
+
+    if tool_type == 'playlist':
+        playlist_id = extract_youtube_playlist_id(input_value)
+        content_url = input_value if input_value.startswith('http') else (
+            f"https://www.youtube.com/playlist?list={playlist_id}" if playlist_id else ''
+        )
+        return playlist_id or slugify(input_value)[:32] or 'playlist-analysis', content_url
+
+    if tool_type == 'brainstorm':
+        topic_slug = slugify(input_value)[:32] if input_value else ''
+        return topic_slug or 'brainstorm-session', ''
+
+    fallback = slugify(input_value)[:32]
+    return fallback or 'analysis-task', input_value
+
+
+def serialize_analysis_job(job: AnalysisJob) -> dict:
+    """Convert AnalysisJob model into template-friendly structure"""
+    options = job.analysis_options or {}
+    display_name = (
+        options.get('display_name')
+        or job.content_title
+        or options.get('brainstorm_topic')
+        or job.content_id
+        or _('Analysis Job')
+    )
+
+    task_type = options.get('tool_type', job.analysis_type)
+    now = timezone.now()
+    created_ago = timesince(job.created_at, now) if job.created_at else None
+    completed_ago = timesince(job.completed_at, now) if job.completed_at else None
+
+    return {
+        'id': job.job_id,
+        'video_id': display_name,
+        'task_type': task_type.replace('_', ' ').title() if isinstance(task_type, str) else task_type,
+        'status': job.status,
+        'created_at': job.created_at,
+        'completed_at': job.completed_at,
+        'progress': job.progress,
+        'content_url': job.content_url,
+        'analysis_type': job.analysis_type,
+        'template_name': job.template_id,
+        'options': options,
+        'created_ago': created_ago,
+        'completed_ago': completed_ago,
+    }
+
+
+def create_analysis_job_entry(
+    *,
+    user,
+    tool_type: str,
+    role: str,
+    template_id: str,
+    input_value: str,
+    custom_questions: list[str] | None = None,
+    analysis_depth: str = 'detailed',
+    report_language: str = 'en',
+    additional_options: dict | None = None,
+) -> AnalysisJob:
+    """Create a persisted analysis job record for wizard submissions"""
+
+    custom_questions = custom_questions or []
+    additional_options = additional_options or {}
+
+    content_id, content_url = parse_job_input(tool_type, input_value)
+
+    analysis_type_map = {
+        'single_video': 'video',
+        'playlist': 'playlist',
+        'brainstorm': 'custom',
+    }
+
+    safe_role = (role or 'general').replace(' ', '-').lower()
+    safe_template = template_id or 'default-template'
+
+    options = {
+        'tool_type': tool_type,
+        'input_value': input_value,
+        'analysis_depth': analysis_depth,
+        'report_language': report_language,
+        'custom_questions': custom_questions,
+        'created_via': additional_options.get('created_via', 'wizard'),
+    }
+    options.update(additional_options)
+
+    display_name = options.get('display_name')
+    if not display_name:
+        if tool_type == 'brainstorm':
+            display_name = options.get('brainstorm_topic') or _('AI Brainstorm Session')
+        else:
+            display_name = content_id or _('Video Analysis')
+
+    job = AnalysisJob.objects.create(
+        user=user,
+        analysis_type=analysis_type_map.get(tool_type, 'custom'),
+        expert_role=safe_role,
+        template_id=safe_template,
+        content_id=content_id,
+        content_url=content_url,
+        content_title=display_name,
+        status='queued',
+        progress=0,
+        custom_questions=custom_questions,
+        analysis_options=options,
+    )
+
+    return job
+
+
+def get_analysis_job_statistics(user=None) -> dict:
+    """Aggregate job statistics for CLI and dashboard"""
+    queryset = AnalysisJob.objects.all()
+    if user is not None:
+        queryset = queryset.filter(user=user)
+
+    summary = queryset.values('status').order_by().annotate(count=Count('job_id'))
+    stats = {'queued': 0, 'processing': 0, 'completed': 0, 'failed': 0, 'cancelled': 0}
+    for item in summary:
+        stats[item['status']] = item['count']
+    stats['total'] = sum(stats.values())
+    stats['active'] = stats['queued'] + stats['processing']
+    return stats
+
+
+def get_recent_analysis_jobs(user=None, limit: int = 5):
+    """Retrieve recent jobs for CLI output"""
+    queryset = AnalysisJob.objects.all()
+    if user is not None:
+        queryset = queryset.filter(user=user)
+    jobs = queryset.order_by('-created_at')[:limit]
+    return list(jobs)
 
 
 # Template Selection Views
@@ -330,7 +537,7 @@ def intelligent_wizard_view(request):
         'max_concurrent_jobs': get_user_max_jobs(user),
     }
     
-    return render(request, 'dashboard/wizard.html', context)
+    return render(request, 'dashboard/wizard_enhanced.html', context)
 
 
 @scientist_login_required
@@ -370,7 +577,7 @@ def smart_wizard_view(request):
         'max_concurrent_jobs': get_user_max_jobs(user),
     }
     
-    return render(request, 'dashboard/wizard.html', context)
+    return render(request, 'dashboard/wizard_enhanced.html', context)
 
 
 def handle_smart_wizard_submission(request, available_templates):
@@ -380,6 +587,23 @@ def handle_smart_wizard_submission(request, available_templates):
         selected_role = request.POST.get('selected_role')
         template_name = request.POST.get('template_name')
         video_input = request.POST.get('video_input', '').strip()
+        analysis_depth = request.POST.get('analysis_depth', 'detailed')
+        report_language = request.POST.get('report_language', 'en')
+        brainstorm_topic = request.POST.get('brainstorm_topic', '').strip()
+        custom_questions_raw = request.POST.get('custom_questions')
+        custom_questions = []
+
+        if custom_questions_raw:
+            try:
+                parsed_questions = json.loads(custom_questions_raw)
+                if isinstance(parsed_questions, list):
+                    custom_questions = [q.strip() for q in parsed_questions if isinstance(q, str) and q.strip()]
+            except json.JSONDecodeError:
+                custom_questions = [part.strip() for part in custom_questions_raw.split('\n') if part.strip()]
+
+        if not custom_questions:
+            # Fallback for checkbox-style submissions: custom_questions[]
+            custom_questions = [q.strip() for q in request.POST.getlist('custom_questions[]') if q.strip()]
         
         # Validate inputs
         if not all([tool_type, selected_role, template_name]):
@@ -401,25 +625,38 @@ def handle_smart_wizard_submission(request, available_templates):
             messages.error(request, _('Selected template not found.'))
             return redirect('dashboard:smart_wizard')
         
-        # Create job parameters
-        job_params = {
+        input_value = video_input
+        if tool_type == 'brainstorm':
+            input_value = brainstorm_topic or request.POST.get('analysis_input', '').strip()
+
+        job = create_analysis_job_entry(
+            user=request.user,
+            tool_type=tool_type,
+            role=selected_role,
+            template_id=getattr(template, 'template_id', template.name),
+            input_value=input_value,
+            custom_questions=custom_questions,
+            analysis_depth=analysis_depth,
+            report_language=report_language,
+            additional_options={
+                'display_name': template.name,
+                'template_db_id': template.id,
+                'template_name': template.name,
+                'brainstorm_topic': brainstorm_topic,
+                'source': 'smart_wizard_view',
+            }
+        )
+
+        request.session['wizard_job_params'] = {
             'tool_type': tool_type,
-            'role': selected_role,
             'template': template.name,
-            'template_id': template.id,
+            'job_id': job.job_id,
         }
-        
-        if tool_type == 'single_video':
-            job_params['video_url'] = video_input
-        elif tool_type == 'playlist':
-            job_params['playlist_url'] = video_input
-        elif tool_type == 'brainstorm':
-            job_params['brainstorm_topic'] = request.POST.get('brainstorm_topic', '').strip()
-        
-        # Store in session for job creation
-        request.session['wizard_job_params'] = job_params
-        
-        messages.success(request, _('Analysis configuration saved. Redirecting to job runner...'))
+
+        messages.success(
+            request,
+            _('Analysis job {} created successfully. Redirecting to job runner...').format(job.job_id)
+        )
         return redirect('dashboard:job_runner')
         
     except Exception as e:
@@ -727,117 +964,220 @@ def theme_search_view(request):
 def process_cli_command(command, user):
     """Process CLI commands with professional system integration"""
     import subprocess
-    import datetime
-    
+    now = timezone.now()
     cmd = command.lower().strip()
-    timestamp = datetime.datetime.now().strftime('%H:%M')
-    
-    # Security: Only allow safe commands for web interface
-    safe_commands = {
-        'status': 'system_status',
-        'help': 'show_help',
-        'jobs list': 'list_jobs',
-        'docker ps': 'docker_status',
-        'logs': 'show_logs',
-        'queue status': 'queue_status',
-        'clear': 'clear_terminal'
-    }
-    
-    # Handle system status
+    timestamp = now.strftime('%H:%M')
+
     if cmd == 'status':
+        stats = get_analysis_job_statistics(user)
+        active_jobs = get_recent_analysis_jobs(user, limit=1)
+        active_line = _('No active jobs running')
+        if active_jobs:
+            job = active_jobs[0]
+            active_line = _('%(job_id)s • %(status)s • %(ago)s ago') % {
+                'job_id': job.job_id,
+                'status': job.status.title(),
+                'ago': timesince(job.created_at, now) if job.created_at else _('just now'),
+            }
+
+        output = [
+            'System Status Report:',
+            '────────────────────────────────────────',
+            f"Jobs Total: {stats['total']} | Active: {stats['active']} | Completed: {stats['completed']} | Failed: {stats['failed']}",
+            f"Queued: {stats['queued']} | Processing: {stats['processing']} | Cancelled: {stats['cancelled']}",
+            '',
+            f"Active Job: {active_line}",
+            f"Last Update: {timestamp}",
+        ]
         return {
-            'output': '''System Status Report:
-✓ Docker Services: All containers running
-✓ Analysis Engine: Ready for processing
-✓ Database: PostgreSQL connected
-✓ Redis Cache: Active and responsive
-⚡ Background Jobs: 2 active, 0 failed
-📊 Queue Length: 3 pending jobs
-🔄 Processing Rate: 4.2 jobs/hour
-💾 Disk Space: 78% available''',
+            'output': '\n'.join(output),
             'type': 'success',
             'timestamp': timestamp
         }
-    
-    # Handle job listing
-    elif cmd == 'jobs list':
-        return {
-            'output': '''Active Analysis Jobs:
-────────────────────────────────────────
-ID     Status      Template          Started
-#1001  Running     sentiment_analysis 2m ago
-#1002  Queued      content_summary   30s ago  
-#1003  Failed      transcript_gen    5m ago
-#1004  Completed   keyword_extract   15m ago
 
-Total: 4 jobs | Success Rate: 75%
-Use 'jobs <id>' for detailed information''',
+    if cmd == 'jobs list':
+        jobs = get_recent_analysis_jobs(user, limit=8)
+        if not jobs:
+            return {
+                'output': 'No analysis jobs found. Use the wizard to start a new analysis.',
+                'type': 'info',
+                'timestamp': timestamp
+            }
+
+        lines = [
+            'Recent Analysis Jobs:',
+            '────────────────────────────────────────────',
+            'ID       Status       Template            Started',
+        ]
+        for job in jobs:
+            started = timesince(job.created_at, now) if job.created_at else 'just now'
+            template_name = (job.analysis_options or {}).get('template_name') or job.template_id
+            lines.append(f"{job.job_id:<8} {job.status.title():<11} {template_name[:18]:<18} {started} ago")
+
+        lines.append('────────────────────────────────────────────')
+        lines.append("Use 'jobs <id>' for detailed information")
+        return {
+            'output': '\n'.join(lines),
             'type': 'info',
             'timestamp': timestamp
         }
-    
-    # Handle Docker status
-    elif cmd == 'docker ps':
+
+    if cmd.startswith('jobs ') and len(cmd.split()) == 2:
+        job_id = cmd.split()[1]
+        job = AnalysisJob.objects.filter(job_id=job_id, user=user).first()
+        if not job:
+            return {
+                'output': _('Job %(job_id)s not found for current user.') % {'job_id': job_id},
+                'type': 'error',
+                'timestamp': timestamp
+            }
+
+        started = timesince(job.created_at, now) if job.created_at else _('just now')
+        completed = timesince(job.completed_at, now) if job.completed_at else None
+        options = job.analysis_options or {}
+        template_name = options.get('template_name') or job.template_id
+        custom_questions = options.get('custom_questions') or []
+
+        output = [
+            f"Job Details: {job.job_id}",
+            '────────────────────────────────────────────',
+            f"Status: {job.status.title()} (progress {job.progress}%)",
+            f"Analysis Type: {job.analysis_type.title()}",
+            f"Template: {template_name}",
+            f"Expert Role: {job.expert_role}",
+            f"Input: {options.get('input_value', job.content_id)}",
+            f"Created: {started} ago",
+        ]
+        if completed:
+            output.append(f"Completed: {completed} ago")
+        if custom_questions:
+            output.append('Custom Questions:')
+            for question in custom_questions:
+                output.append(f"  • {question}")
+        if job.error_message:
+            output.append('Error Message:')
+            output.append(job.error_message)
+
+        return {
+            'output': '\n'.join(output),
+            'type': 'info',
+            'timestamp': timestamp
+        }
+
+    if cmd == 'queue status':
+        stats = get_analysis_job_statistics(user)
+        queued_jobs = get_recent_analysis_jobs(user, limit=5)
+        queued_jobs = [job for job in queued_jobs if job.status == 'queued']
+        lines = [
+            'Analysis Queue Dashboard:',
+            '────────────────────────────────────────────',
+            f"Current Queue Length: {stats['queued']} jobs",
+            f"Processing: {stats['processing']} jobs",
+            f"Completed Today: {stats['completed']}",
+            '',
+        ]
+        if queued_jobs:
+            lines.append('Next Jobs:')
+            for job in queued_jobs:
+                created = timesince(job.created_at, now) if job.created_at else 'just now'
+                lines.append(f"  • {job.job_id} | {job.expert_role} | queued {created} ago")
+        else:
+            lines.append('No queued jobs at the moment. ✅')
+
+        return {
+            'output': '\n'.join(lines),
+            'type': 'info',
+            'timestamp': timestamp
+        }
+
+    if cmd.startswith('start '):
+        video_url = command[6:].strip()
+        if not video_url:
+            return {
+                'output': _('Usage: start <youtube_url_or_id>'),
+                'type': 'error',
+                'timestamp': timestamp
+            }
+
+        template_obj = (
+            AnalysisTemplate.objects.filter(template_id='default-analysis').first()
+            or AnalysisTemplate.objects.filter(slug='default-analysis').first()
+            or AnalysisTemplate.objects.filter(is_active=True).order_by('order').first()
+        )
+
+        template_id = template_obj.template_id if template_obj else 'default-analysis'
+        template_name = template_obj.name if template_obj else _('Default Analysis')
+
+        job = create_analysis_job_entry(
+            user=user,
+            tool_type='single_video',
+            role='content-creator',
+            template_id=template_id,
+            input_value=video_url,
+            custom_questions=[],
+            analysis_depth='detailed',
+            report_language='en',
+            additional_options={
+                'display_name': template_name,
+                'template_db_id': template_obj.id if template_obj else None,
+                'template_name': template_name,
+                'source': 'cli',
+            }
+        )
+
+        return {
+            'output': _(
+                'Analysis job %(job_id)s created for %(video)s with template %(template)s. Use "jobs %(job_id)s" to monitor.'
+            ) % {
+                'job_id': job.job_id,
+                'video': video_url,
+                'template': template_name,
+            },
+            'type': 'success',
+            'timestamp': timestamp
+        }
+
+    if cmd == 'docker ps':
         try:
-            result = subprocess.run(['docker', 'ps', '--format', 'table {{.Names}}\t{{.Status}}\t{{.Image}}'], 
-                                  capture_output=True, text=True, timeout=10)
+            result = subprocess.run(
+                ['docker', 'ps', '--format', 'table {{.Names}}\t{{.Status}}\t{{.Image}}'],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
             if result.returncode == 0:
                 return {
                     'output': f'Docker Container Status:\n{result.stdout}',
-                    'type': 'success', 
-                    'timestamp': timestamp
+                    'type': 'success',
+                    'timestamp': timestamp,
                 }
-            else:
-                return {
-                    'output': 'Error accessing Docker services',
-                    'type': 'error',
-                    'timestamp': timestamp
-                }
-        except Exception as e:
+            return {
+                'output': 'Error accessing Docker services',
+                'type': 'error',
+                'timestamp': timestamp,
+            }
+        except Exception:
             return {
                 'output': 'Docker services unavailable - running in development mode',
                 'type': 'warning',
-                'timestamp': timestamp
+                'timestamp': timestamp,
             }
-    
-    # Handle logs
-    elif cmd.startswith('logs'):
+
+    if cmd.startswith('logs'):
+        logs = [
+            f"[{timestamp}] INFO  User {user.username} executed CLI command '{command}'",
+        ]
+        recent_jobs = get_recent_analysis_jobs(user, limit=3)
+        for job in recent_jobs:
+            created = timesince(job.created_at, now) if job.created_at else 'just now'
+            logs.append(f"[{timestamp}] JOB   {job.job_id} status {job.status} (created {created} ago)")
         return {
-            'output': f'''Recent System Logs:
-[{timestamp}] INFO  Analysis engine started successfully
-[{timestamp}] INFO  User {user.username} authenticated
-[{timestamp}] SUCCESS Template selection completed  
-[{timestamp}] INFO  Job #1001 processing started
-[{timestamp}] WARNING Rate limit: 80% of daily quota used
-[{timestamp}] INFO  Background worker #2 active
-[{timestamp}] SUCCESS Database backup completed
-[{timestamp}] INFO  Cache optimization running''',
+            'output': '\n'.join(logs),
             'type': 'info',
             'timestamp': timestamp
         }
-    
-    # Handle queue status
-    elif cmd == 'queue status':
-        return {
-            'output': '''Analysis Queue Dashboard:
-════════════════════════════════════════
-Current Queue Length: 3 jobs
-Active Workers: 4 available
-Average Processing Time: 2m 30s
-Queue Throughput: 4.2 jobs/hour
 
-Priority Queue:
-High Priority: 1 job
-Normal Priority: 2 jobs
-Low Priority: 0 jobs
-
-Next Job ETA: 45 seconds''',
-            'type': 'info',
-            'timestamp': timestamp
-        }
-    
-    # Handle help
-    elif cmd == 'help':
+    if cmd == 'help':
         return {
             'output': '''TubeWhale CLI Commands Reference:
 ╭─────────────────────────────────────────────╮
@@ -1011,128 +1351,115 @@ def get_user_max_jobs(user):
     return tier_limits.get(user.tier.lower() if user.tier else 'basic', 1)
 
 
-import uuid
-# Missing functions for dashboard_app/views.py
-
-def handle_smart_wizard_submission(request, available_templates, analysis_paths):
-    """Handle form submission from smart 4-step wizard"""
-    from django.http import JsonResponse
-    import json
-    
-    try:
-        data = json.loads(request.body) if request.content_type == 'application/json' else request.POST
-        
-        selected_tool = data.get('selected_tool')
-        selected_template_id = data.get('template_id')
-        analysis_type = data.get('analysis_type')
-        user_input = data.get('user_input')
-        
-        # Validate the selected path
-        if selected_tool not in analysis_paths:
-            return JsonResponse({'error': 'Invalid analysis tool selected'}, status=400)
-        
-        # Find the selected template using template_id field
-        selected_template = None
-        for template in available_templates:
-            if str(template.template_id) == str(selected_template_id):
-                selected_template = template
-                break
-        
-        if not selected_template:
-            return JsonResponse({'error': 'Selected template not found'}, status=400)
-        
-        # Validate input based on selected tool
-        path_config = analysis_paths[selected_tool]
-        if analysis_type not in path_config['analysis_types']:
-            return JsonResponse({'error': 'Invalid analysis type for selected tool'}, status=400)
-        
-        # Create smart analysis job configuration
-        # Convert translated strings to regular strings to avoid JSON serialization issues
-        safe_path_config = {
-            'name': str(path_config['name']),
-            'description': str(path_config['description']),
-            'icon': path_config['icon'],
-            'color': path_config['color'],
-            'analysis_types': path_config['analysis_types'],
-            'input_types': path_config['input_types'],
-            'example_inputs': path_config['example_inputs']
-            # Note: omitting 'templates' as it contains Django model objects
-        }
-        
-        job_config = {
-            'tool_type': selected_tool,
-            'template_id': selected_template.template_id,
-            'template_name': selected_template.name,
-            'analysis_type': analysis_type,
-            'user_input': user_input,
-            'path_config': safe_path_config,
-            'created_via': 'smart_wizard',
-        }
-        
-        # Store configuration in session for job runner
-        request.session['pending_job_config'] = job_config
-        
-        return JsonResponse({
-            'success': True,
-            'message': 'Analysis configuration saved. Redirecting to job runner...',
-            'redirect_url': '/dashboard/job-runner/?start_job=true'
-        })
-        
-    except Exception as e:
-        return JsonResponse({'error': f'Configuration error: {str(e)}'}, status=500)
-
-
 def jobs_view(request):
-    """Display user's analysis jobs and handle wizard submissions"""
+    """Display user's analysis jobs and handle unified wizard submissions"""
     from django.shortcuts import render
-    from django.http import HttpResponseRedirect
     from django.urls import reverse
-    from django.contrib import messages
-    import uuid
-    import requests
-    
+    from django.http import HttpResponseRedirect
+
     if request.method == 'POST':
-        # Handle wizard analysis submission
-        tool = request.POST.get('tool')
-        role = request.POST.get('role')
-        template = request.POST.get('template')
-        input_text = request.POST.get('input')
-        
-        if not all([tool, role, template, input_text]):
-            messages.error(request, 'All fields are required for analysis')
-            return HttpResponseRedirect(reverse('dashboard:wizard'))
-        
+        tool = request.POST.get('tool', '').strip()
+        role = request.POST.get('role', '').strip()
+        template = request.POST.get('template', '').strip()
+        input_data = (request.POST.get('input') or '').strip()
+
+        depth = request.POST.get('depth', 'detailed')
+        language = request.POST.get('language', 'zh-CN')
+        custom_questions_raw = request.POST.get('custom_questions', '[]')
+        modules_raw = request.POST.get('modules')
+        limit = request.POST.get('limit')
+        count = request.POST.get('count')
+        content_type = request.POST.get('type', 'mixed')
+
+        if tool not in {'single_video', 'playlist', 'brainstorm'}:
+            messages.error(request, _('Unsupported tool type: {}').format(tool or 'unknown'))
+            return HttpResponseRedirect(reverse('dashboard:smart_wizard'))
+
+        if not all([role, template]) or (tool != 'brainstorm' and not input_data):
+            messages.error(request, _('All required fields must be completed for analysis'))
+            return HttpResponseRedirect(reverse('dashboard:smart_wizard'))
+
+        analysis_modules = {
+            'transcript': True,
+            'sentiment': True,
+            'keywords': True,
+            'trends': False,
+        }
+        if modules_raw:
+            try:
+                parsed_modules = json.loads(modules_raw)
+                if isinstance(parsed_modules, dict):
+                    analysis_modules.update(parsed_modules)
+            except json.JSONDecodeError:
+                pass
+
+        custom_questions = []
         try:
-            # Extract video ID from YouTube URL if needed
-            video_id = input_text
-            if 'youtube.com/watch?v=' in input_text:
-                video_id = input_text.split('v=')[1].split('&')[0]
-            elif 'youtu.be/' in input_text:
-                video_id = input_text.split('youtu.be/')[1].split('?')[0]
-            
-            # Call the analysis API
-            api_url = request.build_absolute_uri('/api/v1/analysis/video/')
-            api_data = {
-                'video_id': video_id,
-                'expert_role': role.replace('-', '_'),
-                'template': template,
-                'analysis_depth': 'standard'
+            parsed_questions = json.loads(custom_questions_raw) if custom_questions_raw else []
+            if isinstance(parsed_questions, list):
+                custom_questions = [q.strip() for q in parsed_questions if isinstance(q, str) and q.strip()]
+        except json.JSONDecodeError:
+            custom_questions = []
+
+        template_obj = (
+            AnalysisTemplate.objects.filter(template_id=template).first()
+            or AnalysisTemplate.objects.filter(slug=template).first()
+        )
+        display_name = template_obj.name if template_obj else template.replace('-', ' ').title()
+
+        additional_options = {
+            'display_name': display_name,
+            'template_db_id': template_obj.id if template_obj else None,
+            'template_name': display_name,
+            'modules': analysis_modules,
+            'report_language': language,
+            'source': 'wizard_enhanced',
+        }
+
+        if tool == 'playlist':
+            additional_options['video_limit'] = int(limit) if limit and limit.isdigit() else None
+        if tool == 'brainstorm':
+            additional_options['brainstorm_topic'] = input_data
+            additional_options['content_count'] = int(count) if count and count.isdigit() else 20
+            additional_options['content_type'] = content_type
+
+        try:
+            job = create_analysis_job_entry(
+                user=request.user,
+                tool_type=tool,
+                role=role,
+                template_id=template,
+                input_value=input_data,
+                custom_questions=custom_questions,
+                analysis_depth=depth,
+                report_language=language,
+                additional_options=additional_options,
+            )
+
+            request.session['wizard_job_params'] = {
+                'tool_type': tool,
+                'template': display_name,
+                'job_id': job.job_id,
             }
-            
-            response = requests.post(api_url, json=api_data, timeout=30)
-            
-            if response.status_code == 200:
-                result = response.json()
-                job_id = result.get('job_id')
-                messages.success(request, f'Analysis started successfully! Job ID: {job_id}')
-            else:
-                messages.error(request, 'Failed to start analysis. Please try again.')
-                
-        except Exception as e:
-            messages.error(request, f'Error starting analysis: {str(e)}')
-        
-        return HttpResponseRedirect(reverse('dashboard:jobs'))
-    
+
+            tool_names = {
+                'single_video': _('Single Video Analysis'),
+                'playlist': _('Playlist Analysis'),
+                'brainstorm': _('AI Brainstorm Analysis'),
+            }
+
+            messages.success(
+                request,
+                _('🚀 {} started successfully! Job ID: {} | Role: {} | Template: {}').format(
+                    tool_names.get(tool, _('Analysis')), job.job_id, role, display_name
+                )
+            )
+            return redirect('dashboard:job_runner')
+
+        except Exception as exc:
+            messages.error(request, _('Error starting analysis: {}').format(str(exc)))
+            return HttpResponseRedirect(reverse('dashboard:smart_wizard'))
+
     return render(request, 'dashboard/jobs.html', {
         'user': request.user,
     })

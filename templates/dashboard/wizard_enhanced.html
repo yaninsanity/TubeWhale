@@ -1,0 +1,1098 @@
+{% load i18n %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚀 TubeWhale YouTube Analysis Wizard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --success-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            --warning-gradient: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+            --info-gradient: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+        }
+        
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+        
+        .wizard-container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            background: white;
+            border-radius: 25px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        .wizard-header {
+            background: var(--primary-gradient);
+            color: white;
+            padding: 3rem 2rem;
+            text-align: center;
+            position: relative;
+        }
+        
+        .wizard-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="white" opacity="0.1"/><circle cx="75" cy="75" r="1" fill="white" opacity="0.1"/><circle cx="50" cy="10" r="0.5" fill="white" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+        }
+        
+        .wizard-header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            position: relative;
+        }
+        
+        .step-indicator {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 2.5rem 0;
+            padding: 0 2rem;
+        }
+        
+        .step-item {
+            flex: 1;
+            text-align: center;
+            position: relative;
+            max-width: 200px;
+        }
+        
+        .step-item:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            top: 20px;
+            right: -50%;
+            width: 100%;
+            height: 3px;
+            background: #dee2e6;
+            z-index: 1;
+        }
+        
+        .step-item.completed:not(:last-child)::after {
+            background: var(--primary-gradient);
+        }
+        
+        .step-circle {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: #dee2e6;
+            color: #6c757d;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 0.5rem;
+            font-weight: bold;
+            font-size: 1.1rem;
+            transition: all 0.4s ease;
+            position: relative;
+            z-index: 2;
+        }
+        
+        .step-item.active .step-circle {
+            background: var(--primary-gradient);
+            color: white;
+            transform: scale(1.1);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .step-item.completed .step-circle {
+            background: var(--success-gradient);
+            color: white;
+        }
+        
+        .step-content {
+            padding: 3rem;
+            min-height: 500px;
+        }
+        
+        .tool-option {
+            border: 2px solid #e9ecef;
+            border-radius: 20px;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+            cursor: pointer;
+            transition: all 0.4s ease;
+            background: white;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .tool-option::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(102, 126, 234, 0.1), transparent);
+            transition: left 0.5s;
+        }
+        
+        .tool-option:hover::before {
+            left: 100%;
+        }
+        
+        .tool-option:hover {
+            border-color: #667eea;
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.2);
+        }
+        
+        .tool-option.selected {
+            border-color: #667eea;
+            background: linear-gradient(135deg, #f8f9ff 0%, #e3f2fd 100%);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        }
+        
+        .role-card {
+            border: 2px solid #e9ecef;
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: white;
+            position: relative;
+        }
+        
+        .role-card:hover {
+            border-color: #667eea;
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.15);
+        }
+        
+        .role-card.selected {
+            border-color: #667eea;
+            background: var(--info-gradient);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.25);
+        }
+        
+        .template-card {
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 1.25rem;
+            margin-bottom: 0.75rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: white;
+        }
+        
+        .template-card:hover {
+            border-color: #28a745;
+            transform: translateX(5px);
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.15);
+        }
+        
+        .template-card.selected {
+            border-color: #28a745;
+            background: linear-gradient(135deg, #f8fff8 0%, #e8f5e8 100%);
+            box-shadow: 0 5px 20px rgba(40, 167, 69, 0.25);
+        }
+        
+        .custom-questions {
+            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin-top: 1rem;
+            border-left: 5px solid #ffc107;
+        }
+        
+        .question-input {
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            padding: 0.75rem;
+            margin-bottom: 0.75rem;
+            transition: border-color 0.3s ease;
+        }
+        
+        .question-input:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+        
+        .btn-wizard {
+            background: var(--primary-gradient);
+            color: white;
+            border: none;
+            padding: 0.875rem 2.5rem;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn-wizard::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+        
+        .btn-wizard:hover::before {
+            left: 100%;
+        }
+        
+        .btn-wizard:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+            color: white;
+        }
+        
+        .btn-wizard:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .analysis-preview {
+            background: linear-gradient(135deg, #e8f5e8 0%, #f0f8f0 100%);
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin-top: 1rem;
+            border-left: 5px solid #28a745;
+        }
+        
+        .thinking-questions {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .question-badge {
+            background: var(--primary-gradient);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 15px;
+            font-size: 0.875rem;
+            margin-right: 0.5rem;
+            margin-bottom: 0.5rem;
+            display: inline-block;
+        }
+        
+        .d-none {
+            display: none !important;
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+    <div class="wizard-container">
+        <div class="wizard-header">
+            <h1><i class="fas fa-robot me-3"></i>TubeWhale AI Agent Suite</h1>
+            <p class="mb-2 fs-5">Our specialized AI agents work together to provide comprehensive YouTube video analysis</p>
+            <small>🤖 Audio Agent • 🔍 Search Agent • 📝 Transcript Agent • 📊 Summarizer Agent • 🎯 Standardizer Agent</small>
+            
+            <!-- Language Switcher -->
+            <div class="language-switcher mt-3">
+                <div class="dropdown">
+                    <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-globe me-2"></i>{{ CURRENT_LANGUAGE_FLAG }} {{ CURRENT_LANGUAGE_NAME }}
+                    </button>
+                    <ul class="dropdown-menu">
+                        {% for lang in AVAILABLE_LANGUAGES %}
+                        <li>
+                            <a class="dropdown-item {% if lang.is_current %}active{% endif %}" 
+                               href="{{ lang.url }}"
+                               onclick="switchLanguage('{{ lang.code }}')">
+                                {{ lang.flag }} {{ lang.native_name }}
+                                {% if lang.is_current %}<i class="fas fa-check ms-2"></i>{% endif %}
+                            </a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="step-indicator">
+            <div class="step-item active" id="step-indicator-1">
+                <div class="step-circle">1</div>
+                <small class="fw-bold">Select Tool</small>
+            </div>
+            <div class="step-item" id="step-indicator-2">
+                <div class="step-circle">2</div>
+                <small class="fw-bold">Select Role</small>
+            </div>
+            <div class="step-item" id="step-indicator-3">
+                <div class="step-circle">3</div>
+                <small class="fw-bold">Configure Analysis</small>
+            </div>
+        </div>
+        
+        <!-- Step 1: Tool Selection -->
+        <div class="step-content fade-in" id="step-1">
+            <h3 class="mb-4">
+                <i class="fas fa-tools text-primary me-2"></i>
+                {% trans "Select Your Analysis Tool" %}
+            </h3>
+            
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="tool-option" data-tool="single_video">
+                        <div class="text-center">
+                            <i class="fas fa-video" style="font-size: 3rem; color: #667eea; margin-bottom: 1rem;"></i>
+                            <h5 class="fw-bold">Single Video Deep Dive</h5>
+                            <p class="text-muted mb-3">Comprehensive AI analysis of a single YouTube video</p>
+                            <div class="small">
+                                <span class="badge bg-primary me-1">Content Analysis</span>
+                                <span class="badge bg-success me-1">Audience Insights</span>
+                                <span class="badge bg-info">Optimization Tips</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="tool-option" data-tool="playlist">
+                        <div class="text-center">
+                            <i class="fas fa-list" style="font-size: 3rem; color: #28a745; margin-bottom: 1rem;"></i>
+                            <h5 class="fw-bold">Playlist Batch Analysis</h5>
+                            <p class="text-muted mb-3">Bulk analysis of all videos in a YouTube playlist</p>
+                            <div class="small">
+                                <span class="badge bg-success me-1">Batch Processing</span>
+                                <span class="badge bg-warning me-1">Trend Analysis</span>
+                                <span class="badge bg-danger">Performance Comparison</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="tool-option" data-tool="brainstorm">
+                        <div class="text-center">
+                            <i class="fas fa-brain" style="font-size: 3rem; color: #ffc107; margin-bottom: 1rem;"></i>
+                            <h5 class="fw-bold">AI Creative Brainstorm</h5>
+                            <p class="text-muted mb-3">Generate content ideas and strategies based on keywords</p>
+                            <div class="small">
+                                <span class="badge bg-warning me-1">Idea Generation</span>
+                                <span class="badge bg-info me-1">Strategy Planning</span>
+                                <span class="badge bg-secondary">Market Insights</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="text-center mt-4">
+                <button class="btn btn-wizard btn-lg" disabled id="step1NextBtn">
+                    Next: Select Professional Role <i class="fas fa-arrow-right ms-2"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Step 2: Role Selection -->
+        <div class="step-content d-none" id="step-2">
+            <h3 class="mb-4">
+                <i class="fas fa-robot text-primary me-2"></i>
+                Choose Your AI Agent Assistant & Analysis Template
+            </h3>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <h5 class="fw-bold mb-3">
+                        <i class="fas fa-user-circle me-2"></i>AI Agent-Powered Roles
+                    </h5>
+                    
+                    <div class="role-card" data-role="content-creator">
+                        <h6><i class="fas fa-video me-2 text-primary"></i>Content Creator Assistant</h6>
+                        <small class="text-muted">AI agents analyze audio quality, transcripts, and engagement patterns to optimize your content creation workflow</small>
+                        <div class="mt-2">
+                            <span class="badge bg-light text-dark me-1">🤖 Audio Agent</span>
+                            <span class="badge bg-light text-dark me-1">📝 Transcript Agent</span>
+                            <span class="badge bg-light text-dark">📊 Summarizer Agent</span>
+                        </div>
+                    </div>
+                    
+                    <div class="role-card" data-role="marketing-expert">
+                        <h6><i class="fas fa-chart-line me-2 text-success"></i>Marketing Intelligence Agent</h6>
+                        <small class="text-muted">Specialized AI agents provide brand analysis, competitive intelligence, and campaign optimization insights</small>
+                        <div class="mt-2">
+                            <span class="badge bg-light text-dark me-1">🔍 Search Agent</span>
+                            <span class="badge bg-light text-dark me-1">🎯 Standardizer Agent</span>
+                            <span class="badge bg-light text-dark">📊 Full Suite</span>
+                        </div>
+                    </div>
+                    
+                    <div class="role-card" data-role="data-analyst">
+                        <h6><i class="fas fa-database me-2 text-warning"></i>Data Science AI Suite</h6>
+                        <small class="text-muted">Full AI agent stack delivers comprehensive metrics, predictive analytics, and performance forecasting</small>
+                        <div class="mt-2">
+                            <span class="badge bg-light text-dark me-1">🤖 All Agents</span>
+                            <span class="badge bg-light text-dark me-1">📈 Analytics</span>
+                            <span class="badge bg-light text-dark">🔮 Predictions</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <h5 class="fw-bold mb-3">
+                        <i class="fas fa-clipboard-list me-2"></i>AI Analysis Templates
+                    </h5>
+                    <div id="template-list">
+                        <div class="text-center text-muted py-5">
+                            <i class="fas fa-arrow-left fa-2x mb-3"></i>
+                            <p>Select an AI agent role to view available analysis templates</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="d-flex justify-content-between mt-4">
+                <button class="btn btn-outline-secondary btn-lg" id="back-to-step-1">
+                    <i class="fas fa-arrow-left me-2"></i>Back
+                </button>
+                <button class="btn btn-wizard btn-lg" id="next-to-step-3" disabled>
+                    Next: Configure Analysis <i class="fas fa-arrow-right ms-2"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Step 3: Configuration -->
+        <div class="step-content d-none" id="step-3">
+            <h3 class="mb-4">
+                <i class="fas fa-cogs text-primary me-2"></i>
+                Configure Analysis Parameters
+            </h3>
+            
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-link me-2"></i>Input Content
+                        </label>
+                        <textarea class="form-control form-control-lg" id="analysis-input" rows="3" 
+                                placeholder="Enter YouTube video link, playlist link, or keywords..."></textarea>
+                        <div class="form-text">
+                            Supports: Full YouTube links, short links, video IDs, playlist links, etc.
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Analysis Depth</label>
+                                <select class="form-select form-select-lg" id="analysis-depth">
+                                    <option value="basic">Basic Analysis</option>
+                                    <option value="detailed" selected>Detailed Analysis</option>
+                                    <option value="comprehensive">Comprehensive Analysis</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Report Language</label>
+                                <select class="form-select form-select-lg" id="report-language">
+                                    <option value="en" selected>English</option>
+                                    <option value="zh-CN">中文</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="custom-questions">
+                        <div class="d-flex align-items-center mb-3">
+                            <h6 class="mb-0 fw-bold">
+                                <i class="fas fa-lightbulb me-2"></i>Custom Analysis Questions
+                            </h6>
+                            <div class="form-check form-switch ms-auto">
+                                <input class="form-check-input" type="checkbox" id="enable-custom-questions">
+                                <label class="form-check-label" for="enable-custom-questions">Enable Custom</label>
+                            </div>
+                        </div>
+                        
+                        <div id="custom-questions-container" class="d-none">
+                            <p class="small text-muted mb-3">You can add up to 3 custom analysis questions that we'll focus on during the analysis:</p>
+                            <textarea class="form-control question-input" placeholder="Question 1: e.g., Who is the target audience for this video?" rows="2"></textarea>
+                            <textarea class="form-control question-input" placeholder="Question 2: e.g., What are the most valuable insights in the video?" rows="2"></textarea>
+                            <textarea class="form-control question-input" placeholder="Question 3: e.g., How can we improve this video's performance?" rows="2"></textarea>
+                        </div>
+                        
+                        <div id="template-questions-preview">
+                            <!-- Template's default analysis questions will be displayed here -->
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="analysis-preview">
+                        <h6 class="fw-bold mb-3">
+                            <i class="fas fa-eye me-2"></i>Analysis Preview
+                        </h6>
+                        <div id="analysis-summary">
+                            <p class="small text-muted">Complete the configuration on the left to view analysis preview</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="d-flex justify-content-between mt-4">
+                <button class="btn btn-outline-secondary btn-lg" id="back-to-step-2">
+                    <i class="fas fa-arrow-left me-2"></i>Back
+                </button>
+                <button class="btn btn-wizard btn-lg pulse" id="start-analysis">
+                    <i class="fas fa-rocket me-2"></i>Start AI Analysis
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Language Context for JavaScript - Django Template Variables -->
+    <script type="application/json" id="language-context-data">
+        {
+            "CURRENT_LANGUAGE": "{{ CURRENT_LANGUAGE|default:'en' }}",
+            "CURRENT_LANGUAGE_INFO": {
+                "name": "{{ CURRENT_LANGUAGE_INFO.name|default:'English' }}",
+                "native_name": "{{ CURRENT_LANGUAGE_INFO.native_name|default:'English' }}",
+                "direction": "{{ CURRENT_LANGUAGE_INFO.direction|default:'ltr' }}",
+                "flag": "{{ CURRENT_LANGUAGE_INFO.flag|default:'🇺🇸' }}"
+            },
+            "AVAILABLE_LANGUAGES": [
+                {% for lang in AVAILABLE_LANGUAGES %}
+                {
+                    "code": "{{ lang.code }}",
+                    "name": "{{ lang.name }}",
+                    "native_name": "{{ lang.native_name }}",
+                    "flag": "{{ lang.flag }}",
+                    "is_current": {{ lang.is_current|yesno:"true,false" }}
+                }{% if not forloop.last %},{% endif %}
+                {% endfor %}
+            ],
+            "LANGUAGE_CODES": [{% for lang in AVAILABLE_LANGUAGES %}"{{ lang.code }}"{% if not forloop.last %},{% endif %}{% endfor %}],
+            "IS_RTL": {% if IS_RTL %}true{% else %}false{% endif %},
+            "DEFAULT_LANGUAGE": "{{ DEFAULT_LANGUAGE|default:'en' }}"
+        }
+    </script>
+
+    <!-- Initialize Language Context for JavaScript -->
+    <script>
+        // Parse language context from JSON script tag
+        const languageContextElement = document.getElementById('language-context-data');
+        window.LANGUAGE_CONTEXT = JSON.parse(languageContextElement.textContent);
+
+        // Language switching function
+        function switchLanguage(langCode) {
+            // Update the language parameter in the current URL
+            const url = new URL(window.location);
+            url.searchParams.set('lang', langCode);
+            window.location.href = url.toString();
+        }
+    </script>
+    
+    <!-- Load i18n JavaScript -->
+    <script src="/static/js/i18n.js"></script>
+    
+    <script>
+        console.log('🚀 TubeWhale Enhanced Multilingual Wizard Loading...');
+        
+        // Enhanced wizard state management
+        let wizardState = {
+            currentStep: 1,
+            selectedTool: null,
+            selectedRole: null,
+            selectedTemplate: null,
+            customQuestions: [],
+            analysisConfig: {}
+        };
+
+        // Dynamic Template Loading - Enhanced with Enterprise Template Integration
+        let youtubeTemplates = {};
+        let templatesLoaded = false;
+
+        // Load templates dynamically from backend
+        async function loadAvailableTemplates() {
+            if (templatesLoaded) return youtubeTemplates;
+            
+            try {
+                const response = await fetch('/api/v1/wizard/templates/', {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    youtubeTemplates = data.templates || {};
+                    templatesLoaded = true;
+                    console.log('✅ Dynamic templates loaded:', Object.keys(youtubeTemplates));
+                    return youtubeTemplates;
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+            } catch (error) {
+                console.error('❌ Failed to load dynamic templates:', error);
+                
+                // Fallback to static templates for backward compatibility
+                youtubeTemplates = {
+                    'content-creator': [
+                        {
+                            id: 'audio-transcript-analysis',
+                            name: 'Audio & Transcript Deep Dive',
+                            desc: 'Uses Audio Agent + Transcript Agent for complete content analysis',
+                            agent: 'audio_agent + transcript_agent',
+                            features: ['Full transcript extraction', 'Audio quality analysis', 'Content timing optimization', 'Voice pattern insights'],
+                            questions: [
+                                'How does the audio quality and voice clarity impact viewer engagement throughout the video?',
+                                'What timing patterns in speech delivery correlate with high engagement moments?',
+                                'How can the transcript content be optimized for better searchability and accessibility?'
+                            ]
+                        },
+                        {
+                            id: 'content-summarization',
+                            name: 'Smart Content Summarizer',
+                            desc: 'Summarizer Agent creates audience-friendly content insights',
+                            agent: 'summarizer_agent',
+                            features: ['Key message extraction', 'Audience-friendly summaries', 'Content structure analysis', 'Engagement point identification'],
+                            questions: [
+                                'What are the key messages and takeaways that resonate most with viewers?',
+                                'How can the content structure be optimized for better retention?',
+                                'What are the most engaging moments that could be highlighted or replicated?'
+                            ]
+                        }
+                    ],
+                    'marketing-expert': [
+                        {
+                            id: 'brand-voice-analysis',
+                            name: 'Brand Voice & Message Analysis',
+                            desc: 'Audio Agent + Summarizer Agent for brand consistency analysis',
+                            agent: 'audio_agent + summarizer_agent',
+                            features: ['Brand voice consistency', 'Message clarity assessment', 'Emotional tone analysis', 'Brand positioning insights'],
+                            questions: [
+                                'How consistent is the brand voice and messaging throughout the video content?',
+                                'What emotional tones and brand values are effectively communicated to the audience?',
+                                'How does the content positioning compare to competitors in the market?'
+                            ]
+                        }
+                    ],
+                    'data-analyst': [
+                        {
+                            id: 'comprehensive-metrics',
+                            name: 'Comprehensive Metrics Analysis', 
+                            desc: 'All agents working together for complete data insights',
+                            agent: 'all_agents',
+                            features: ['Statistical performance analysis', 'Predictive modeling', 'Audience behavior patterns', 'Content optimization recommendations'],
+                            questions: [
+                                'What statistical patterns emerge from comprehensive performance data analysis?',
+                                'How can predictive modeling guide future content strategy and optimization?',
+                                'What audience behavior insights drive the highest engagement and conversion rates?'
+                            ]
+                        }
+                    ]
+                };
+                templatesLoaded = true;
+                console.log('⚠️ Using fallback templates due to loading error');
+                return youtubeTemplates;
+            }
+        }
+
+        // 步骤指示器更新
+        function updateStepIndicator(step) {
+            for (let i = 1; i <= 3; i++) {
+                const indicator = document.getElementById(`step-indicator-${i}`);
+
+                if (!indicator) {
+                    console.warn(`⚠️ Step indicator missing: step-indicator-${i}`);
+                    continue;
+                }
+
+                indicator.classList.remove('active', 'completed');
+                
+                if (i < step) {
+                    indicator.classList.add('completed');
+                } else if (i === step) {
+                    indicator.classList.add('active');
+                }
+            }
+        }
+
+        // 显示指定步骤
+        function showStep(step) {
+            console.log(`📍 Showing step ${step}`);
+            
+            // 隐藏所有步骤
+            for (let i = 1; i <= 3; i++) {
+                const stepElement = document.getElementById(`step-${i}`);
+
+                if (!stepElement) {
+                    console.warn(`⚠️ Step element missing: step-${i}`);
+                    continue;
+                }
+
+                stepElement.classList.add('d-none');
+                stepElement.classList.remove('fade-in');
+            }
+            
+            // 显示当前步骤
+            const currentStepElement = document.getElementById(`step-${step}`);
+
+            if (!currentStepElement) {
+                console.error(`❌ Unable to find step element: step-${step}`);
+                return;
+            }
+
+            currentStepElement.classList.remove('d-none');
+            currentStepElement.classList.add('fade-in');
+            
+            wizardState.currentStep = step;
+            updateStepIndicator(step);
+            
+            // 步骤特定初始化
+            if (step === 2) {
+                bindRoleEvents();
+            } else if (step === 3) {
+                updateAnalysisPreview();
+            }
+        }
+
+        // 工具选择事件处理
+        document.querySelectorAll('.tool-option').forEach(option => {
+            option.addEventListener('click', function() {
+                console.log('🛠️ Tool selected:', this.dataset.tool);
+                
+                // 清除之前的选择
+                document.querySelectorAll('.tool-option').forEach(o => o.classList.remove('selected'));
+                
+                // 选中当前工具
+                this.classList.add('selected');
+                wizardState.selectedTool = this.dataset.tool;
+                
+                // 启用下一步按钮
+                document.getElementById('step1NextBtn').disabled = false;
+            });
+        });
+
+        // 角色选择事件绑定
+        function bindRoleEvents() {
+            console.log('🔧 Binding role events...');
+            
+            // 移除现有监听器
+            document.querySelectorAll('.role-card').forEach(card => {
+                card.replaceWith(card.cloneNode(true));
+            });
+            
+            // 重新绑定到新元素
+            document.querySelectorAll('.role-card').forEach(card => {
+                card.addEventListener('click', function() {
+                    console.log('👔 Role selected:', this.dataset.role);
+                    
+                    // 清除之前的角色选择
+                    document.querySelectorAll('.role-card').forEach(c => c.classList.remove('selected'));
+                    
+                    // 选中当前角色
+                    this.classList.add('selected');
+                    wizardState.selectedRole = this.dataset.role;
+                    
+                    // 更新模板列表
+                    updateTemplateList();
+                });
+            });
+        }
+
+        // 更新模板列表 - Enhanced with dynamic loading
+        async function updateTemplateList() {
+            const templateList = document.getElementById('template-list');
+            
+            // Show loading state
+            templateList.innerHTML = `
+                <div class="text-center text-muted py-5">
+                    <i class="fas fa-spinner fa-spin fa-2x mb-3"></i>
+                    <p>Loading available templates...</p>
+                </div>
+            `;
+            
+            try {
+                // Ensure templates are loaded
+                await loadAvailableTemplates();
+                
+                const templates = youtubeTemplates[wizardState.selectedRole];
+                
+                if (templates && templates.length > 0) {
+                    templateList.innerHTML = templates.map(template => `
+                        <div class="template-card" data-template="${template.id}" data-template-type="${template.type || 'custom'}" style="border-left: 4px solid #667eea; margin-bottom: 1rem;">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="fw-bold mb-1">
+                                    <i class="fas fa-robot me-2 text-primary"></i>${template.name}
+                                    ${template.type === 'enterprise' ? '<span class="badge bg-success ms-1">Enterprise</span>' : ''}
+                                </h6>
+                                <small class="badge bg-primary">${template.agent || 'Multi-Agent'}</small>
+                            </div>
+                            <p class="small text-muted mb-2">${template.desc || template.description || 'Professional analysis template'}</p>
+                            ${template.features ? `
+                                <div class="mb-2">
+                                    <small class="fw-bold text-success d-block mb-1">
+                                        <i class="fas fa-cogs me-1"></i>AI Features:
+                                    </small>
+                                    <div class="d-flex flex-wrap gap-1">
+                                        ${template.features.map(feature => `<span class="badge bg-light text-dark" style="font-size: 0.7rem;">${feature}</span>`).join('')}
+                                    </div>
+                                </div>
+                            ` : ''}
+                            ${template.questions && template.questions.length > 0 ? `
+                                <div class="thinking-questions">
+                                    <small class="fw-bold text-primary d-block mb-2">
+                                        <i class="fas fa-lightbulb me-1"></i>Analysis Questions:
+                                    </small>
+                                    ${template.questions.map((q, i) => `
+                                        <div class="small mb-1">
+                                            <span class="question-badge">${i+1}</span>${q}
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            ` : ''}
+                            ${template.parameters ? `
+                                <div class="mt-2">
+                                    <small class="text-muted">
+                                        <i class="fas fa-cog me-1"></i>
+                                        Model: ${template.parameters.model || 'Default'} | 
+                                        Temp: ${template.parameters.temperature || '0.7'}
+                                    </small>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `).join('');
+                    
+                    // 绑定模板选择事件
+                    templateList.querySelectorAll('.template-card').forEach(card => {
+                        card.addEventListener('click', function() {
+                            console.log('📋 Template selected:', this.dataset.template, 'Type:', this.dataset.templateType);
+                            
+                            // 清除模板选择
+                            templateList.querySelectorAll('.template-card').forEach(c => c.classList.remove('selected'));
+                            
+                            // 选中当前模板
+                            this.classList.add('selected');
+                            wizardState.selectedTemplate = this.dataset.template;
+                            wizardState.selectedTemplateType = this.dataset.templateType;
+                            
+                            // 启用下一步按钮
+                            document.getElementById('next-to-step-3').disabled = false;
+                            
+                            // 更新问题预览
+                            updateQuestionPreview();
+                        });
+                    });
+                } else {
+                    templateList.innerHTML = `
+                        <div class="text-center text-muted py-5">
+                            <i class="fas fa-exclamation-triangle fa-2x mb-3"></i>
+                            <p>No templates available for this role</p>
+                            <small>Please try selecting a different AI agent role</small>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Failed to update template list:', error);
+                templateList.innerHTML = `
+                    <div class="text-center text-danger py-5">
+                        <i class="fas fa-times-circle fa-2x mb-3"></i>
+                        <p>Failed to load templates</p>
+                        <small>Please refresh the page and try again</small>
+                    </div>
+                `;
+            }
+        }
+
+        // 更新问题预览
+        function updateQuestionPreview() {
+            const template = youtubeTemplates[wizardState.selectedRole]?.find(t => t.id === wizardState.selectedTemplate);
+            const preview = document.getElementById('template-questions-preview');
+            
+            if (template) {
+                preview.innerHTML = `
+                    <div class="mt-3">
+                        <h6 class="fw-bold text-success">
+                            <i class="fas fa-check-circle me-2"></i>Default Analysis Questions Preview:
+                        </h6>
+                        ${template.questions.map((q, i) => `
+                            <div class="small mb-2 p-2 bg-light rounded">
+                                <span class="fw-bold text-primary">${i+1}.</span> ${q}
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+        }
+
+        // 自定义问题切换
+        document.getElementById('enable-custom-questions').addEventListener('change', function() {
+            const container = document.getElementById('custom-questions-container');
+            const preview = document.getElementById('template-questions-preview');
+            
+            if (this.checked) {
+                container.classList.remove('d-none');
+                preview.classList.add('d-none');
+            } else {
+                container.classList.add('d-none');
+                preview.classList.remove('d-none');
+            }
+        });
+
+        // 更新分析预览
+        function updateAnalysisPreview() {
+            const summary = document.getElementById('analysis-summary');
+            const toolNames = {
+                'single_video': 'Single Video Analysis',
+                'playlist': 'Playlist Analysis',
+                'brainstorm': 'AI Brainstorm'
+            };
+            
+            const roleNames = {
+                'content-creator': 'Content Creator',
+                'marketing-expert': 'Marketing Expert',
+                'data-analyst': 'Data Analyst'
+            };
+            
+            if (wizardState.selectedTool && wizardState.selectedRole && wizardState.selectedTemplate) {
+                const template = youtubeTemplates[wizardState.selectedRole]?.find(t => t.id === wizardState.selectedTemplate);
+                
+                summary.innerHTML = `
+                    <div class="mb-3">
+                        <h6 class="fw-bold text-success">
+                            <i class="fas fa-check-circle me-2"></i>Analysis Configuration Confirmed
+                        </h6>
+                        <ul class="list-unstyled small">
+                            <li><strong>Tool:</strong> ${toolNames[wizardState.selectedTool]}</li>
+                            <li><strong>Role:</strong> ${roleNames[wizardState.selectedRole]}</li>
+                            <li><strong>Template:</strong> ${template?.name || 'Not Selected'}</li>
+                        </ul>
+                    </div>
+                    <div class="alert alert-info p-2">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <small>Analysis will be based on professional analysis questions to generate deep insights</small>
+                    </div>
+                `;
+            }
+        }
+
+        // 导航按钮事件
+    const step1Button = document.getElementById('step1NextBtn');
+    const step3Button = document.getElementById('next-to-step-3');
+    const backTo1Button = document.getElementById('back-to-step-1');
+    const backTo2Button = document.getElementById('back-to-step-2');
+
+    if (step1Button) step1Button.addEventListener('click', () => showStep(2));
+    if (step3Button) step3Button.addEventListener('click', () => showStep(3));
+    if (backTo1Button) backTo1Button.addEventListener('click', () => showStep(1));
+    if (backTo2Button) backTo2Button.addEventListener('click', () => showStep(2));
+
+        // 分析提交
+        document.getElementById('start-analysis').addEventListener('click', function() {
+            const input = document.getElementById('analysis-input').value.trim();
+            const depth = document.getElementById('analysis-depth').value;
+            const language = document.getElementById('report-language').value;
+            const customEnabled = document.getElementById('enable-custom-questions').checked;
+            
+            if (!input) {
+                alert('Please enter content for analysis');
+                return;
+            }
+            
+            // Collect custom questions
+            let questions = [];
+            if (customEnabled) {
+                const questionInputs = document.querySelectorAll('.question-input');
+                questions = Array.from(questionInputs)
+                    .map(input => input.value.trim())
+                    .filter(q => q.length > 0);
+            }
+            
+            console.log('🚀 Starting enhanced analysis:', {
+                tool: wizardState.selectedTool,
+                role: wizardState.selectedRole,
+                template: wizardState.selectedTemplate,
+                input: input,
+                depth: depth,
+                language: language,
+                customQuestions: questions
+            });
+            
+            // 创建提交表单
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '{% url "dashboard:jobs" %}';
+            
+            const data = {
+                tool: wizardState.selectedTool,
+                role: wizardState.selectedRole,
+                template: wizardState.selectedTemplate,
+                template_type: wizardState.selectedTemplateType || 'default',
+                input: input,
+                depth: depth,
+                language: language,
+                custom_questions: JSON.stringify(questions),
+                // Enhanced template configuration for backend processing
+                template_config: JSON.stringify({
+                    template_id: wizardState.selectedTemplate,
+                    template_type: wizardState.selectedTemplateType,
+                    role: wizardState.selectedRole,
+                    analysis_depth: depth,
+                    report_language: language,
+                    timestamp: new Date().toISOString()
+                }),
+                csrfmiddlewaretoken: '{{ csrf_token }}'
+            };
+            
+            Object.keys(data).forEach(key => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                input.value = data[key];
+                form.appendChild(input);
+            });
+            
+            document.body.appendChild(form);
+            form.submit();
+        });
+
+        // Preload templates on page initialization
+        loadAvailableTemplates().then(() => {
+            console.log('✅ Enhanced TubeWhale Wizard initialized successfully with dynamic templates');
+        }).catch(error => {
+            console.warn('⚠️ Template preloading failed, using fallback templates:', error);
+            console.log('✅ Enhanced TubeWhale Wizard initialized successfully with fallback templates');
+        });
+    </script>
+</body>
+</html>

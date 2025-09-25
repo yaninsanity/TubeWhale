@@ -9,6 +9,9 @@ import yaml
 from io import BytesIO
 from typing import Any, Callable, Dict, Generator, List, Optional, Union
 
+# Import the new configuration manager
+from utils.configuration_manager import ConfigurationManager, ConfigurationMode, get_configuration_manager
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 _handler = logging.StreamHandler()
@@ -18,12 +21,13 @@ logger.addHandler(_handler)
 
 class OpenAIService:
     """
-    OpenAIService：封装 OpenAI API 调用，
-      - 自动加载同目录下 openai_config.yaml（models + prompts）；
-      - 动态注入全局 api_key；
-      - 同步/异步 completion、stream、embedding、Whisper 转录；
-      - 重试 & usage 统计；
-      - reload_configuration 支持热加载。
+    Enhanced OpenAIService with enterprise configuration management:
+      - Integration with ConfigurationManager for dynamic template loading
+      - Support for environment-specific configurations  
+      - Hot-reload capabilities with enterprise template injection
+      - Thread-safe configuration updates
+      - CLI-friendly template overrides
+      - Comprehensive usage tracking and retry mechanisms
     """
 
     def __init__(
@@ -32,12 +36,22 @@ class OpenAIService:
         api_key: Optional[str] = None,
         client: Optional[Any] = None,
         logger: Optional[logging.Logger] = None,
+        configuration_manager: Optional[ConfigurationManager] = None,
+        template_id_override: Optional[str] = None,
+        model_override: Optional[str] = None,
     ):
+        # Legacy support for existing configuration format
         self.models: Dict[str, Dict[str, Any]] = {}
-        # prompts[name] = {"system": "...", "user": "..."}
         self.prompts: Dict[str, Dict[str, str]] = {}
         self.default_model: Optional[str] = None
         self.default_prompt: Optional[str] = None
+        
+        # Enhanced configuration management
+        self.config_manager = configuration_manager or get_configuration_manager()
+        self.template_id_override = template_id_override
+        self.model_override = model_override
+        
+        # Usage tracking and settings
         self.max_retries = 3
         self.total_prompt_tokens = 0
         self.total_completion_tokens = 0
@@ -47,103 +61,158 @@ class OpenAIService:
         self.client = client
         self.logger = logger or logging.getLogger(__name__)
 
-    # —— 一律尝试加载本模块同目录下的 openai_config.yaml —— 
+        # —— Enhanced configuration loading with ConfigurationManager —— 
+        self._load_configurations_from_manager()
+        
+        # —— Legacy fallback for direct configuration —— 
+        if config_path or (not self.models and not self.prompts):
+            self._load_legacy_configuration(config_path, api_key)
+        
+        # —— Apply CLI overrides if provided —— 
+        if template_id_override or model_override:
+            self.config_manager.override_for_cli(template_id_override, model_override)
+            self._load_configurations_from_manager()
+        
+        # —— Ensure OpenAI Client is initialized —— 
+        if self.client is None:
+            import openai
+            
+            # Get API key from current default model or environment
+            api_key_to_use = api_key
+            if self.default_model and self.default_model in self.models:
+                api_key_to_use = self.models[self.default_model].get("api_key") or api_key_to_use
+            api_key_to_use = api_key_to_use or os.environ.get("OPENAI_API_KEY")
+            
+            if not api_key_to_use:
+                self.logger.warning("No API key found. OpenAI client may not work properly.")
+            
+            self.client = openai.OpenAI(api_key=api_key_to_use)
+            self.logger.info("Instantiated OpenAI client with enhanced configuration.")
+
+    def _load_configurations_from_manager(self):
+        """Load configurations from the ConfigurationManager"""
+        try:
+            # Get configuration in OpenAI service compatible format
+            config_data = self.config_manager.get_openai_service_config()
+            
+            # Update models and prompts
+            self.models = config_data.get("models", {})
+            self.prompts = config_data.get("prompts", {})
+            self.default_model = config_data.get("default_model")
+            self.default_prompt = config_data.get("default_prompt")
+            
+            self.logger.info(
+                f"Loaded from ConfigurationManager: {len(self.models)} models, "
+                f"{len(self.prompts)} prompts, mode: {self.config_manager.mode.value}"
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Failed to load configurations from manager: {e}")
+            self._load_fallback_configuration()
+
+    def _load_legacy_configuration(self, config_path: Optional[str], api_key: Optional[str]):
+        """Legacy configuration loading for backward compatibility"""
         if config_path is None:
             default_cfg = self._get_default_config_path()
             if os.path.exists(default_cfg):
                 config_path = default_cfg
-                self.logger.info(f"Using config file: {default_cfg}")
+                self.logger.info(f"Using legacy config file: {default_cfg}")
             else:
-                self.logger.warning("No config_path provided and no default openai_config.yaml found.")
+                self.logger.warning("No config_path provided and no default config found.")
 
-        # —— 优先从 YAML 加载 —— 
         if config_path:
             self.load_configuration(config_path)
-            # 若同时给了 api_key，就注入到每个 model（若它们 YAML 中未指定）
+            # Inject API key if provided
             if api_key:
                 for m in self.models.values():
                     m.setdefault("api_key", api_key)
             self._validate_models()
-
-        # —— 仅传 api_key，则注入内置 default —— 
         elif api_key:
-            self.models = {
-                "default": {
-                    "model_name": "gpt-4",
-                    "type": "chat",
-                    "context_length": 8192,
-                    "max_tokens": 100,
-                    "temperature": 0.7,
-                    "price": {"prompt": 0.003, "completion": 0.003},
-                    "api_key": api_key,
-                }
-            }
-            self.prompts = {"default": {"system": "", "user": "You are a helpful assistant."}}
-            self.default_model = "default"
-            self.default_prompt = "default"
-            self.logger.info("Initialized with built-in default + API key.")
+            # Fallback to built-in default with API key
+            self._load_fallback_configuration(api_key)
 
-        else:
-            self.logger.info("Initialized with empty configuration (no models, no prompts).")
-
-    # —— 兜底 fallback —— 
-        if not self.models:
-            self.models["default"] = {
+    def _load_fallback_configuration(self, api_key: Optional[str] = None):
+        """Load fallback configuration when other methods fail"""
+        self.models = {
+            "default": {
                 "model_name": "gpt-4",
                 "type": "chat",
                 "context_length": 8192,
-                "max_tokens": 100,
+                "max_tokens": 1000,
                 "temperature": 0.7,
                 "price": {"prompt": 0.003, "completion": 0.003},
+                "api_key": api_key,
             }
-            self.default_model = "default"
-        if not self.prompts:
-            self.prompts["default"] = {"system": "", "user": "You are a helpful assistant."}
-            self.default_prompt = "default"
-
-        # —— 最后确保有一个 OpenAI Client —— 
-        if self.client is None:
-            import openai
-
-            key = (
-                self.models[self.default_model].get("api_key")
-                or os.environ.get("OPENAI_API_KEY")
-            )
-            self.client = openai.OpenAI(api_key=key)
-            self.logger.info("Instantiated internal OpenAI client.")
-
-        # —— 可选：从企业模板引擎同步可用 prompts，供 prompt_template 使用 ——
-        try:
-            # 避免硬依赖 Django；仅当可导入时才加载
-            from service.enterprise_template_engine import TemplateEngine  # type: ignore
-            engine = TemplateEngine(validation_strict=False)
-            # 将引擎的模板注入到 prompts 命名空间中（只注入 user 文本；system 留空，或根据需要扩展）
-            for md in engine.list_templates(include_metadata=True):
-                tid = md.get("id") or md.get("name")
-                if not tid:
-                    continue
-                t = engine.get_template(tid)
-                if not t:
-                    continue
-                prompt_text = t.get("prompt", "")
-                # 仅在未定义同名 prompt 时注入，避免覆盖用户 YAML
-                self.prompts.setdefault(tid, {"system": "", "user": str(prompt_text)})
-        except Exception as _e:
-            # 安静失败，保证 CLI 在无 Django 环境时也能运行
-            pass
+        }
+        self.prompts = {"default": {"system": "", "user": "You are a helpful assistant."}}
+        self.default_model = "default"
+        self.default_prompt = "default"
+        self.logger.info("Loaded fallback configuration.")
 
     def _get_default_config_path(self) -> str:
         # openAIServices.py 同目录下
         base = os.path.dirname(__file__) if "__file__" in globals() else os.getcwd()
         return os.path.join(base, "openai_config.yaml")
 
-    def reload_configuration(self, new_config_path: Optional[str] = None):
-        path = new_config_path or self._get_default_config_path()
-        if not os.path.exists(path):
-            raise FileNotFoundError(f"Cannot reload, not found: {path}")
-        self.load_configuration(path)
-        self._validate_models()
-        self.logger.info(f"Configuration reloaded from {path}")
+    def reload_configuration(self, new_config_path: Optional[str] = None, force_manager_reload: bool = True):
+        """
+        Enhanced configuration reload with ConfigurationManager support
+        
+        Args:
+            new_config_path: Legacy path-based reload (for backward compatibility)
+            force_manager_reload: Whether to force ConfigurationManager reload
+        """
+        if force_manager_reload and hasattr(self, 'config_manager'):
+            # Use ConfigurationManager for hot-reload
+            self.config_manager.reload_configuration(force=True)
+            self._load_configurations_from_manager()
+            self.logger.info("Configuration reloaded via ConfigurationManager")
+        elif new_config_path:
+            # Legacy file-based reload
+            path = new_config_path or self._get_default_config_path()
+            if not os.path.exists(path):
+                raise FileNotFoundError(f"Cannot reload, not found: {path}")
+            self.load_configuration(path)
+            self._validate_models()
+            self.logger.info(f"Legacy configuration reloaded from {path}")
+        else:
+            # Try ConfigurationManager first, then legacy
+            try:
+                if hasattr(self, 'config_manager'):
+                    self.config_manager.reload_configuration(force=True)
+                    self._load_configurations_from_manager()
+                    self.logger.info("Configuration reloaded via ConfigurationManager")
+                else:
+                    raise AttributeError("No ConfigurationManager available")
+            except Exception as e:
+                self.logger.warning(f"ConfigurationManager reload failed: {e}, trying legacy reload")
+                path = self._get_default_config_path()
+                if os.path.exists(path):
+                    self.load_configuration(path)
+                    self._validate_models()
+                    self.logger.info(f"Legacy configuration reloaded from {path}")
+                else:
+                    raise FileNotFoundError("No configuration source available for reload")
+
+    def update_template_override(self, template_id: Optional[str], model_override: Optional[str] = None):
+        """
+        Update template and model overrides at runtime
+        
+        Args:
+            template_id: Template ID to use for prompts
+            model_override: Model name to use for completions
+        """
+        if hasattr(self, 'config_manager'):
+            self.config_manager.override_for_cli(template_id, model_override)
+            self._load_configurations_from_manager()
+            self.logger.info(f"Runtime override applied: template='{template_id}', model='{model_override}'")
+        else:
+            # Legacy override mechanism
+            if template_id and template_id in self.prompts:
+                self.default_prompt = template_id
+            if model_override and model_override in self.models:
+                self.default_model = model_override
+            self.logger.info(f"Legacy override applied: template='{template_id}', model='{model_override}'")
 
     def _validate_models(self):
         if not self.models:
@@ -292,6 +361,38 @@ class OpenAIService:
                 self.logger.error(f"API attempt {i} failed: {e}")
                 time.sleep(1)
         raise last
+
+    @classmethod
+    def create_with_template(cls, 
+                           template_id: Optional[str] = None,
+                           model_override: Optional[str] = None,
+                           api_key: Optional[str] = None,
+                           mode: Optional[ConfigurationMode] = None) -> 'OpenAIService':
+        """
+        Factory method to create OpenAIService with specific template configuration
+        
+        Args:
+            template_id: Template ID to use for prompts
+            model_override: Model name to use for completions  
+            api_key: OpenAI API key
+            mode: Configuration mode (development, production, etc.)
+            
+        Returns:
+            Configured OpenAIService instance
+        """
+        # Get configuration manager for the specified mode
+        config_manager = get_configuration_manager(mode=mode)
+        
+        # Apply overrides if provided
+        if template_id or model_override:
+            config_manager.override_for_cli(template_id, model_override)
+        
+        return cls(
+            api_key=api_key,
+            configuration_manager=config_manager,
+            template_id_override=template_id,
+            model_override=model_override
+        )
 
     def completion(
         self,

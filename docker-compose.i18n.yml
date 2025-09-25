@@ -1,0 +1,224 @@
+# TubeWhale Multilingual Docker Configuration
+# Production-Ready Deployment with English-First i18n Support
+
+version: '3.9'
+
+services:
+  # PostgreSQL Database with UTF-8 support
+  postgres:
+    image: postgres:15-alpine
+    container_name: tubewhale_postgres_i18n
+    environment:
+      POSTGRES_DB: tubewhale
+      POSTGRES_USER: tubewhale
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_password}
+      # UTF-8 and multilingual support
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C.UTF-8"
+      LC_ALL: C.UTF-8
+      LANG: C.UTF-8
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - tubewhale_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tubewhale"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis Cache with UTF-8 support
+  redis:
+    image: redis:7-alpine
+    container_name: tubewhale_redis_i18n
+    environment:
+      # UTF-8 support for cached translations
+      LC_ALL: C.UTF-8
+      LANG: C.UTF-8
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - tubewhale_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # TubeWhale Backend with Multilingual Support
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.i18n
+      args:
+        - ENABLE_I18N=true
+        - DEFAULT_LANGUAGE=en
+        - COMPILE_LOCALES=true
+    container_name: tubewhale_backend_i18n
+    environment:
+      # Django settings
+      DEBUG: "False"
+      SECRET_KEY: ${SECRET_KEY:-django-insecure-change-in-production}
+      ALLOWED_HOSTS: "localhost,127.0.0.1,0.0.0.0,tubewhale.local"
+      
+      # Database configuration
+      DB_ENGINE: "django.db.backends.postgresql"
+      DB_NAME: "tubewhale"
+      DB_USER: "tubewhale"
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-secure_password}
+      DB_HOST: "postgres"
+      DB_PORT: "5432"
+      
+      # Cache configuration
+      REDIS_URL: "redis://redis:6379/1"
+      
+      # Multilingual settings
+      LANGUAGE_CODE: "en"
+      USE_I18N: "True"
+      USE_L10N: "True"
+      USE_TZ: "True"
+      
+      # Locale settings for container
+      LC_ALL: "C.UTF-8"
+      LANG: "C.UTF-8"
+      PYTHONIOENCODING: "utf-8"
+      
+      # API Keys
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
+    volumes:
+      - static_files:/app/staticfiles
+      - media_files:/app/media
+      - locale_files:/app/locale
+      - ./logs:/app/logs
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - tubewhale_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+
+  # Nginx with Multilingual Static Files
+  nginx:
+    image: nginx:alpine
+    container_name: tubewhale_nginx_i18n
+    environment:
+      # UTF-8 support for nginx
+      LC_ALL: C.UTF-8
+      LANG: C.UTF-8
+    volumes:
+      - ./nginx/nginx.i18n.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/sites-available/tubewhale.i18n.conf:/etc/nginx/conf.d/default.conf:ro
+      - static_files:/var/www/static:ro
+      - media_files:/var/www/media:ro
+      - locale_files:/var/www/locale:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - backend
+    networks:
+      - tubewhale_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Celery Worker for Background Tasks
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.i18n
+      args:
+        - ENABLE_I18N=true
+        - DEFAULT_LANGUAGE=en
+        - COMPILE_LOCALES=true
+    container_name: tubewhale_celery_i18n
+    command: celery -A tubewhale_project worker -l info --concurrency=2
+    environment:
+      # Same environment as backend
+      DEBUG: "False"
+      SECRET_KEY: ${SECRET_KEY:-django-insecure-change-in-production}
+      DB_ENGINE: "django.db.backends.postgresql"
+      DB_NAME: "tubewhale"
+      DB_USER: "tubewhale"
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-secure_password}
+      DB_HOST: "postgres"
+      DB_PORT: "5432"
+      REDIS_URL: "redis://redis:6379/1"
+      
+      # Multilingual settings
+      LANGUAGE_CODE: "en"
+      USE_I18N: "True"
+      USE_L10N: "True"
+      USE_TZ: "True"
+      LC_ALL: "C.UTF-8"
+      LANG: "C.UTF-8"
+      PYTHONIOENCODING: "utf-8"
+      
+      # API Keys
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
+    volumes:
+      - media_files:/app/media
+      - locale_files:/app/locale
+      - ./logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - tubewhale_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.25'
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  static_files:
+    driver: local
+  media_files:
+    driver: local
+  locale_files:
+    driver: local
+
+networks:
+  tubewhale_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

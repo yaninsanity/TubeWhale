@@ -88,7 +88,7 @@ def main():
         ("cli.py", "增强的CLI，支持模板参数和Django集成"),
         ("utils/enhanced_job_manager.py", "实际作业管理和CLI进程执行"),
         ("apps/dashboard_app/views.py", "智能向导视图和作业创建"),
-        ("templates/dashboard/smart_wizard.html", "前端智能向导界面"),
+    ("templates/dashboard/wizard_enhanced.html", "统一的前端智能向导界面"),
         ("docker-compose.yml", "完整的容器化环境配置"),
         ("test_integration_full.py", "全面的集成测试套件"),
         ("quick_demo.py", "系统功能演示脚本")

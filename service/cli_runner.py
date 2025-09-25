@@ -2,8 +2,19 @@ import subprocess
 import os
 import time
 from typing import List, Dict, Any, Optional
-from django.conf import settings
-from django.utils import timezone
+
+# Django imports with fallback for testing environments
+try:
+    from django.conf import settings
+    from django.utils import timezone
+    DJANGO_AVAILABLE = True
+except ImportError:
+    DJANGO_AVAILABLE = False
+    # Fallback settings for testing without Django
+    class FallbackSettings:
+        BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        CLI_PERSIST_ENABLED = False
+    settings = FallbackSettings()
 
 try:
     from apps.templates_app.models import CLIExecution  # type: ignore
@@ -114,7 +125,7 @@ def run_cli(command: str, args: List[str], *, prompt_final: Optional[str] = None
 def _maybe_persist(payload: Dict[str, Any], command: str, args: List[str], prompt_final: Optional[str],
                    template_id: str, expert_slug: str, meta: Optional[Dict[str, Any]],
                    status_override: str, started: Optional[float] = None):  # pragma: no cover - side-effect only
-    if CLIExecution is None:
+    if not DJANGO_AVAILABLE or CLIExecution is None:
         return
     try:
         if meta is None:

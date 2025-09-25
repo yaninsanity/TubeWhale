@@ -97,6 +97,10 @@ urlpatterns = [
     path('api/templates/', include('apps.templates_app.urls')),
     # Friendly alias (non-API) for direct browser/manual usage
     path('templates/', include('apps.templates_app.urls')),
+    
+    # === ENHANCED TASK MANAGEMENT ===
+    # Industrial-grade task management with pause/resume and real-time results
+    path('', include('service.enhanced_task_urls')),
     path('admin/system-health/', tpl_admin_views.system_health_overview, name='admin-system-health'),
     path('admin/dashboard-embed/', tpl_admin_views.admin_dashboard_summary, name='admin-dashboard-embed'),
     

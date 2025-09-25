@@ -5,7 +5,7 @@ Fixes admin logout issues by avoiding session interference
 
 import logging
 from django.conf import settings
-from django.utils import translation
+from django.utils import translation, timezone
 from django.utils.deprecation import MiddlewareMixin
 
 logger = logging.getLogger(__name__)
@@ -107,4 +107,45 @@ class AdminLanguageMiddleware(MiddlewareMixin):
             if browser_language in self.SUPPORTED_LANGUAGES:
                 return browser_language
                 
+
+class UserProfileMiddleware(MiddlewareMixin):
+    """Attach lightweight user profile metadata to each request."""
+
+    PROFILE_SESSION_KEY = 'user_profile_cache'
+    PROFILE_FIELDS = (
+        'tier',
+        'language',
+        'timezone_setting',
+        'is_verified',
+    )
+
+    def process_request(self, request):
+        user = getattr(request, 'user', None)
+        if not user or not user.is_authenticated:
+            return
+
+        try:
+            cached_profile = request.session.get(self.PROFILE_SESSION_KEY, {})
+            if cached_profile.get('user_id') != str(user.id):
+                cached_profile = {
+                    'user_id': str(user.id),
+                    'username': user.username,
+                    **{field: getattr(user, field, None) for field in self.PROFILE_FIELDS},
+                }
+                request.session[self.PROFILE_SESSION_KEY] = cached_profile
+
+            request.user_profile = cached_profile
+
+            if not getattr(user, '_activity_tracked', False):
+                user.last_activity = timezone.now()
+                user.save(update_fields=['last_activity'])
+                user._activity_tracked = True
+
+        except Exception as exc:
+            logger.debug('UserProfileMiddleware fallback due to %s', exc)
+            request.user_profile = {
+                'user_id': str(getattr(user, 'id', '')),
+                'username': getattr(user, 'username', ''),
+            }
+
 

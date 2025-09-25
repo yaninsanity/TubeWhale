@@ -1,0 +1,158 @@
+# TubeWhale Multilingual Docker Image
+# Production-Ready with English-First i18n Support
+
+FROM python:3.11-slim
+
+# Build arguments for i18n configuration
+ARG ENABLE_I18N=true
+ARG DEFAULT_LANGUAGE=en
+ARG COMPILE_LOCALES=true
+
+# Set environment variables for UTF-8 support
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONIOENCODING=utf-8 \
+    LC_ALL=C.UTF-8 \
+    LANG=C.UTF-8 \
+    LANGUAGE=C.UTF-8
+
+# Install system dependencies including locale support
+RUN apt-get update && apt-get install -y \
+    # Essential build tools
+    gcc \
+    g++ \
+    make \
+    # Locale and internationalization support
+    locales \
+    locales-all \
+    gettext \
+    # Database and network tools
+    libpq-dev \
+    curl \
+    # Clean up
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Generate all locales for comprehensive i18n support
+RUN locale-gen en_US.UTF-8 \
+    zh_CN.UTF-8 \
+    zh_TW.UTF-8 \
+    ja_JP.UTF-8 \
+    ko_KR.UTF-8 \
+    es_ES.UTF-8 \
+    fr_FR.UTF-8 \
+    de_DE.UTF-8 \
+    pt_PT.UTF-8 \
+    ru_RU.UTF-8 \
+    ar_SA.UTF-8 \
+    hi_IN.UTF-8
+
+# Set working directory
+WORKDIR /app
+
+# Copy Python requirements and install dependencies
+COPY requirements.txt django_requirements.txt ./
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir -r django_requirements.txt
+
+# Copy project files
+COPY . .
+
+# Create necessary directories
+RUN mkdir -p /app/logs \
+    /app/staticfiles \
+    /app/media \
+    /app/locale
+
+# Set proper permissions
+RUN chmod +x /app/compile_locales.sh && \
+    chmod 755 /app/logs /app/staticfiles /app/media /app/locale
+
+# Compile locales if enabled
+RUN if [ "$COMPILE_LOCALES" = "true" ]; then \
+        echo "🌍 Compiling multilingual locales..." && \
+        python manage.py makemessages -l en --no-wrap --no-obsolete && \
+        python manage.py makemessages -l zh-hans --no-wrap --no-obsolete && \
+        python manage.py makemessages -l zh-hant --no-wrap --no-obsolete && \
+        python manage.py makemessages -l ja --no-wrap --no-obsolete && \
+        python manage.py makemessages -l ko --no-wrap --no-obsolete && \
+        python manage.py makemessages -l es --no-wrap --no-obsolete && \
+        python manage.py makemessages -l fr --no-wrap --no-obsolete && \
+        python manage.py makemessages -l de --no-wrap --no-obsolete && \
+        python manage.py makemessages -l pt --no-wrap --no-obsolete && \
+        python manage.py makemessages -l ru --no-wrap --no-obsolete && \
+        python manage.py makemessages -l ar --no-wrap --no-obsolete && \
+        python manage.py makemessages -l hi --no-wrap --no-obsolete && \
+        python manage.py compilemessages && \
+        echo "✅ Multilingual locales compiled successfully"; \
+    fi
+
+# Collect static files
+RUN python manage.py collectstatic --noinput
+
+# Create entrypoint script for multilingual support
+RUN echo '#!/bin/bash\n\
+set -e\n\
+\n\
+echo "🌍 TubeWhale Multilingual Container Starting..."\n\
+echo "Default Language: $DEFAULT_LANGUAGE"\n\
+echo "i18n Enabled: $ENABLE_I18N"\n\
+echo "Locale: $LC_ALL"\n\
+\n\
+# Wait for database\n\
+echo "⏳ Waiting for database..."\n\
+while ! nc -z $DB_HOST $DB_PORT; do\n\
+    sleep 1\n\
+done\n\
+echo "✅ Database is ready"\n\
+\n\
+# Run migrations\n\
+echo "🔄 Running database migrations..."\n\
+python manage.py migrate --noinput\n\
+\n\
+# Compile messages if needed\n\
+if [ "$COMPILE_LOCALES" = "true" ]; then\n\
+    echo "🌍 Compiling translation messages..."\n\
+    python manage.py compilemessages\n\
+fi\n\
+\n\
+# Collect static files\n\
+echo "📁 Collecting static files..."\n\
+python manage.py collectstatic --noinput\n\
+\n\
+# Create superuser if needed\n\
+echo "👤 Checking for superuser..."\n\
+python manage.py shell -c "\n\
+from apps.user_app.models import User;\n\
+if not User.objects.filter(is_superuser=True).exists():\n\
+    User.objects.create_superuser(\'"'"'admin\'"'"', \'"'"'admin@tubewhale.com\'"'"', \'"'"'admin123\'"'"');\n\
+    print(\'"'"'✅ Superuser created: admin/admin123\'"'"');\n\
+else:\n\
+    print(\'"'"'ℹ️  Superuser already exists\'"'"');\n\
+"\n\
+\n\
+echo "🚀 Starting TubeWhale application..."\n\
+exec "$@"\n\
+' > /app/docker-entrypoint.sh && chmod +x /app/docker-entrypoint.sh
+
+# Health check with multilingual support
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8000/health/ || exit 1
+
+# Expose port
+EXPOSE 8000
+
+# Set entrypoint
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
+
+# Default command
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+
+# Labels for container metadata
+LABEL maintainer="TubeWhale Team <dev@tubewhale.com>" \
+      version="3.0" \
+      description="TubeWhale YouTube Analysis Platform with English-First Multilingual Support" \
+      i18n.enabled="true" \
+      i18n.default_language="en" \
+      i18n.supported_languages="en,zh-hans,zh-hant,ja,ko,es,fr,de,pt,ru,ar,hi"
