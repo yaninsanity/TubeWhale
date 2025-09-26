@@ -82,6 +82,7 @@ THIRD_PARTY_APPS = [
     'drf_spectacular',
     'django_redis',
     'channels',
+    'django_celery_beat',  # Required for Celery beat scheduler
 ]
 
 LOCAL_APPS = [
