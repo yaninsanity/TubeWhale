@@ -14,7 +14,7 @@ class UserTier(models.TextChoices):
 
 class UserProfile(models.Model):
     """用户档案扩展，包含层级信息"""
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='template_profile')
     tier = models.CharField(
         max_length=20,
         choices=UserTier.choices,

@@ -1,0 +1,651 @@
+{% extends 'dashboard/base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Job Details" %} - TubeWhale{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+<style>
+    .job-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 10px;
+        margin-bottom: 2rem;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .job-header::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Ccircle cx='30' cy='30' r='4'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E") repeat;
+        animation: float 20s infinite linear;
+        z-index: 0;
+    }
+    
+    .job-header > * {
+        position: relative;
+        z-index: 1;
+    }
+    
+    @keyframes float {
+        0% { transform: translate(-50%, -50%) rotate(0deg); }
+        100% { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+    
+    .status-badge {
+        padding: 0.5rem 1rem;
+        border-radius: 25px;
+        font-weight: bold;
+        font-size: 0.9rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .status-completed { background: #10B981; color: white; }
+    .status-processing { background: #F59E0B; color: white; }
+    .status-pending { background: #6B7280; color: white; }
+    .status-failed { background: #EF4444; color: white; }
+    
+    .progress-ring {
+        width: 120px;
+        height: 120px;
+        position: relative;
+    }
+    
+    .progress-ring svg {
+        width: 100%;
+        height: 100%;
+        transform: rotate(-90deg);
+    }
+    
+    .progress-ring circle {
+        fill: none;
+        stroke-width: 8;
+    }
+    
+    .progress-ring .bg {
+        stroke: rgba(255, 255, 255, 0.2);
+    }
+    
+    .progress-ring .progress {
+        stroke: #10B981;
+        stroke-linecap: round;
+        transition: stroke-dasharray 0.3s ease;
+    }
+    
+    .progress-text {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: white;
+    }
+    
+    .youtube-embed {
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        margin-bottom: 2rem;
+    }
+    
+    .insight-card {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        border-left: 4px solid #667eea;
+        transition: all 0.3s ease;
+    }
+    
+    .insight-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    
+    .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    
+    .metric-card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 10px;
+        text-align: center;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+    }
+    
+    .metric-card:hover {
+        transform: translateY(-3px);
+    }
+    
+    .metric-value {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #667eea;
+        margin-bottom: 0.5rem;
+    }
+    
+    .metric-label {
+        color: #6B7280;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .recommendation-item {
+        background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 0.8rem;
+        border-left: 3px solid #667eea;
+        position: relative;
+    }
+    
+    .recommendation-item::before {
+        content: '💡';
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        font-size: 1.2rem;
+    }
+    
+    .download-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1rem;
+        margin-top: 2rem;
+    }
+    
+    .download-card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 10px;
+        text-align: center;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+    }
+    
+    .download-card:hover {
+        border-color: #667eea;
+        transform: translateY(-3px);
+    }
+    
+    .download-icon {
+        font-size: 2rem;
+        color: #667eea;
+        margin-bottom: 1rem;
+    }
+    
+    .btn-download {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 0.8rem 2rem;
+        border-radius: 25px;
+        font-weight: bold;
+        text-decoration: none;
+        display: inline-block;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-download:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        color: white;
+        text-decoration: none;
+    }
+    
+    .error-message {
+        background: #FEF2F2;
+        border: 1px solid #FCA5A5;
+        color: #DC2626;
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+    }
+    
+    .loading-spinner {
+        border: 4px solid #f3f4f6;
+        border-top: 4px solid #667eea;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .auto-refresh {
+        background: #EFF6FF;
+        border: 1px solid #BFDBFE;
+        color: #1E40AF;
+        padding: 0.8rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        text-align: center;
+    }
+    
+    .template-info {
+        background: linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%);
+        border-left: 4px solid #10B981;
+        padding: 1.5rem;
+        border-radius: 8px;
+        margin-bottom: 2rem;
+    }
+    
+    .expert-role-badge {
+        background: linear-gradient(135deg, #FEF3C7 0%, #FCD34D 100%);
+        color: #92400E;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-weight: bold;
+        font-size: 0.9rem;
+        display: inline-block;
+        margin-bottom: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Job Header -->
+    <div class="job-header">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h1 class="mb-3">
+                    <i class="fas fa-video me-2"></i>
+                    {% trans "Analysis Job Details" %}
+                </h1>
+                <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+                                        <span class="status-badge status-{{ job.status|lower }}">
+                        {% if job.status == 'processing' %}
+                            <i class="fas fa-spinner fa-spin"></i>
+                        {% elif job.status == 'completed' %}
+                            <i class="fas fa-check-circle"></i>
+                        {% elif job.status == 'failed' %}
+                            <i class="fas fa-exclamation-triangle"></i>
+                        {% elif job.status == 'pending' %}
+                            <i class="fas fa-clock"></i>
+                        {% endif %}
+                        {{ job.status|title }}
+                    </span>
+                                        <span class="expert-role-badge">
+                        <i class="fas fa-user-tie me-2"></i>
+                        {{ template.expert_role|default:job.expert_role|title }}
+                    </span>
+                </div>
+                <p class="mb-0 opacity-90">
+                    <strong>{% trans "Job ID" %}:</strong> {{ job.job_id }}<br>
+                    <strong>{% trans "Created" %}:</strong> {{ job.created_at|date:"M d, Y H:i" }}<br>
+                    {% if job.completed_at %}
+                        <strong>{% trans "Completed" %}:</strong> {{ job.completed_at|date:"M d, Y H:i" }}
+                    {% endif %}
+                </p>
+            </div>
+            <div class="col-md-4 text-center">
+                {% if job.status == 'processing' %}
+                                        <div class="progress-ring">
+                        <svg viewBox="0 0 100 100">
+                            <circle class="bg" cx="50" cy="50" r="42"></circle>
+                            <circle class="progress" cx="50" cy="50" r="42"
+                                    stroke-dasharray="{{ job.progress|floatformat:0 }}, 100"
+                                    stroke-dashoffset="0"></circle>
+                        </svg>
+                        <div class="progress-text">{{ job.progress|floatformat:0 }}%</div>
+                    </div>
+                {% elif job.status == 'completed' %}
+                                        <div class="text-center">
+                        <i class="fas fa-check-circle" style="font-size: 4rem; color: #10B981;"></i>
+                        <div class="mt-2"><strong>{% trans "Complete" %}</strong></div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Auto-refresh for processing jobs -->
+    {% if job.status == 'processing' or job.status == 'pending' %}
+    <div class="auto-refresh">
+        <i class="fas fa-sync-alt fa-spin me-2"></i>
+        {% trans "This page will auto-refresh every 5 seconds until analysis is complete." %}
+    </div>
+    {% endif %}
+
+    <!-- Error Message -->
+    {% if job.status == 'failed' %}
+    <div class="error-message">
+        <h5><i class="fas fa-exclamation-triangle me-2"></i>{% trans "Analysis Failed" %}</h5>
+        <p class="mb-0">{{ job.error_message|default:"An unexpected error occurred during analysis." }}</p>
+    </div>
+    {% endif %}
+
+    <div class="row">
+        <!-- YouTube Video Section -->
+        <div class="col-lg-8">
+            {% if youtube.video_url %}
+            <div class="youtube-embed">
+                <div class="ratio ratio-16x9">
+                                        <iframe src="{{ youtube.embed_url }}" 
+                            title="YouTube video player" 
+                            frameborder="0" 
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                            allowfullscreen></iframe>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Template Information -->
+            {% if template %}
+            <div class="template-info">
+                <h5 class="mb-3">
+                    <i class="fas fa-cogs me-2"></i>
+                    {% trans "Analysis Configuration" %}
+                </h5>
+                <div class="row">
+                    <div class="col-md-6">
+                        <strong>{% trans "Template" %}:</strong> {{ template.name }}<br>
+                        <strong>{% trans "Analysis Level" %}:</strong> 
+                        <span class="badge bg-primary">{{ template.level|title }}</span><br>
+                        <strong>{% trans "Estimated Time" %}:</strong> {{ template.estimated_time }}
+                    </div>
+                    <div class="col-md-6">
+                        <strong>{% trans "Expert Role" %}:</strong> {{ template.expert_role|title }}<br>
+                        <strong>{% trans "Focus Areas" %}:</strong> 
+                        {% for area in template.focus_areas %}
+                            <span class="badge bg-secondary me-1">{{ area }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Results Section -->
+            {% if job.status == 'completed' and results %}
+            <div class="insight-card">
+                                <h3 class="mb-4">
+                    <i class="fas fa-chart-line me-2"></i>
+                    {% trans "Analysis Results" %}
+                </h3>
+
+                <!-- Performance Metrics -->
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <div class="metric-value">{{ results.confidence_score|floatformat:1 }}%</div>
+                        <div class="metric-label">{% trans "Confidence Score" %}</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">{{ results.completeness_score|floatformat:1 }}%</div>
+                        <div class="metric-label">{% trans "Completeness" %}</div>
+                    </div>
+                    {% if results.metrics %}
+                        {% for key, value in results.metrics.items %}
+                        <div class="metric-card">
+                            <div class="metric-value">{{ value }}</div>
+                            <div class="metric-label">{{ key|title }}</div>
+                        </div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+
+                <!-- Executive Summary -->
+                {% if results.summary %}
+                <div class="mb-4">
+                    <h5 class="mb-3">
+                        <i class="fas fa-clipboard-list me-2"></i>
+                        {% trans "Executive Summary" %}
+                    </h5>
+                    <div class="bg-light p-3 rounded">
+                        {{ results.summary|linebreaks }}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- AI Insights -->
+                {% if results.raw_data.ai_response %}
+                    {% with ai_response=results.raw_data.ai_response %}
+                    
+                    <!-- Key Insights -->
+                    {% if ai_response.key_insights %}
+                    <div class="mb-4">
+                        <h5 class="mb-3">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            {% trans "Key Insights" %}
+                        </h5>
+                        {% for insight in ai_response.key_insights %}
+                        <div class="insight-card">
+                            {{ insight }}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <!-- Recommendations -->
+                    {% if ai_response.recommendations %}
+                    <div class="mb-4">
+                        <h5 class="mb-3">
+                            <i class="fas fa-thumbs-up me-2"></i>
+                            {% trans "Recommendations" %}
+                        </h5>
+                        {% for recommendation in ai_response.recommendations %}
+                        <div class="recommendation-item">
+                            {{ recommendation }}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <!-- Strengths and Weaknesses -->
+                    {% if ai_response.strengths or ai_response.weaknesses %}
+                    <div class="row mb-4">
+                        {% if ai_response.strengths %}
+                        <div class="col-md-6">
+                            <h6 class="text-success">
+                                <i class="fas fa-plus-circle me-2"></i>
+                                {% trans "Strengths" %}
+                            </h6>
+                            <ul class="list-unstyled">
+                                {% for strength in ai_response.strengths %}
+                                <li class="mb-2">
+                                    <i class="fas fa-check text-success me-2"></i>
+                                    {{ strength }}
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+                        
+                        {% if ai_response.weaknesses %}
+                        <div class="col-md-6">
+                            <h6 class="text-warning">
+                                <i class="fas fa-minus-circle me-2"></i>
+                                {% trans "Areas for Improvement" %}
+                            </h6>
+                            <ul class="list-unstyled">
+                                {% for weakness in ai_response.weaknesses %}
+                                <li class="mb-2">
+                                    <i class="fas fa-arrow-up text-warning me-2"></i>
+                                    {{ weakness }}
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    
+                    {% endwith %}
+                {% endif %}
+
+                <!-- Download Section -->
+                {% if results.download_links %}
+                <div class="download-grid">
+                    {% for format, link in results.download_links.items %}
+                    <div class="download-card">
+                        <div class="download-icon">
+                            {% if format == 'pdf' %}
+                                <i class="fas fa-file-pdf"></i>
+                            {% elif format == 'json' %}
+                                <i class="fas fa-file-code"></i>
+                            {% elif format == 'csv' %}
+                                <i class="fas fa-file-csv"></i>
+                            {% else %}
+                                <i class="fas fa-download"></i>
+                            {% endif %}
+                        </div>
+                        <h6>{{ format|upper }} {% trans "Report" %}</h6>
+                        <p class="text-muted small">{% trans "Download detailed analysis" %}</p>
+                        <a href="{{ link }}" class="btn-download" target="_blank">
+                            <i class="fas fa-download me-2"></i>
+                            {% trans "Download" %}
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Video Information -->
+            {% if youtube %}
+            <div class="insight-card">
+                <h5 class="mb-3">
+                    <i class="fab fa-youtube me-2 text-danger"></i>
+                    {% trans "Video Information" %}
+                </h5>
+                {% if youtube.thumbnail_url %}
+                <img src="{{ youtube.thumbnail_url }}" 
+                     alt="Video thumbnail" 
+                     class="img-fluid rounded mb-3">
+                {% endif %}
+                <p><strong>{% trans "Video ID" %}:</strong> {{ youtube.video_id }}</p>
+                <p><strong>{% trans "URL" %}:</strong> 
+                   <a href="{{ youtube.video_url }}" target="_blank" class="text-decoration-none">
+                       {{ youtube.video_url|truncatechars:50 }}
+                       <i class="fas fa-external-link-alt ms-1"></i>
+                   </a>
+                </p>
+                {% if youtube.title %}
+                <p><strong>{% trans "Title" %}:</strong> {{ youtube.title }}</p>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <!-- Processing Status -->
+            {% if job.status == 'processing' %}
+            <div class="insight-card">
+                <h5 class="mb-3">
+                    <i class="fas fa-cogs me-2"></i>
+                    {% trans "Processing Status" %}
+                </h5>
+                <div class="progress mb-3">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" 
+                         style="width: {{ job.progress }}%"
+                         aria-valuenow="{{ job.progress }}" 
+                         aria-valuemin="0" 
+                         aria-valuemax="100">
+                        {{ job.progress|floatformat:0 }}%
+                    </div>
+                </div>
+                <p class="text-muted">{{ job.status_message|default:"Processing video analysis..." }}</p>
+                {% if job.estimated_completion %}
+                <p><strong>{% trans "Estimated Completion" %}:</strong> {{ job.estimated_completion|date:"H:i" }}</p>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <!-- Quick Actions -->
+            <div class="insight-card">
+                <h5 class="mb-3">
+                    <i class="fas fa-tools me-2"></i>
+                    {% trans "Quick Actions" %}
+                </h5>
+                <div class="d-grid gap-2">
+                    <button class="btn btn-outline-primary" onclick="location.reload()">
+                        <i class="fas fa-sync-alt me-2"></i>
+                        {% trans "Refresh Status" %}
+                    </button>
+                    <a href="{% url 'tubewhale_engine:jobs_list' %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-list me-2"></i>
+                        {% trans "All Jobs" %}
+                    </a>
+                    {% if job.status == 'completed' %}
+                    <button class="btn btn-outline-success" onclick="shareResults()">
+                        <i class="fas fa-share me-2"></i>
+                        {% trans "Share Results" %}
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Auto-refresh for processing jobs
+{% if job.status == 'processing' or job.status == 'pending' %}
+setTimeout(function() {
+    location.reload();
+}, 5000);
+{% endif %}
+
+// Share results function
+function shareResults() {
+    if (navigator.share) {
+        navigator.share({
+            title: 'TubeWhale Analysis Results',
+            text: 'Check out this video analysis from TubeWhale',
+            url: window.location.href
+        });
+    } else {
+        // Fallback: copy to clipboard
+        navigator.clipboard.writeText(window.location.href).then(function() {
+            alert('{% trans "Link copied to clipboard!" %}');
+        });
+    }
+}
+
+// Progress ring animation
+document.addEventListener('DOMContentLoaded', function() {
+    const progressRing = document.querySelector('.progress-ring .progress');
+    if (progressRing) {
+        const radius = progressRing.r.baseVal.value;
+        const circumference = radius * 2 * Math.PI;
+        progressRing.style.strokeDasharray = `${circumference} ${circumference}`;
+        progressRing.style.strokeDashoffset = circumference;
+        
+        function setProgress(percent) {
+            const offset = circumference - percent / 100 * circumference;
+            progressRing.style.strokeDashoffset = offset;
+        }
+        
+        // Animate progress
+        const progress = {{ job.progress|default:0 }};
+        setTimeout(() => setProgress(progress), 100);
+    }
+});
+</script>
+{% endblock %}

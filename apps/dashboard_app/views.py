@@ -4,6 +4,7 @@ User onboarding and environment configuration
 """
 
 from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import reverse
 from django.contrib import messages
 from django.utils import timezone
 from django.utils.text import slugify
@@ -15,7 +16,7 @@ from django.core.paginator import Paginator
 from django.db.models import Q, Count
 from apps.user_app.decorators import scientist_login_required
 from .models import TemplateCategory, AnalysisTemplate
-from apps.tubewhale_engine.models import AnalysisJob
+from apps.tubewhale_engine.models import AnalysisJob, AnalysisResult
 import os
 import json
 from urllib.parse import urlparse, parse_qs
@@ -157,25 +158,69 @@ def job_runner_view(request):
 
 def has_environment_configured(user):
     """Check if user has completed environment setup"""
-    # TODO: Implement actual check based on user preferences/config
-    return False
+    from apps.user_app.models import UserProfile
+    try:
+        profile = UserProfile.objects.get(user=user)
+        # Check if basic config fields are populated
+        return bool(profile.api_keys.get('youtube_api_key') and 
+                   profile.api_keys.get('openai_api_key'))
+    except UserProfile.DoesNotExist:
+        return False
 
 
 def get_user_environment_config(user):
     """Get user's current environment configuration"""
-    # TODO: Load from user preferences or config storage
-    return {
-        'youtube_api_key': '',
-        'openai_api_key': '',
-        'workspace_folder': f'/workspace/{user.username}'
-    }
+    from apps.user_app.models import UserProfile
+    try:
+        profile = UserProfile.objects.get(user=user)
+        return {
+            'youtube_api_key': profile.api_keys.get('youtube_api_key', ''),
+            'openai_api_key': profile.api_keys.get('openai_api_key', ''),
+            'workspace_folder': profile.workspace_folder or f'/workspace/{user.username}',
+            'preferred_language': profile.preferred_language or 'en',
+            'analysis_tier': profile.subscription_tier or 'basic'
+        }
+    except UserProfile.DoesNotExist:
+        return {
+            'youtube_api_key': '',
+            'openai_api_key': '',
+            'workspace_folder': f'/workspace/{user.username}',
+            'preferred_language': 'en',
+            'analysis_tier': 'basic'
+        }
 
 
 def handle_environment_setup(request):
     """Handle environment configuration form submission"""
-    # TODO: Implement configuration saving
-    messages.success(request, _('Environment configuration saved successfully!'))
-    return redirect('template_selection')
+    from apps.user_app.models import UserProfile
+    
+    if request.method == 'POST':
+        try:
+            profile, created = UserProfile.objects.get_or_create(user=request.user)
+            
+            # Update API keys
+            api_keys = profile.api_keys or {}
+            if request.POST.get('youtube_api_key'):
+                api_keys['youtube_api_key'] = request.POST.get('youtube_api_key')
+            if request.POST.get('openai_api_key'):
+                api_keys['openai_api_key'] = request.POST.get('openai_api_key')
+            profile.api_keys = api_keys
+            
+            # Update other preferences
+            if request.POST.get('workspace_folder'):
+                profile.workspace_folder = request.POST.get('workspace_folder')
+            if request.POST.get('preferred_language'):
+                profile.preferred_language = request.POST.get('preferred_language')
+            
+            profile.save()
+            messages.success(request, _('Environment configuration saved successfully!'))
+            return redirect('dashboard:template_selection')
+            
+        except Exception as e:
+            messages.error(request, _('Error saving configuration: {}').format(str(e)))
+            return redirect('dashboard:environment_setup')
+    
+    return redirect('dashboard:environment_setup')
 
 
 def get_available_templates(user):
@@ -231,8 +276,12 @@ def get_template_by_id(template_id, user):
 
 def get_user_template_selection(user):
     """Get user's current template selection"""
-    # TODO: Load from user preferences
-    return 'default_analysis'
+    from apps.user_app.models import UserProfile
+    try:
+        profile = UserProfile.objects.get(user=user)
+        return profile.preferred_template or 'default_analysis'
+    except UserProfile.DoesNotExist:
+        return 'default_analysis'
 
 
 def get_user_active_jobs(user):
@@ -1351,6 +1400,123 @@ def get_user_max_jobs(user):
     return tier_limits.get(user.tier.lower() if user.tier else 'basic', 1)
 
 
+def job_detail_view(request, job_id):
+    """Render a detailed analysis report for a specific job"""
+    if request.user.is_authenticated:
+        job = get_object_or_404(AnalysisJob, job_id=job_id, user=request.user)
+    else:
+        # Allow anonymous access to view jobs (demo mode)
+        job = get_object_or_404(AnalysisJob, job_id=job_id)
+
+    analysis_options = job.analysis_options or {}
+    youtube_meta = analysis_options.get('youtube_metadata') or {}
+
+    video_id = job.content_id or youtube_meta.get('video_id')
+    video_url = (
+        job.content_url
+        or youtube_meta.get('video_url')
+        or (f"https://www.youtube.com/watch?v={video_id}" if video_id else None)
+    )
+    embed_url = youtube_meta.get('embed_url')
+    if not embed_url and video_id:
+        embed_url = f"https://www.youtube.com/embed/{video_id}"
+
+    youtube_info = {
+        'video_id': video_id,
+        'video_url': video_url,
+        'embed_url': embed_url,
+        'thumbnail_url': youtube_meta.get('thumbnail_url') or analysis_options.get('thumbnail_url'),
+        'title': job.content_title or youtube_meta.get('title') or analysis_options.get('video_title'),
+    }
+    if not any(youtube_info.values()):
+        youtube_info = None
+
+    focus_areas = analysis_options.get('focus_areas')
+    modules = analysis_options.get('modules') if not focus_areas else None
+    if not focus_areas and isinstance(modules, dict):
+        focus_areas = [
+            module.replace('_', ' ').title()
+            for module, enabled in modules.items()
+            if enabled
+        ]
+
+    template_obj = AnalysisTemplate.objects.filter(template_id=job.template_id).first()
+    template_info = None
+    if template_obj:
+        template_info = {
+            'name': template_obj.name,
+            'level': template_obj.complexity_level.replace('_', ' ') if template_obj.complexity_level else None,
+            'estimated_time': template_obj.estimated_duration or _('Not specified'),
+            'expert_role': job.expert_role,
+            'focus_areas': focus_areas or template_obj.get_tags_list(),
+        }
+    elif analysis_options:
+        depth = analysis_options.get('analysis_depth') or analysis_options.get('analysis_level')
+        template_info = {
+            'name': analysis_options.get('template_name') or job.template_id,
+            'level': depth.replace('_', ' ').title() if isinstance(depth, str) else None,
+            'estimated_time': analysis_options.get('estimated_time'),
+            'expert_role': job.expert_role,
+            'focus_areas': focus_areas or [],
+        }
+
+    def normalize_score(value):
+        if value is None:
+            return None
+        return round(value * 100, 1) if value <= 1 else round(value, 1)
+
+    try:
+        result_obj = job.result
+    except AnalysisResult.DoesNotExist:
+        result_obj = None
+
+    results_context = None
+    if result_obj:
+        download_base = reverse('tubewhale_engine:download-analysis-result', args=[job.job_id])
+        available_formats = result_obj.available_formats or []
+        fallback_formats = ['json', 'markdown']
+        format_sequence = [
+            fmt for fmt in (available_formats + fallback_formats)
+            if fmt
+        ]
+        # Preserve order while removing duplicates
+        seen = set()
+        download_links = {}
+        for fmt in format_sequence:
+            fmt_key = fmt.lower()
+            if fmt_key in seen:
+                continue
+            seen.add(fmt_key)
+            download_links[fmt_key] = f"{download_base}?format={fmt_key}"
+
+        raw_data = result_obj.raw_data or {}
+        summary = result_obj.summary
+        if not summary and isinstance(raw_data, dict):
+            summary = raw_data.get('summary') or raw_data.get('ai_summary')
+            ai_response = raw_data.get('ai_response') if isinstance(raw_data.get('ai_response'), dict) else {}
+            summary = summary or ai_response.get('summary')
+
+        results_context = {
+            'summary': summary,
+            'raw_data': raw_data,
+            'metrics': result_obj.metrics or {},
+            'confidence_score': normalize_score(result_obj.confidence_score),
+            'completeness_score': normalize_score(result_obj.completeness_score),
+            'download_links': download_links,
+        }
+
+    job.estimated_completion = job.estimated_completion_time
+
+    context = {
+        'job': job,
+        'youtube': youtube_info,
+        'template': template_info,
+        'results': results_context,
+    }
+
+    return render(request, 'dashboard/job_detail.html', context)
+
+
 def jobs_view(request):
     """Display user's analysis jobs and handle unified wizard submissions"""
     from django.shortcuts import render
@@ -1460,8 +1626,18 @@ def jobs_view(request):
             messages.error(request, _('Error starting analysis: {}').format(str(exc)))
             return HttpResponseRedirect(reverse('dashboard:smart_wizard'))
 
+    # Get user's actual jobs
+    if request.user.is_authenticated:
+        recent_jobs = AnalysisJob.objects.filter(
+            user=request.user
+        ).order_by('-created_at')[:10]
+    else:
+        # Show all jobs for anonymous users (demo mode)
+        recent_jobs = AnalysisJob.objects.all().order_by('-created_at')[:10]
+    
     return render(request, 'dashboard/jobs.html', {
         'user': request.user,
+        'jobs': recent_jobs,
     })
 
 
@@ -1525,3 +1701,102 @@ def analysis_status_api(request, job_id):
         'message': 'Job is pending',
         'video_id': 'dQw4w9WgXcQ'
     })
+
+
+@csrf_exempt
+def retry_job_view(request, job_id):
+    """Retry a failed job"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    try:
+        # Get the job from the tubewhale_engine app
+        from apps.tubewhale_engine.models import AnalysisJob
+        job = get_object_or_404(AnalysisJob, job_id=job_id)
+        
+        # Check if job can be retried
+        if job.status not in ['failed', 'error', 'cancelled']:
+            return JsonResponse({'error': 'Job cannot be retried'}, status=400)
+        
+        # Reset job status and retry
+        job.status = 'pending'
+        job.progress = 0
+        job.error_message = ''
+        job.save()
+        
+        # Resubmit the task
+        from apps.tubewhale_engine.tasks import analyze_video_task
+        task_result = analyze_video_task.delay(job.job_id)
+        
+        # Update celery task ID
+        job.celery_task_id = task_result.id
+        job.save()
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Job retry initiated successfully'
+        })
+        
+    except Exception as e:
+        return JsonResponse({'error': f'Retry failed: {str(e)}'}, status=500)
+
+
+@csrf_exempt
+def cancel_job_view(request, job_id):
+    """Cancel a running job"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    try:
+        # Get the job from the tubewhale_engine app
+        from apps.tubewhale_engine.models import AnalysisJob
+        job = get_object_or_404(AnalysisJob, job_id=job_id)
+        
+        # Check if job can be cancelled
+        if job.status in ['completed', 'failed', 'cancelled']:
+            return JsonResponse({'error': 'Job cannot be cancelled'}, status=400)
+        
+        # Cancel the Celery task if it exists
+        if job.celery_task_id:
+            from celery import current_app
+            current_app.control.revoke(job.celery_task_id, terminate=True)
+        
+        # Update job status
+        job.status = 'cancelled'
+        job.error_message = 'Job cancelled by user'
+        job.save()
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Job cancelled successfully'
+        })
+        
+    except Exception as e:
+        return JsonResponse({'error': f'Cancel failed: {str(e)}'}, status=500)
+
+
+def job_progress_api(request, job_id):
+    """API endpoint for real-time job progress updates"""
+    try:
+        # Get the job from the tubewhale_engine app
+        from apps.tubewhale_engine.models import AnalysisJob
+        job = get_object_or_404(AnalysisJob, job_id=job_id)
+        
+        # Return comprehensive progress information
+        return JsonResponse({
+            'status': job.status,
+            'progress': job.progress,
+            'current_step': job.current_step,
+            'steps_completed': job.steps_completed,
+            'total_steps': job.total_steps,
+            'estimated_time_remaining': job.estimated_time_remaining,
+            'status_message': job.status_message,
+            'created_at': job.created_at.isoformat(),
+            'started_at': job.started_at.isoformat() if job.started_at else None,
+            'completed_at': job.completed_at.isoformat() if job.completed_at else None,
+            'error_message': job.error_message,
+            'processing_time_seconds': job.processing_time_seconds,
+        })
+        
+    except Exception as e:
+        return JsonResponse({'error': f'Progress fetch failed: {str(e)}'}, status=500)

@@ -38,9 +38,52 @@
             50% { opacity: 0.6; }
             100% { opacity: 1; }
         }
+        
+        /* Enhanced progress styling */
+        .clickable-progress:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            transition: all 0.2s ease;
+        }
+        
+        .progress {
+            border-radius: 10px;
+            overflow: hidden;
+            background-color: rgba(0,0,0,0.1);
+        }
+        
+        .progress-bar {
+            border-radius: 10px;
+            transition: width 0.6s ease;
+        }
+        
+        .btn-xs {
+            padding: 0.125rem 0.25rem;
+            font-size: 0.75rem;
+            line-height: 1.2;
+            border-radius: 0.2rem;
+        }
+        
+        .job-status-text {
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .badge {
+            transition: all 0.2s ease;
+        }
+        
+        .badge:hover {
+            transform: scale(1.05);
+        }
     </style>
 </head>
 <body>
+    {% csrf_token %}
     <div class="container py-4">
         <!-- Django Messages -->
         {% if messages %}
@@ -86,13 +129,13 @@
                                 <div class="col-md-4">
                                     <div class="bg-white bg-opacity-20 p-3 rounded mb-2">
                                         <i class="fas fa-tools fs-4 mb-2"></i>
-                                        <div>{{ job_config.tool_type|title }} Analysis</div>
+                                        <div>{{ job_config.analysis_type|default:"Video"|title }} Analysis</div>
                                     </div>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="bg-white bg-opacity-20 p-3 rounded mb-2">
                                         <i class="fas fa-user-tie fs-4 mb-2"></i>
-                                        <div>{{ job_config.template_name }}</div>
+                                        <div>{{ job_config.expert_role|default:"Expert" }}</div>
                                     </div>
                                 </div>
                                 <div class="col-md-4">
@@ -102,9 +145,7 @@
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                        
-                        <!-- Progress Bar -->
+                        </div>                        <!-- Progress Bar -->
                         <div class="progress mb-4 progress-animation" style="height: 8px;">
                             <div class="progress-bar progress-bar-striped progress-bar-animated" 
                                  role="progressbar" style="width: 75%"></div>
@@ -145,14 +186,12 @@
                                     <span>{% trans "Quality assurance check..." %}</span>
                                 </div>
                             </div>
-                        </div>
-                        
-                        <!-- Mock completion -->
+                        </div>                        <!-- Mock completion -->
                         <div class="mt-4" id="completionSection" style="display: none;">
                             <div class="alert alert-success">
                                 <h5><i class="fas fa-check-circle me-2"></i>{% trans "Analysis Complete!" %}</h5>
                                 <p class="mb-3">{% trans "Your professional analysis report is ready for download." %}</p>
-                                <button class="btn btn-light btn-lg" onclick="downloadReport()">
+                                <button class="btn btn-light btn-lg" onclick="downloadReport(null)">
                                     <i class="fas fa-download me-2"></i>{% trans "Download Report" %}
                                 </button>
                             </div>
@@ -173,27 +212,130 @@
                         </h5>
                     </div>
                     <div class="card-body">
-                        {% if mock_jobs %}
+                        {% if jobs %}
                         <div class="row g-3">
-                            {% for job in mock_jobs %}
+                            {% for job in jobs %}
                             <div class="col-md-6 col-lg-4">
-                                <div class="card job-card h-100">
+                                <div class="card job-card h-100" data-job-id="{{ job.job_id }}">
                                     <div class="card-body">
                                         <div class="d-flex justify-content-between align-items-start mb-2">
-                                            <h6 class="card-title">{{ job.template_name }}</h6>
-                                            <span class="badge bg-success status-badge">{{ job.status }}</span>
+                                            <h6 class="card-title">{{ job.template_id|default:job.analysis_type|title }} Analysis</h6>
+                                            <span class="badge 
+                                                {% if job.status == 'completed' %}bg-success
+                                                {% elif job.status == 'processing' %}bg-warning progress-animation
+                                                {% elif job.status == 'pending' %}bg-secondary
+                                                {% elif job.status == 'failed' %}bg-danger
+                                                {% elif job.status == 'cancelled' %}bg-dark
+                                                {% else %}bg-primary{% endif %} 
+                                                status-badge">{{ job.status|title }}</span>
                                         </div>
-                                        <p class="card-text small text-muted">
-                                            <i class="fas fa-{{ job.tool_icon }} me-1"></i>
-                                            {{ job.tool_type }} • {{ job.created_at }}
-                                        </p>
-                                        <p class="card-text small">{{ job.input_preview }}</p>
                                         
+                                        <!-- Enhanced clickable progress display -->
+                                        {% if job.status == 'processing' %}
+                                        <div class="progress mb-2 clickable-progress" 
+                                             style="height: 8px; cursor: pointer;"
+                                             title="Click to see detailed progress"
+                                             onclick="showProgressDetail('{{ job.job_id }}')">
+                                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" 
+                                                 role="progressbar" 
+                                                 style="width: {{ job.progress|default:0 }}%"
+                                                 data-progress="{{ job.progress|default:0 }}"></div>
+                                        </div>
+                                        <div class="small text-muted mb-2 job-status-text">
+                                            <i class="fas fa-cog fa-spin me-1"></i>
+                                            <span class="current-step">{{ job.current_step|default:"Initializing..." }}</span>
+                                            <div class="mt-1">
+                                                <span class="badge bg-light text-dark me-1">{{ job.progress|default:0 }}%</span>
+                                                <span class="badge bg-light text-dark me-1">Step {{ job.steps_completed|default:0 }}/{{ job.total_steps|default:5 }}</span>
+                                                {% if job.estimated_time_remaining %}
+                                                <span class="badge bg-warning text-dark">~{{ job.estimated_time_remaining }}s left</span>
+                                                {% endif %}
+                                                <button class="btn btn-xs btn-outline-primary ms-2" 
+                                                        onclick="showProgressDetail('{{ job.job_id }}')" 
+                                                        title="View detailed progress">
+                                                    <i class="fas fa-info-circle"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        {% elif job.status == 'completed' %}
+                                        <div class="progress mb-2 clickable-progress" 
+                                             style="height: 6px; cursor: pointer;"
+                                             title="Click to view completion details"
+                                             onclick="showCompletionDetail('{{ job.job_id }}')">
+                                            <div class="progress-bar bg-success" style="width: 100%"></div>
+                                        </div>
+                                        <div class="small text-success mb-2">
+                                            <i class="fas fa-check-circle me-1"></i>
+                                            Completed {{ job.completed_at|timesince|default:"recently" }} ago
+                                            <span class="badge bg-success ms-2">100%</span>
+                                            <button class="btn btn-xs btn-outline-success ms-2" 
+                                                    onclick="showCompletionDetail('{{ job.job_id }}')" 
+                                                    title="View completion summary">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                        </div>
+                                        {% elif job.status == 'failed' %}
+                                        <div class="progress mb-2 clickable-progress" 
+                                             style="height: 6px; cursor: pointer;"
+                                             title="Click to view error details"
+                                             onclick="showErrorDetail('{{ job.job_id }}')">
+                                            <div class="progress-bar bg-danger" style="width: {{ job.progress|default:25 }}%"></div>
+                                        </div>
+                                        <div class="small text-danger mb-2">
+                                            <i class="fas fa-exclamation-triangle me-1"></i>
+                                            {{ job.error_message|default:"Processing failed"|truncatechars:50 }}
+                                            <span class="badge bg-danger ms-2">{{ job.progress|default:0 }}%</span>
+                                            <button class="btn btn-xs btn-outline-danger ms-2" 
+                                                    onclick="showErrorDetail('{{ job.job_id }}')" 
+                                                    title="View error details">
+                                                <i class="fas fa-bug"></i>
+                                            </button>
+                                        </div>
+                                        {% elif job.status == 'pending' or job.status == 'queued' %}
+                                        <div class="progress mb-2 clickable-progress" 
+                                             style="height: 6px; cursor: pointer;"
+                                             title="Click to view queue position"
+                                             onclick="showQueueDetail('{{ job.job_id }}')">
+                                            <div class="progress-bar bg-secondary" style="width: 5%"></div>
+                                        </div>
+                                        <div class="small text-muted mb-2">
+                                            <i class="fas fa-clock me-1"></i>
+                                            Waiting in queue...
+                                            <span class="badge bg-secondary ms-2">0%</span>
+                                            <button class="btn btn-xs btn-outline-secondary ms-2" 
+                                                    onclick="showQueueDetail('{{ job.job_id }}')" 
+                                                    title="View queue status">
+                                                <i class="fas fa-list"></i>
+                                            </button>
+                                        </div>
+                                        {% endif %}
+                                        
+                                        <p class="card-text small text-muted">
+                                            <i class="fas fa-play me-1"></i>
+                                            {{ job.analysis_type|title }} • {{ job.created_at|timesince }} ago
+                                        </p>
+                                        <p class="card-text small">{{ job.content_title|default:job.content_url|truncatechars:60 }}</p>
+                                        
+                                        <!-- Job actions -->
                                         <div class="mt-auto">
-                                            <button class="btn btn-sm btn-outline-primary" onclick="downloadMockReport('{{ job.id }}')">
+                                            {% if job.status == 'completed' %}
+                                            <button class="btn btn-sm btn-outline-primary"
+                                                    data-download-url="{% url 'tubewhale_engine:download-analysis-result' job.job_id %}?format=json"
+                                                    onclick="downloadReport(this.dataset.downloadUrl)">
                                                 <i class="fas fa-download me-1"></i>{% trans "Download" %}
                                             </button>
-                                            <button class="btn btn-sm btn-outline-secondary" onclick="viewMockJob('{{ job.id }}')">
+                                            {% elif job.status == 'processing' %}
+                                            <button class="btn btn-sm btn-outline-danger" onclick="cancelJob('{{ job.job_id }}')">
+                                                <i class="fas fa-stop me-1"></i>{% trans "Cancel" %}
+                                            </button>
+                                            {% elif job.status == 'failed' or job.status == 'cancelled' %}
+                                            <button class="btn btn-sm btn-outline-warning" onclick="retryJob('{{ job.job_id }}')">
+                                                <i class="fas fa-redo me-1"></i>{% trans "Retry" %}
+                                            </button>
+                                            {% endif %}
+                                            <button class="btn btn-sm btn-outline-secondary"
+                                                    data-detail-url="{% url 'dashboard:job_detail' job.job_id %}"
+                                                    onclick="viewJob(this.dataset.detailUrl)">
                                                 <i class="fas fa-eye me-1"></i>{% trans "View" %}
                                             </button>
                                         </div>
@@ -221,85 +363,336 @@
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Mock analysis completion
-        {% if start_job and job_config %}
-        setTimeout(function() {
-            // Update progress steps
-            document.querySelectorAll('.fa-spinner').forEach(el => {
-                el.classList.remove('fa-spinner', 'fa-spin', 'text-warning');
-                el.classList.add('fa-check-circle', 'text-success');
-            });
-            document.querySelectorAll('.fa-clock').forEach(el => {
-                el.classList.remove('fa-clock', 'text-secondary');
-                el.classList.add('fa-check-circle', 'text-success');
-            });
+        // Real-time progress monitoring
+        let progressIntervals = {};
+        
+        function startProgressMonitoring(jobId) {
+            // Clear any existing interval for this job
+            if (progressIntervals[jobId]) {
+                clearInterval(progressIntervals[jobId]);
+            }
+            
+            // Start polling for progress updates
+            progressIntervals[jobId] = setInterval(() => {
+                fetchJobProgress(jobId);
+            }, 2000); // Poll every 2 seconds
+        }
+        
+        function stopProgressMonitoring(jobId) {
+            if (progressIntervals[jobId]) {
+                clearInterval(progressIntervals[jobId]);
+                delete progressIntervals[jobId];
+            }
+        }
+        
+        function fetchJobProgress(jobId) {
+            fetch(`/dashboard/api/jobs/${jobId}/progress/`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error('Progress fetch error:', data.error);
+                        return;
+                    }
+                    
+                    updateJobDisplay(jobId, data);
+                    
+                    // Stop monitoring if job is completed
+                    if (data.status === 'completed' || data.status === 'failed' || data.status === 'cancelled') {
+                        stopProgressMonitoring(jobId);
+                        // Refresh page to show final state
+                        setTimeout(() => location.reload(), 1000);
+                    }
+                })
+                .catch(error => {
+                    console.error('Progress fetch failed:', error);
+                    stopProgressMonitoring(jobId);
+                });
+        }
+        
+        function updateJobDisplay(jobId, data) {
+            const jobCard = document.querySelector(`[data-job-id="${jobId}"]`);
+            if (!jobCard) return;
+            
+            // Update status badge
+            const statusBadge = jobCard.querySelector('.status-badge');
+            if (statusBadge) {
+                statusBadge.textContent = data.status.charAt(0).toUpperCase() + data.status.slice(1);
+                statusBadge.className = `badge status-badge ${getStatusBadgeClass(data.status)}`;
+            }
             
             // Update progress bar
-            document.querySelector('.progress-bar').style.width = '100%';
-            document.querySelector('.progress-bar').classList.remove('progress-bar-animated');
+            const progressBar = jobCard.querySelector('.progress-bar');
+            if (progressBar) {
+                progressBar.style.width = `${data.progress || 0}%`;
+                // Add visual feedback
+                progressBar.classList.add('progress-animation');
+                setTimeout(() => progressBar.classList.remove('progress-animation'), 1000);
+            }
             
-            // Show completion
-            document.getElementById('completionSection').style.display = 'block';
-        }, 5000); // 5 seconds mock processing
-        {% endif %}
-        
-        function downloadReport() {
-            // Generate mock report download
-            const reportContent = `
-TUBEWHALE PROFESSIONAL ANALYSIS REPORT
-====================================
-
-Analysis Type: {{ job_config.tool_type|default:"Professional" }}
-Template: {{ job_config.template_name|default:"Professional Analysis" }}
-Generated: ${new Date().toLocaleString()}
-
-EXECUTIVE SUMMARY
-================
-This professional analysis provides comprehensive insights into the analyzed content using advanced AI techniques and industry expertise.
-
-KEY FINDINGS
-============
-1. Content Quality: High-quality analysis completed
-2. Professional Insights: Expert-level evaluation provided
-3. Actionable Recommendations: Strategic guidance included
-
-DETAILED ANALYSIS
-================
-[Professional analysis content would appear here based on the selected template and analysis type]
-
-RECOMMENDATIONS
-==============
-1. Continue leveraging high-quality content strategies
-2. Implement suggested improvements for enhanced performance
-3. Monitor progress using provided metrics and KPIs
-
----
-Generated by TubeWhale Intelligence Platform
-© ${new Date().getFullYear()} TubeWhale
-            `;
+            // Update current step
+            const currentStepSpan = jobCard.querySelector('.current-step');
+            if (currentStepSpan && data.current_step) {
+                currentStepSpan.textContent = data.current_step;
+            }
             
-            const blob = new Blob([reportContent], { type: 'text/plain' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'tubewhale-analysis-report.txt';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
+            // Update progress percentage badge
+            const progressBadges = jobCard.querySelectorAll('.badge');
+            progressBadges.forEach(badge => {
+                if (badge.textContent.includes('%')) {
+                    badge.textContent = `${data.progress || 0}%`;
+                }
+                if (badge.textContent.includes('Step')) {
+                    badge.textContent = `Step ${data.steps_completed || 0}/${data.total_steps || 5}`;
+                }
+            });
             
-            // Show success message
-            alert('{% trans "Report downloaded successfully!" %}');
+            // Update estimated time
+            const estimatedTimeSpan = jobCard.querySelector('.estimated-time');
+            if (estimatedTimeSpan && data.estimated_time_remaining !== null) {
+                if (data.estimated_time_remaining > 0) {
+                    estimatedTimeSpan.textContent = `(~${data.estimated_time_remaining}s remaining)`;
+                    estimatedTimeSpan.style.display = 'inline';
+                } else {
+                    estimatedTimeSpan.style.display = 'none';
+                }
+            }
+            
+            // Update time remaining badge
+            const timeBadges = jobCard.querySelectorAll('.badge');
+            timeBadges.forEach(badge => {
+                if (badge.textContent.includes('left') || badge.textContent.includes('remaining')) {
+                    if (data.estimated_time_remaining && data.estimated_time_remaining > 0) {
+                        badge.textContent = `~${data.estimated_time_remaining}s left`;
+                        badge.style.display = 'inline';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                }
+            });
         }
         
-        function downloadMockReport(jobId) {
-            // Generate mock historical report
-            downloadReport();
+        function getStatusBadgeClass(status) {
+            switch (status) {
+                case 'completed': return 'bg-success';
+                case 'processing': return 'bg-warning progress-animation';
+                case 'pending': return 'bg-secondary';
+                case 'failed': return 'bg-danger';
+                case 'cancelled': return 'bg-dark';
+                default: return 'bg-primary';
+            }
         }
         
-        function viewMockJob(jobId) {
-            alert('{% trans "Job details view would open here in a full implementation" %}');
+        // Progress detail functions
+        function showProgressDetail(jobId) {
+            fetch(`/dashboard/api/jobs/${jobId}/progress/`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        alert(`Error: ${data.error}`);
+                        return;
+                    }
+                    
+                    const progressInfo = `
+Job Progress Details:
+━━━━━━━━━━━━━━━━━━━━
+
+🔄 Status: ${data.status.toUpperCase()}
+📊 Progress: ${data.progress || 0}%
+📋 Current Step: ${data.current_step || 'Initializing...'}
+⏱️ Started: ${data.started_at ? new Date(data.started_at).toLocaleString() : 'Not started'}
+
+${data.estimated_time_remaining ? `⏰ Estimated Time Remaining: ${data.estimated_time_remaining}s` : ''}
+${data.steps_completed ? `✅ Steps Completed: ${data.steps_completed}/${data.total_steps || 5}` : ''}
+
+${data.execution_logs && data.execution_logs.length > 0 ? 
+`📝 Recent Activity:
+${data.execution_logs.slice(-3).map(log => `• ${log.timestamp}: ${log.message}`).join('\n')}` : ''}
+
+Click "View" button for detailed monitoring.
+                    `.trim();
+                    
+                    alert(progressInfo);
+                })
+                .catch(error => {
+                    console.error('Progress fetch failed:', error);
+                    alert('Unable to fetch progress details. Please try again.');
+                });
         }
+        
+        function showCompletionDetail(jobId) {
+            fetch(`/dashboard/api/jobs/${jobId}/progress/`)
+                .then(response => response.json())
+                .then(data => {
+                    const completionInfo = `
+Job Completion Summary:
+━━━━━━━━━━━━━━━━━━━━
+
+✅ Status: COMPLETED
+📊 Final Progress: 100%
+⏱️ Started: ${data.started_at ? new Date(data.started_at).toLocaleString() : 'Unknown'}
+🏁 Completed: ${data.completed_at ? new Date(data.completed_at).toLocaleString() : 'Recently'}
+
+${data.duration ? `⏰ Total Duration: ${Math.round(data.duration)}s` : ''}
+${data.result_summary ? `📋 Summary: ${data.result_summary}` : ''}
+
+Click "Download" to get the analysis report.
+                    `.trim();
+                    
+                    alert(completionInfo);
+                })
+                .catch(error => {
+                    console.error('Completion details fetch failed:', error);
+                    alert('Unable to fetch completion details.');
+                });
+        }
+        
+        function showErrorDetail(jobId) {
+            fetch(`/dashboard/api/jobs/${jobId}/progress/`)
+                .then(response => response.json())
+                .then(data => {
+                    const errorInfo = `
+Job Error Details:
+━━━━━━━━━━━━━━━━━━━━
+
+❌ Status: FAILED
+📊 Progress at Failure: ${data.progress || 0}%
+⏱️ Started: ${data.started_at ? new Date(data.started_at).toLocaleString() : 'Unknown'}
+💥 Failed: ${data.failed_at ? new Date(data.failed_at).toLocaleString() : 'Recently'}
+
+🐛 Error: ${data.error_message || 'Unknown error occurred'}
+📋 Failed Step: ${data.current_step || 'Unknown step'}
+
+${data.execution_logs && data.execution_logs.length > 0 ? 
+`📝 Error Context:
+${data.execution_logs.slice(-2).map(log => `• ${log.timestamp}: ${log.message}`).join('\n')}` : ''}
+
+Click "Retry" to attempt the job again.
+                    `.trim();
+                    
+                    alert(errorInfo);
+                })
+                .catch(error => {
+                    console.error('Error details fetch failed:', error);
+                    alert('Unable to fetch error details.');
+                });
+        }
+        
+        function showQueueDetail(jobId) {
+            fetch(`/dashboard/api/jobs/${jobId}/progress/`)
+                .then(response => response.json())
+                .then(data => {
+                    const queueInfo = `
+Job Queue Information:
+━━━━━━━━━━━━━━━━━━━━
+
+⏳ Status: ${data.status.toUpperCase()}
+📋 Queue Position: ${data.queue_position || 'Unknown'}
+⏱️ Queued Since: ${data.created_at ? new Date(data.created_at).toLocaleString() : 'Recently'}
+
+${data.estimated_start_time ? `🚀 Estimated Start: ${data.estimated_start_time}` : ''}
+${data.queue_length ? `📊 Total Queue Length: ${data.queue_length} jobs` : ''}
+
+Your job will start processing automatically.
+                    `.trim();
+                    
+                    alert(queueInfo);
+                })
+                .catch(error => {
+                    console.error('Queue details fetch failed:', error);
+                    alert('Unable to fetch queue details.');
+                });
+        }
+
+        // Job management functions
+        function retryJob(jobId) {
+            if (!confirm('{% trans "Are you sure you want to retry this job?" %}')) return;
+            
+            fetch(`/dashboard/jobs/${jobId}/retry/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert(`Error: ${data.error}`);
+                } else {
+                    alert('{% trans "Job retry started successfully!" %}');
+                    location.reload();
+                }
+            })
+            .catch(error => {
+                console.error('Retry failed:', error);
+                alert('{% trans "Retry failed. Please try again." %}');
+            });
+        }
+        
+        function cancelJob(jobId) {
+            if (!confirm('{% trans "Are you sure you want to cancel this job?" %}')) return;
+            
+            fetch(`/dashboard/jobs/${jobId}/cancel/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert(`Error: ${data.error}`);
+                } else {
+                    alert('{% trans "Job cancelled successfully!" %}');
+                    location.reload();
+                }
+            })
+            .catch(error => {
+                console.error('Cancel failed:', error);
+                alert('{% trans "Cancel failed. Please try again." %}');
+            });
+        }
+        
+        function viewJob(target) {
+            if (!target) {
+                return;
+            }
+            if (!target.startsWith('http') && !target.startsWith('/')) {
+                target = `/dashboard/jobs/${target}/`;
+            }
+            window.location.href = target;
+        }
+        
+        function downloadReport(target) {
+            if (!target) {
+                alert('{% trans "Report is not ready yet. Please wait for the analysis to finish." %}');
+                return;
+            }
+            if (!target.startsWith('http') && !target.startsWith('/')) {
+                target = `/api/analysis/${target}/download/?format=json`;
+            }
+            window.open(target, '_blank', 'noopener,noreferrer');
+        }
+        
+        // Initialize progress monitoring for processing jobs
+        document.addEventListener('DOMContentLoaded', function() {
+            // Start monitoring all processing jobs
+            document.querySelectorAll('[data-job-id]').forEach(jobCard => {
+                const statusBadge = jobCard.querySelector('.status-badge');
+                if (statusBadge && statusBadge.textContent.toLowerCase() === 'processing') {
+                    const jobId = jobCard.dataset.jobId;
+                    startProgressMonitoring(jobId);
+                }
+            });
+        });
+        
+        // Clean up intervals when page unloads
+        window.addEventListener('beforeunload', function() {
+            Object.keys(progressIntervals).forEach(jobId => {
+                stopProgressMonitoring(jobId);
+            });
+        });
     </script>
 </body>
 </html>

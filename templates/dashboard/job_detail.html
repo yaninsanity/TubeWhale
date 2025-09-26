@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Job Details - {{ job.job_id }} - TubeWhale</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .job-header {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 2rem;
+            margin: 2rem 0;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+        
+        .job-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+        
+        .progress-ring {
+            transform: rotate(-90deg);
+            width: 120px;
+            height: 120px;
+        }
+        
+        .progress-ring__circle {
+            stroke: #e9ecef;
+            stroke-width: 8;
+            fill: transparent;
+            r: 50;
+            cx: 60;
+            cy: 60;
+        }
+        
+        .progress-ring__progress {
+            stroke: #667eea;
+            stroke-width: 8;
+            stroke-linecap: round;
+            fill: transparent;
+            r: 50;
+            cx: 60;
+            cy: 60;
+            stroke-dasharray: 314.16;
+            stroke-dashoffset: 314.16;
+            transition: stroke-dashoffset 0.5s ease-in-out;
+        }
+        
+        .status-badge {
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .status-processing {
+            background: linear-gradient(45deg, #ffc107, #ff8c00);
+            color: white;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-completed {
+            background: linear-gradient(45deg, #28a745, #20c997);
+            color: white;
+        }
+        
+        .status-failed {
+            background: linear-gradient(45deg, #dc3545, #e74c3c);
+            color: white;
+        }
+        
+        .status-pending {
+            background: linear-gradient(45deg, #6c757d, #495057);
+            color: white;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+        
+        .log-container {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 1.5rem;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        
+        .log-entry {
+            margin-bottom: 0.5rem;
+            padding: 0.5rem;
+            border-left: 3px solid #dee2e6;
+            padding-left: 1rem;
+        }
+        
+        .log-info { border-left-color: #0dcaf0; }
+        .log-success { border-left-color: #198754; }
+        .log-warning { border-left-color: #ffc107; }
+        .log-error { border-left-color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header Navigation -->
+        <nav class="navbar navbar-expand-lg navbar-dark" style="background: rgba(255, 255, 255, 0.1);">
+            <div class="container-fluid">
+                <a class="navbar-brand" href="/dashboard/">
+                    <i class="fas fa-whale"></i> TubeWhale
+                </a>
+                <div class="navbar-nav ms-auto">
+                    <a class="nav-link" href="/dashboard/jobs/">
+                        <i class="fas fa-arrow-left"></i> Back to Jobs
+                    </a>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Job Header -->
+        <div class="job-header">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1 class="mb-2">
+                        <i class="fas fa-play-circle text-primary me-2"></i>
+                        {{ job.content_title|default:"Analysis Job" }}
+                    </h1>
+                    <p class="text-muted mb-3">
+                        <strong>Job ID:</strong> {{ job.job_id }} | 
+                        <strong>Type:</strong> {{ job.analysis_type|title }} | 
+                        <strong>Expert:</strong> {{ job.expert_role }}
+                    </p>
+                    {% if job.content_url %}
+                    <p class="mb-2">
+                        <i class="fas fa-link text-primary me-2"></i>
+                        <a href="{{ job.content_url }}" target="_blank" class="text-decoration-none">
+                            {{ job.content_url|truncatechars:60 }}
+                        </a>
+                    </p>
+                    {% endif %}
+                </div>
+                <div class="col-md-4 text-center">
+                    <div class="d-inline-block position-relative">
+                        <svg class="progress-ring">
+                            <circle class="progress-ring__circle"></circle>
+                            <circle class="progress-ring__progress" id="progressCircle"></circle>
+                        </svg>
+                        <div class="position-absolute top-50 start-50 translate-middle text-center">
+                            <div class="h2 mb-0" id="progressText">{{ job.progress }}%</div>
+                            <div class="small text-muted">Complete</div>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <span class="status-badge status-{{ job.status }}">
+                            {% if job.status == 'processing' %}
+                                <i class="fas fa-spinner fa-spin me-1"></i>
+                            {% elif job.status == 'completed' %}
+                                <i class="fas fa-check me-1"></i>
+                            {% elif job.status == 'failed' %}
+                                <i class="fas fa-times me-1"></i>
+                            {% else %}
+                                <i class="fas fa-clock me-1"></i>
+                            {% endif %}
+                            {{ job.status|title }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Job Progress Details -->
+        <div class="job-card">
+            <h3 class="mb-4">
+                <i class="fas fa-tasks text-primary me-2"></i>
+                Progress Details
+            </h3>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label"><strong>Current Step:</strong></label>
+                        <p class="ms-3">
+                            <i class="fas fa-cog fa-spin text-primary me-2"></i>
+                            {{ job.current_step|default:"Waiting for processing..." }}
+                        </p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label"><strong>Progress:</strong></label>
+                        <div class="progress ms-3" style="height: 20px;">
+                            <div class="progress-bar bg-primary" role="progressbar" 
+                                 style="width: {{ job.progress }}%;" 
+                                 aria-valuenow="{{ job.progress }}" aria-valuemin="0" aria-valuemax="100">
+                                {{ job.progress }}%
+                            </div>
+                        </div>
+                        <small class="text-muted ms-3">
+                            Step {{ job.steps_completed }} of {{ job.total_steps }}
+                        </small>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label"><strong>Created:</strong></label>
+                        <p class="ms-3">
+                            <i class="fas fa-calendar text-muted me-2"></i>
+                            {{ job.created_at|date:"M d, Y H:i" }}
+                        </p>
+                    </div>
+                    
+                    {% if job.started_at %}
+                    <div class="mb-3">
+                        <label class="form-label"><strong>Started:</strong></label>
+                        <p class="ms-3">
+                            <i class="fas fa-play text-success me-2"></i>
+                            {{ job.started_at|date:"M d, Y H:i" }}
+                        </p>
+                    </div>
+                    {% endif %}
+                    
+                    {% if job.estimated_time_remaining and job.estimated_time_remaining > 0 %}
+                    <div class="mb-3">
+                        <label class="form-label"><strong>Estimated Remaining:</strong></label>
+                        <p class="ms-3">
+                            <i class="fas fa-clock text-warning me-2"></i>
+                            {{ job.estimated_time_remaining }} seconds
+                        </p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Job Logs -->
+        <div class="job-card">
+            <h3 class="mb-4">
+                <i class="fas fa-file-alt text-primary me-2"></i>
+                Execution Log
+            </h3>
+            
+            <div class="log-container" id="logContainer">
+                <div class="log-entry log-info">
+                    <strong>[{{ job.created_at|date:"H:i:s" }}]</strong> Job created: {{ job.job_id }}
+                </div>
+                {% if job.started_at %}
+                <div class="log-entry log-success">
+                    <strong>[{{ job.started_at|date:"H:i:s" }}]</strong> Processing started
+                </div>
+                {% endif %}
+                
+                {% if job.status == 'processing' %}
+                <div class="log-entry log-info">
+                    <strong>[Current]</strong> {{ job.current_step|default:"Processing in progress..." }}
+                </div>
+                {% elif job.status == 'completed' %}
+                <div class="log-entry log-success">
+                    <strong>[{{ job.completed_at|date:"H:i:s"|default:"Recently" }}]</strong> Analysis completed successfully
+                </div>
+                {% elif job.status == 'failed' %}
+                <div class="log-entry log-error">
+                    <strong>[Error]</strong> {{ job.error_message|default:"Job failed during processing" }}
+                </div>
+                {% endif %}
+                
+                <div class="log-entry log-info">
+                    <strong>[System]</strong> Real-time monitoring active
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="job-card">
+            <h3 class="mb-4">
+                <i class="fas fa-cogs text-primary me-2"></i>
+                Actions
+            </h3>
+            
+            <div class="d-flex gap-3 flex-wrap">
+                <button class="btn btn-primary" onclick="refreshProgress()">
+                    <i class="fas fa-sync-alt me-2"></i>
+                    Refresh Status
+                </button>
+                
+                {% if job.status == 'processing' %}
+                <button class="btn btn-warning" onclick="toggleRealTime()">
+                    <i class="fas fa-broadcast-tower me-2"></i>
+                    <span id="realTimeToggle">Enable Real-time Updates</span>
+                </button>
+                {% endif %}
+                
+                <a href="/dashboard/jobs/" class="btn btn-secondary">
+                    <i class="fas fa-list me-2"></i>
+                    View All Jobs
+                </a>
+                
+                {% if job.status == 'failed' %}
+                <button class="btn btn-success" onclick="retryJob()">
+                    <i class="fas fa-redo me-2"></i>
+                    Retry Job
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let realTimeEnabled = false;
+        let realTimeInterval = null;
+        
+        // Set initial progress ring
+        function setProgress(percent) {
+            const circle = document.getElementById('progressCircle');
+            const circumference = 2 * Math.PI * 50;
+            const offset = circumference - (percent / 100) * circumference;
+            circle.style.strokeDashoffset = offset;
+            document.getElementById('progressText').textContent = percent + '%';
+        }
+        
+        // Initialize progress
+        setProgress({{ job.progress }});
+        
+        // Refresh progress function
+        async function refreshProgress() {
+            try {
+                const response = await fetch(`/dashboard/api/jobs/{{ job.job_id }}/progress/`);
+                const data = await response.json();
+                
+                // Update progress
+                setProgress(data.progress);
+                
+                // Update current step
+                const currentStepElements = document.querySelectorAll('[data-update="current-step"]');
+                currentStepElements.forEach(el => {
+                    el.textContent = data.current_step || 'Processing...';
+                });
+                
+                // Add log entry
+                const logContainer = document.getElementById('logContainer');
+                const now = new Date().toLocaleTimeString();
+                const logEntry = document.createElement('div');
+                logEntry.className = 'log-entry log-info';
+                logEntry.innerHTML = `<strong>[${now}]</strong> ${data.current_step || 'Status updated'}`;
+                logContainer.appendChild(logEntry);
+                logContainer.scrollTop = logContainer.scrollHeight;
+                
+                console.log('Progress updated:', data);
+            } catch (error) {
+                console.error('Error refreshing progress:', error);
+                
+                // Add error log
+                const logContainer = document.getElementById('logContainer');
+                const now = new Date().toLocaleTimeString();
+                const logEntry = document.createElement('div');
+                logEntry.className = 'log-entry log-error';
+                logEntry.innerHTML = `<strong>[${now}]</strong> Failed to update progress`;
+                logContainer.appendChild(logEntry);
+            }
+        }
+        
+        // Toggle real-time updates
+        function toggleRealTime() {
+            const button = document.getElementById('realTimeToggle');
+            
+            if (!realTimeEnabled) {
+                realTimeEnabled = true;
+                button.textContent = 'Disable Real-time Updates';
+                realTimeInterval = setInterval(refreshProgress, 3000);
+                
+                // Add log entry
+                const logContainer = document.getElementById('logContainer');
+                const now = new Date().toLocaleTimeString();
+                const logEntry = document.createElement('div');
+                logEntry.className = 'log-entry log-success';
+                logEntry.innerHTML = `<strong>[${now}]</strong> Real-time monitoring enabled`;
+                logContainer.appendChild(logEntry);
+            } else {
+                realTimeEnabled = false;
+                button.textContent = 'Enable Real-time Updates';
+                if (realTimeInterval) {
+                    clearInterval(realTimeInterval);
+                }
+                
+                // Add log entry
+                const logContainer = document.getElementById('logContainer');
+                const now = new Date().toLocaleTimeString();
+                const logEntry = document.createElement('div');
+                logEntry.className = 'log-entry log-warning';
+                logEntry.innerHTML = `<strong>[${now}]</strong> Real-time monitoring disabled`;
+                logContainer.appendChild(logEntry);
+            }
+        }
+        
+        // Retry job function
+        function retryJob() {
+            if (confirm('Are you sure you want to retry this job?')) {
+                // This would normally send a request to retry the job
+                alert('Job retry functionality would be implemented here');
+            }
+        }
+        
+        // Auto-refresh for processing jobs
+        {% if job.status == 'processing' %}
+        setInterval(refreshProgress, 5000);
+        {% endif %}
+    </script>
+</body>
+</html>

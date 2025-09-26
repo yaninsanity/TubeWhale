@@ -130,6 +130,43 @@ def core_templates_catalog(request):
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
+def youtube_templates_catalog(request):
+    """Return YouTube analysis templates (English-first intelligent platform)."""
+    if getattr(settings, 'FORCE_EN_PROMPTS', False):
+        translation.activate('en')
+    
+    from .youtube_templates import get_youtube_templates
+    template_manager = get_youtube_templates()
+    
+    # Get all templates
+    all_templates = template_manager.get_all_templates()
+    
+    # Convert to API format
+    data = []
+    for template in all_templates:
+        data.append({
+            'template_id': template.id,
+            'name': template.name,
+            'description': template.description,
+            'role': template.role,
+            'category': template.category,
+            'thinking_questions': [
+                {
+                    'id': q.id,
+                    'question': q.question,
+                    'purpose': q.purpose
+                } for q in template.thinking_questions
+            ],
+            'analysis_focus': template.analysis_focus,
+            'output_format': template.output_format,
+            'template_type': 'youtube'
+        })
+    
+    return Response({'count': len(data), 'templates': data})
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
 def health(request):
     engine = TemplateEngine(validation_strict=False)
     return Response({

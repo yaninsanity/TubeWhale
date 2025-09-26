@@ -30,6 +30,7 @@ venv_tubewhale/
 /logs/
 /media/uploads/
 /exports/
+/outputs/
 /*.ndjson
 /*.csv
 /*.jsonl
@@ -57,6 +58,7 @@ docker-compose.override.yml
 
 ## Logs and misc local files
 *.log
+*.pid
 server.log
 cookies.txt
 init_db.sql
@@ -65,6 +67,9 @@ profile.prof
 .mypy_cache/
 .ruff_cache/
 __pypackages__/
+celerybeat-schedule
+task_monitor.html
+test_progress_monitor.html
 
 # Large media (if transient) – comment out if you deliberately track
 *.mp3

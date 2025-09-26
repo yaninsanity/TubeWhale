@@ -10,6 +10,7 @@ from .views import (
     cli_config,
     expert_prompts_catalog,
     core_templates_catalog,
+    youtube_templates_catalog,
 )
 from .views import JobViewSet
 from .views import template_selection_list, template_selection_add, template_selection_remove
@@ -54,6 +55,7 @@ urlpatterns = [
     path("expert/compile/", expert_compile, name="expert-compile"),
     path("expert/catalog/", expert_prompts_catalog, name="expert-prompts-catalog"),
     path("core/catalog/", core_templates_catalog, name="core-templates-catalog"),
+    path("youtube/catalog/", youtube_templates_catalog, name="youtube-templates-catalog"),
     # CLI configuration endpoint (auth)
     path("cli/config/", cli_config, name="cli-config"),
     # Template selection (tier BASIC)

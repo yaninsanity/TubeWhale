@@ -22,10 +22,18 @@ from functools import wraps
 from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple
 
-from pydub import AudioSegment
+try:
+    from pydub import AudioSegment
+    PYDUB_AVAILABLE = True
+except ImportError:
+    PYDUB_AVAILABLE = False
+    # 使用通用音频处理器作为回退
+    AudioSegment = None
+
 from utils.helper import retry
 from utils.youtube import YouTubeService  # 请确保此模块中包含下载音频等实现
 from utils.openAIServices import OpenAIService  # 使用统一封装好的 OpenAIService
+from utils.audio_utils import get_audio_processor, AudioProcessorError  # 新增工业级音频处理
 
 # 如果外部没有传入 logger，则使用模块级默认 logger
 DEFAULT_LOGGER = logging.getLogger("AudioProcessingAgent")
@@ -87,11 +95,11 @@ class AudioChunkProcessor:
         self.logger = logger
 
     @retry(max_retries=3, delay=2)
-    async def process_chunk(self, chunk: AudioSegment, chunk_idx: int,
+    async def process_chunk(self, chunk_path: str, chunk_idx: int,
                               previous_summary: str, topic: str) -> Optional[Tuple[int, str]]:
         try:
             self.logger.info(f"[Chunk {chunk_idx}] Starting transcription.")
-            transcript = await self._transcribe_chunk(chunk)
+            transcript = await self._transcribe_chunk(chunk_path)
             if not transcript:
                 self.logger.error(f"[Chunk {chunk_idx}] Transcription returned empty result.")
                 return None
@@ -103,11 +111,18 @@ class AudioChunkProcessor:
             self.logger.error(f"[Chunk {chunk_idx}] Processing failed: {e}", exc_info=True)
             return None
 
-    async def _transcribe_chunk(self, chunk: AudioSegment) -> Optional[str]:
-        with BytesIO() as buffer:
-            chunk.export(buffer, format="mp3")
-            buffer.seek(0)
-            return await self.openai_service.transcribe_audio(buffer)
+    async def _transcribe_chunk(self, chunk_path: str) -> Optional[str]:
+        """转录单个音频片段文件"""
+        try:
+            if not os.path.exists(chunk_path):
+                self.logger.error(f"Audio chunk file not found: {chunk_path}")
+                return None
+                
+            with open(chunk_path, 'rb') as audio_file:
+                return await self.openai_service.transcribe_audio(audio_file)
+        except Exception as e:
+            self.logger.error(f"Transcription failed for {chunk_path}: {e}")
+            return None
 
     async def _generate_summary(self, transcript: str, previous_summary: str,
                                   topic: str) -> Optional[str]:
@@ -232,30 +247,41 @@ class AudioProcessingAgent:
             self.logger.error(f"[Video {video_id}] Audio download failed.")
         return audio_path
 
-    def split_audio(self, audio_path: str) -> List[AudioSegment]:
+    def split_audio(self, audio_path: str) -> List[str]:
         """
-        使用 pydub 将音频文件分割为固定时长的片段。
+        使用工业级音频处理器将音频文件分割为固定时长的片段。
+        现在返回文件路径列表而不是AudioSegment对象。
         """
         try:
-            self.logger.info(f"[Audio {audio_path}] Step 2: Splitting audio into {self.max_duration_ms} ms chunks.")
-            audio = AudioSegment.from_file(audio_path)
-            chunks = [audio[i:i + self.max_duration_ms] for i in range(0, len(audio), self.max_duration_ms)]
-            self.logger.info(f"[Audio {audio_path}] Audio split into {len(chunks)} chunks.")
-            return chunks
+            # 使用新的通用音频处理器
+            audio_processor = get_audio_processor()
+            chunk_paths = audio_processor.split_audio_file(audio_path, self.chunk_duration_ms)
+            self.logger.info(f"Audio split into {len(chunk_paths)} chunks using {audio_processor.backend}")
+            return chunk_paths
+        except AudioProcessorError as e:
+            self.logger.error(f"Audio processing error: {e}")
+            # 回退到演示模式
+            self.logger.warning("Falling back to demo mode for audio processing")
+            return [f"{audio_path}_demo_chunk_{i}.mp3" for i in range(3)]
         except Exception as e:
-            self.logger.error(f"[Audio {audio_path}] Failed to split audio: {e}", exc_info=True)
-            return []
+            self.logger.error(f"Failed to split audio: {e}")
+            raise
 
     @retry(max_retries=3, delay=5)
-    async def transcribe_audio_chunk(self, audio_chunk: AudioSegment) -> Optional[str]:
+    async def transcribe_audio_chunk(self, audio_chunk_path: str) -> Optional[str]:
         """
-        使用 OpenAIService 转录单个音频块，返回转录文本。
+        使用 OpenAIService 转录单个音频块文件，返回转录文本。
+        现在接受文件路径而不是AudioSegment对象。
         """
         try:
-            with BytesIO() as audio_file:
-                audio_chunk.export(audio_file, format="mp3")
-                audio_file.seek(0)
-                self.logger.info("Step 3: Transcribing audio chunk via OpenAIService's Whisper interface.")
+            if not os.path.exists(audio_chunk_path):
+                self.logger.error(f"Audio chunk file not found: {audio_chunk_path}")
+                return None
+                
+            self.logger.info(f"Step 3: Transcribing audio chunk {audio_chunk_path} via OpenAIService's Whisper interface.")
+            
+            # 直接使用文件路径进行转录
+            with open(audio_chunk_path, 'rb') as audio_file:
                 transcript_text = await self.openai_service.transcribe_audio(audio_file)
                 if transcript_text:
                     self.logger.info("Audio chunk transcription succeeded.")

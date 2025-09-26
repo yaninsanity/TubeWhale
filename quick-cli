@@ -1,0 +1,35 @@
+#!/bin/bash
+
+# 简单的 TubeWhale CLI 工具
+
+API_BASE="http://localhost:8000"
+
+case "$1" in
+    "quick-analyze")
+        VIDEO_ID="$2"
+        if [ -z "$VIDEO_ID" ]; then
+            echo "❌ 请提供视频 ID"
+            echo "💡 用法: ./quick-cli quick-analyze <video_id>"
+            exit 1
+        fi
+        
+        echo "🎬 快速分析视频: $VIDEO_ID"
+        
+        curl -X POST "$API_BASE/api/v1/analysis/video/" \
+            -H "Content-Type: application/json" \
+            -d "{
+                \"video_id\": \"$VIDEO_ID\",
+                \"expert_role\": \"content_creator\",
+                \"template\": \"basic_performance\"
+            }"
+        ;;
+    "status")
+        echo "🔍 系统状态检查"
+        curl -s "$API_BASE/api/v1/tubewhale/health/" || echo "❌ 服务器未运行"
+        ;;
+    *)
+        echo "🎯 TubeWhale 快速 CLI"
+        echo "  ./quick-cli quick-analyze <video_id>  # 快速分析视频"
+        echo "  ./quick-cli status                    # 检查系统状态"
+        ;;
+esac

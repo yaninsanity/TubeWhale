@@ -1,0 +1,625 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Start New Analysis" %} - TubeWhale{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+<style>
+    .start-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 3rem;
+        border-radius: 15px;
+        margin-bottom: 3rem;
+        text-align: center;
+    }
+    
+    .analysis-card {
+        background: white;
+        border-radius: 15px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+    }
+    
+    .analysis-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 15px 40px rgba(0,0,0,0.15);
+    }
+    
+    .level-card {
+        border: 2px solid #E5E7EB;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        position: relative;
+    }
+    
+    .level-card:hover {
+        border-color: #667eea;
+        background: #F8FAFF;
+    }
+    
+    .level-card.selected {
+        border-color: #667eea;
+        background: linear-gradient(135deg, #F0F5FF 0%, #E6F0FF 100%);
+    }
+    
+    .level-card.selected::after {
+        content: '✓';
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        background: #667eea;
+        color: white;
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 0.8rem;
+    }
+    
+    .role-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 1.5rem;
+        margin-top: 2rem;
+    }
+    
+    .role-card {
+        border: 2px solid #E5E7EB;
+        border-radius: 12px;
+        padding: 1.5rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        position: relative;
+        background: white;
+    }
+    
+    .role-card:hover {
+        border-color: #F59E0B;
+        background: #FFFBEB;
+    }
+    
+    .role-card.selected {
+        border-color: #F59E0B;
+        background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%);
+    }
+    
+    .role-card.selected::after {
+        content: '✓';
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        background: #F59E0B;
+        color: white;
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 0.8rem;
+    }
+    
+    .role-icon {
+        font-size: 2rem;
+        margin-bottom: 1rem;
+        color: #F59E0B;
+    }
+    
+    .btn-analyze {
+        background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+        color: white;
+        border: none;
+        padding: 1rem 3rem;
+        border-radius: 30px;
+        font-weight: bold;
+        font-size: 1.1rem;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+    }
+    
+    .btn-analyze:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+        color: white;
+    }
+    
+    .btn-analyze:disabled {
+        background: #9CA3AF;
+        box-shadow: none;
+        transform: none;
+        cursor: not-allowed;
+    }
+    
+    .video-preview {
+        border-radius: 12px;
+        overflow: hidden;
+        margin-top: 1rem;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+    }
+    
+    .step-indicator {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-bottom: 3rem;
+    }
+    
+    .step {
+        display: flex;
+        align-items: center;
+        color: #9CA3AF;
+        font-weight: bold;
+    }
+    
+    .step.active {
+        color: #667eea;
+    }
+    
+    .step.completed {
+        color: #10B981;
+    }
+    
+    .step-number {
+        background: #E5E7EB;
+        color: white;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 0.5rem;
+        font-size: 0.9rem;
+    }
+    
+    .step.active .step-number {
+        background: #667eea;
+    }
+    
+    .step.completed .step-number {
+        background: #10B981;
+    }
+    
+    .step-connector {
+        width: 60px;
+        height: 2px;
+        background: #E5E7EB;
+        margin: 0 1rem;
+    }
+    
+    .step.completed ~ .step .step-connector {
+        background: #10B981;
+    }
+    
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.8);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+    }
+    
+    .loading-content {
+        background: white;
+        padding: 3rem;
+        border-radius: 15px;
+        text-align: center;
+        max-width: 400px;
+    }
+    
+    .loading-spinner {
+        width: 60px;
+        height: 60px;
+        border: 4px solid #E5E7EB;
+        border-top: 4px solid #667eea;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 2rem;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .error-alert {
+        background: #FEF2F2;
+        border: 1px solid #FCA5A5;
+        color: #DC2626;
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 2rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Header -->
+    <div class="start-header">
+        <h1 class="mb-3">
+            <i class="fas fa-rocket me-3"></i>
+            {% trans "Start New Video Analysis" %}
+        </h1>
+        <p class="mb-0 opacity-90">
+            {% trans "Analyze YouTube videos with AI-powered insights from expert perspectives" %}
+        </p>
+    </div>
+
+    <!-- Step Indicator -->
+    <div class="step-indicator">
+        <div class="step active" id="step1">
+            <div class="step-number">1</div>
+            <span>{% trans "Video URL" %}</span>
+        </div>
+        <div class="step-connector"></div>
+        <div class="step" id="step2">
+            <div class="step-number">2</div>
+            <span>{% trans "Analysis Level" %}</span>
+        </div>
+        <div class="step-connector"></div>
+        <div class="step" id="step3">
+            <div class="step-number">3</div>
+            <span>{% trans "Expert Role" %}</span>
+        </div>
+        <div class="step-connector"></div>
+        <div class="step" id="step4">
+            <div class="step-number">4</div>
+            <span>{% trans "Start Analysis" %}</span>
+        </div>
+    </div>
+
+    <form id="analysisForm">
+        {% csrf_token %}
+        
+        <!-- Step 1: Video Input -->
+        <div class="analysis-card" id="videoStep">
+            <h3 class="mb-4">
+                <i class="fab fa-youtube text-danger me-2"></i>
+                {% trans "Enter YouTube Video URL" %}
+            </h3>
+            
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="mb-3">
+                        <label for="videoUrl" class="form-label">{% trans "YouTube Video URL" %}</label>
+                        <input type="url" 
+                               class="form-control form-control-lg" 
+                               id="videoUrl" 
+                               placeholder="https://www.youtube.com/watch?v=..."
+                               required>
+                        <div class="form-text">
+                            {% trans "Enter a valid YouTube video URL to begin analysis" %}
+                        </div>
+                    </div>
+                    
+                    <button type="button" class="btn btn-primary" onclick="validateVideo()">
+                        <i class="fas fa-check me-2"></i>
+                        {% trans "Validate Video" %}
+                    </button>
+                </div>
+                
+                <div class="col-md-4">
+                    <div id="videoPreview" class="video-preview" style="display: none;">
+                        <!-- Video preview will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2: Analysis Level -->
+        <div class="analysis-card" id="levelStep" style="display: none;">
+            <h3 class="mb-4">
+                <i class="fas fa-layer-group me-2"></i>
+                {% trans "Choose Analysis Level" %}
+            </h3>
+            
+            <div id="analysisLevels">
+                {% for level in analysis_levels %}
+                <div class="level-card" data-level="{{ level.id }}" onclick="selectLevel('{{ level.id }}')">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h5 class="mb-2">{{ level.name }}</h5>
+                            <p class="mb-0 text-muted">{{ level.description }}</p>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <div class="text-muted">
+                                {% if level.id == 'basic' %}
+                                    <i class="fas fa-clock me-1"></i> 2-5 {% trans "minutes" %}
+                                {% elif level.id == 'detailed' %}
+                                    <i class="fas fa-clock me-1"></i> 5-15 {% trans "minutes" %}
+                                {% elif level.id == 'expert' %}
+                                    <i class="fas fa-clock me-1"></i> 15-30 {% trans "minutes" %}
+                                {% elif level.id == 'comprehensive' %}
+                                    <i class="fas fa-clock me-1"></i> 30+ {% trans "minutes" %}
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Step 3: Expert Role Selection -->
+        <div class="analysis-card" id="roleStep" style="display: none;">
+            <h3 class="mb-4">
+                <i class="fas fa-user-tie me-2"></i>
+                {% trans "Select Expert Perspective" %}
+            </h3>
+            
+            <div class="role-grid">
+                <div class="role-card" data-role="content_creator" onclick="selectRole('content_creator')">
+                    <div class="role-icon">
+                        <i class="fas fa-video"></i>
+                    </div>
+                    <h5>{% trans "Content Creator" %}</h5>
+                    <p class="text-muted small">{% trans "Content strategy and audience engagement analysis" %}</p>
+                </div>
+                
+                <div class="role-card" data-role="marketing_expert" onclick="selectRole('marketing_expert')">
+                    <div class="role-icon">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <h5>{% trans "Marketing Expert" %}</h5>
+                    <p class="text-muted small">{% trans "Marketing effectiveness and ROI analysis" %}</p>
+                </div>
+                
+                <div class="role-card" data-role="education_specialist" onclick="selectRole('education_specialist')">
+                    <div class="role-icon">
+                        <i class="fas fa-graduation-cap"></i>
+                    </div>
+                    <h5>{% trans "Education Specialist" %}</h5>
+                    <p class="text-muted small">{% trans "Educational value and learning outcomes" %}</p>
+                </div>
+                
+                <div class="role-card" data-role="data_analyst" onclick="selectRole('data_analyst')">
+                    <div class="role-icon">
+                        <i class="fas fa-chart-bar"></i>
+                    </div>
+                    <h5>{% trans "Data Analyst" %}</h5>
+                    <p class="text-muted small">{% trans "Performance metrics and analytics insights" %}</p>
+                </div>
+                
+                <div class="role-card" data-role="seo_specialist" onclick="selectRole('seo_specialist')">
+                    <div class="role-icon">
+                        <i class="fas fa-search"></i>
+                    </div>
+                    <h5>{% trans "SEO Specialist" %}</h5>
+                    <p class="text-muted small">{% trans "Search optimization and discoverability" %}</p>
+                </div>
+                
+                <div class="role-card" data-role="brand_strategist" onclick="selectRole('brand_strategist')">
+                    <div class="role-icon">
+                        <i class="fas fa-bullhorn"></i>
+                    </div>
+                    <h5>{% trans "Brand Strategist" %}</h5>
+                    <p class="text-muted small">{% trans "Brand messaging and positioning analysis" %}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 4: Final Review & Start -->
+        <div class="analysis-card" id="finalStep" style="display: none;">
+            <h3 class="mb-4">
+                <i class="fas fa-rocket me-2"></i>
+                {% trans "Ready to Analyze" %}
+            </h3>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="bg-light p-3 rounded">
+                        <h6>{% trans "Analysis Summary" %}</h6>
+                        <p><strong>{% trans "Video" %}:</strong> <span id="finalVideoId"></span></p>
+                        <p><strong>{% trans "Level" %}:</strong> <span id="finalLevel"></span></p>
+                        <p><strong>{% trans "Expert Role" %}:</strong> <span id="finalRole"></span></p>
+                        <p><strong>{% trans "Estimated Time" %}:</strong> <span id="finalTime"></span></p>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div id="finalVideoPreview">
+                        <!-- Final video preview -->
+                    </div>
+                </div>
+            </div>
+            
+            <div class="text-center mt-4">
+                <button type="submit" class="btn-analyze" id="startAnalysisBtn">
+                    <i class="fas fa-play me-2"></i>
+                    {% trans "Start Analysis" %}
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-content">
+        <div class="loading-spinner"></div>
+        <h5>{% trans "Starting Analysis..." %}</h5>
+        <p class="text-muted">{% trans "Please wait while we initialize your video analysis" %}</p>
+    </div>
+</div>
+
+<script>
+let selectedLevel = null;
+let selectedRole = null;
+let videoId = null;
+
+function validateVideo() {
+    const url = document.getElementById('videoUrl').value;
+    const videoIdMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
+    
+    if (!videoIdMatch) {
+        alert('{% trans "Please enter a valid YouTube URL" %}');
+        return;
+    }
+    
+    videoId = videoIdMatch[1];
+    
+    // Show video preview
+    const preview = document.getElementById('videoPreview');
+    preview.innerHTML = `
+        <iframe width="100%" height="200" 
+                src="https://www.youtube.com/embed/${videoId}" 
+                frameborder="0" allowfullscreen></iframe>
+    `;
+    preview.style.display = 'block';
+    
+    // Update step indicator and show next step
+    updateStep(1, 2);
+    document.getElementById('levelStep').style.display = 'block';
+}
+
+function selectLevel(level) {
+    selectedLevel = level;
+    
+    // Update UI
+    document.querySelectorAll('.level-card').forEach(card => {
+        card.classList.remove('selected');
+    });
+    document.querySelector(`[data-level="${level}"]`).classList.add('selected');
+    
+    // Show next step after small delay
+    setTimeout(() => {
+        updateStep(2, 3);
+        document.getElementById('roleStep').style.display = 'block';
+    }, 500);
+}
+
+function selectRole(role) {
+    selectedRole = role;
+    
+    // Update UI
+    document.querySelectorAll('.role-card').forEach(card => {
+        card.classList.remove('selected');
+    });
+    document.querySelector(`[data-role="${role}"]`).classList.add('selected');
+    
+    // Show final step after small delay
+    setTimeout(() => {
+        updateStep(3, 4);
+        showFinalStep();
+    }, 500);
+}
+
+function showFinalStep() {
+    // Populate final summary
+    document.getElementById('finalVideoId').textContent = videoId;
+    document.getElementById('finalLevel').textContent = selectedLevel.replace('_', ' ').toUpperCase();
+    document.getElementById('finalRole').textContent = selectedRole.replace('_', ' ').toUpperCase();
+    
+    // Set estimated time based on level
+    const timeMap = {
+        'basic': '2-5 minutes',
+        'detailed': '5-15 minutes',
+        'expert': '15-30 minutes',
+        'comprehensive': '30+ minutes'
+    };
+    document.getElementById('finalTime').textContent = timeMap[selectedLevel];
+    
+    // Show final video preview
+    document.getElementById('finalVideoPreview').innerHTML = `
+        <iframe width="100%" height="200" 
+                src="https://www.youtube.com/embed/${videoId}" 
+                frameborder="0" allowfullscreen></iframe>
+    `;
+    
+    document.getElementById('finalStep').style.display = 'block';
+}
+
+function updateStep(current, next) {
+    // Mark current step as completed
+    document.getElementById(`step${current}`).classList.remove('active');
+    document.getElementById(`step${current}`).classList.add('completed');
+    
+    // Mark next step as active
+    document.getElementById(`step${next}`).classList.add('active');
+}
+
+// Form submission
+document.getElementById('analysisForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    if (!videoId || !selectedLevel || !selectedRole) {
+        alert('{% trans "Please complete all steps before starting analysis" %}');
+        return;
+    }
+    
+    // Show loading overlay
+    document.getElementById('loadingOverlay').style.display = 'flex';
+    
+    // Determine template based on level
+    const templateMap = {
+        'basic': 'basic_analysis',
+        'detailed': 'detailed_analysis', 
+        'expert': 'expert_analysis',
+        'comprehensive': 'comprehensive_analysis'
+    };
+    
+    // Start analysis
+    fetch('/api/v1/analysis/video/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({
+            video_id: videoId,
+            expert_role: selectedRole,
+            template: templateMap[selectedLevel]
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        document.getElementById('loadingOverlay').style.display = 'none';
+        
+        if (data.job_id) {
+            // Redirect to job details page
+            window.location.href = `/jobs/${data.job_id}/`;
+        } else {
+            alert('{% trans "Failed to start analysis. Please try again." %}');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        document.getElementById('loadingOverlay').style.display = 'none';
+        alert('{% trans "An error occurred. Please try again." %}');
+    });
+});
+
+// CSRF token helper
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
+{% endblock %}

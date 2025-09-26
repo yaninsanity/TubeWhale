@@ -103,14 +103,14 @@ MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'apps.user_app.middleware.AdminLanguageMiddleware',  # MUST be before LocaleMiddleware!
+    # 'apps.user_app.middleware.AdminLanguageMiddleware',  # Temporarily disabled - causing admin access issues
     'django.middleware.locale.LocaleMiddleware',  # Language support
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'apps.user_app.middleware.UserProfileMiddleware',
+    # 'apps.user_app.middleware.UserProfileMiddleware',  # Temporarily disabled
 ]
 
 # ============== URL CONFIGURATION ==============
@@ -198,15 +198,21 @@ AUTH_PASSWORD_VALIDATORS = [
 
 AUTH_USER_MODEL = 'user_app.User'
 
-# ============== INTERNATIONALIZATION CONFIGURATION ==============
-# Language settings (from multilingual_config)
+# ============== INTERNATIONALIZATION - ENGLISH-FIRST INTELLIGENT PLATFORM ==============
+# Language settings - English-first priority for intelligent platform
 LANGUAGES = LANGUAGES
-LANGUAGE_CODE = LANGUAGE_CODE
-DEFAULT_LANGUAGE_CODE = DEFAULT_LANGUAGE_CODE
+LANGUAGE_CODE = 'en'     # 🇺🇸 PRIMARY: English-first intelligent platform
+DEFAULT_LANGUAGE_CODE = 'en'  # Force English as default
 
-# Internationalization
+# English-first content analysis and template priorities
+DEFAULT_TEMPLATE_LANGUAGE = 'en'
+CONTENT_ANALYSIS_LANGUAGE = 'en'
+ADMIN_LANGUAGE = 'en'
+API_DEFAULT_LANGUAGE = 'en'
+
+# Internationalization - English optimized
 USE_I18N = True          # Enable internationalization
-USE_L10N = True          # Enable localization
+USE_L10N = True          # Enable localization  
 USE_TZ = True            # Enable timezone support
 
 TIME_ZONE = 'UTC'
@@ -241,11 +247,13 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 # ============== SESSION CONFIGURATION ==============
-SESSION_ENGINE = 'django.contrib.sessions.backends.db'
-SESSION_COOKIE_NAME = 'tubewhale_sessionid'
-SESSION_COOKIE_AGE = 86400 * 30  # 30 days
+# Use cache-based sessions for better reliability with admin access
+SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+SESSION_CACHE_ALIAS = 'default'
+SESSION_COOKIE_NAME = 'sessionid'  # Use Django default name
+SESSION_COOKIE_AGE = 86400 * 7  # 7 days (shorter for security)
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
-SESSION_SAVE_EVERY_REQUEST = True
+SESSION_SAVE_EVERY_REQUEST = False  # Reduced to improve performance
 SESSION_COOKIE_SECURE = False if DEBUG else True
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
@@ -317,6 +325,7 @@ REST_FRAMEWORK = {
         'rest_framework.renderers.JSONRenderer',
         'rest_framework.renderers.BrowsableAPIRenderer',
     ],
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 # ============== CORS CONFIGURATION ==============
@@ -379,6 +388,107 @@ MAX_CONCURRENT_ANALYSIS = int(os.environ.get('MAX_CONCURRENT_ANALYSIS', '5'))
 # File upload limits
 FILE_UPLOAD_MAX_MEMORY_SIZE = 100 * 1024 * 1024  # 100MB
 DATA_UPLOAD_MAX_MEMORY_SIZE = 100 * 1024 * 1024  # 100MB
+
+# ============== CELERY CONFIGURATION ==============
+# Celery settings for async task processing - Production optimized
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/0'))
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/0'))
+
+# Task settings  
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+
+# Task execution settings - Optimized for performance
+CELERY_TASK_ALWAYS_EAGER = False  # Set to True for synchronous testing
+CELERY_TASK_EAGER_PROPAGATES = False
+CELERY_TASK_IGNORE_RESULT = False
+CELERY_TASK_STORE_EAGER_RESULT = True
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 1800  # 30 minutes max per task
+CELERY_TASK_SOFT_TIME_LIMIT = 1500  # 25 minutes soft limit
+
+# Worker settings - Production tuned
+CELERY_WORKER_CONCURRENCY = int(os.environ.get('CELERY_WORKER_CONCURRENCY', '4'))
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 1000
+CELERY_WORKER_DISABLE_RATE_LIMITS = False
+
+# Connection settings
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_BROKER_CONNECTION_RETRY = True
+CELERY_BROKER_CONNECTION_MAX_RETRIES = 10
+
+# Task routing - Performance optimized queues
+CELERY_TASK_ROUTES = {
+    'apps.tubewhale_engine.tasks.*': {'queue': 'analysis'},
+    'apps.video_app.tasks.*': {'queue': 'video_processing'},
+    'apps.templates_app.tasks.*': {'queue': 'template_processing'},
+}
+
+# Result backend settings
+CELERY_RESULT_EXPIRES = 3600  # Results expire after 1 hour
+CELERY_RESULT_CACHE_MAX = 10000  # Cache up to 10k results
+
+# Beat scheduler for periodic tasks
+CELERY_BEAT_SCHEDULE = {}
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
+# ============== LOGGING CONFIGURATION ==============
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': 'logs/tubewhale.log',
+            'formatter': 'verbose',
+        },
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+        },
+    },
+    'root': {
+        'handlers': ['console', 'file'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'celery': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'tubewhale': {
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+    },
+}
+
+# Create logs directory if it doesn't exist
+import os
+if not os.path.exists('logs'):
+    os.makedirs('logs')
 
 # ============== DEVELOPMENT SETTINGS ==============
 if DEBUG:

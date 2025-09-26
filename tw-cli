@@ -1,0 +1,192 @@
+#!/bin/bash
+# TubeWhale Enhanced CLI Wrapper with Industrial-grade Features
+# Provides simplified commands for complex video analysis workflows
+
+set -e
+
+# Configuration
+API_BASE="${TUBEWHALE_API_BASE:-http://localhost:8000}"
+CLI_SCRIPT="$(dirname "$0")/enhanced_cli.py"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+# Helper functions
+log_info() {
+    echo -e "${BLUE}ℹ️  $1${NC}"
+}
+
+log_success() {
+    echo -e "${GREEN}✅ $1${NC}"
+}
+
+log_warning() {
+    echo -e "${YELLOW}⚠️  $1${NC}"
+}
+
+log_error() {
+    echo -e "${RED}❌ $1${NC}"
+}
+
+show_help() {
+    cat << EOF
+${CYAN}🐋 TubeWhale Enhanced CLI - Industrial Video Analysis${NC}
+
+${YELLOW}USAGE:${NC}
+    $0 <command> [options]
+
+${YELLOW}COMMANDS:${NC}
+    ${GREEN}list-templates${NC} [--role <role>] [--level <level>]
+        List available analysis templates with optional filtering
+        
+    ${GREEN}list-roles${NC}
+        Show all available expert roles and their specializations
+        
+    ${GREEN}quick-analyze${NC} <video_id> <role> <template> [--format <format>]
+        Start analysis and wait for completion (recommended for most use cases)
+        
+    ${GREEN}start-analysis${NC} <video_id> <role> <template>
+        Start analysis without waiting (returns job ID immediately)
+        
+    ${GREEN}check-job${NC} <job_id> [--dashboard] [--format <format>]
+        Check analysis job status and results
+        
+    ${GREEN}list-jobs${NC} [--status <status>] [--page <page>]
+        List analysis jobs with optional filtering
+
+${YELLOW}ANALYSIS LEVELS:${NC}
+    ${PURPLE}basic${NC}        - Quick overview analysis (2-5 minutes)
+    ${PURPLE}detailed${NC}     - Comprehensive analysis (5-15 minutes)  
+    ${PURPLE}expert${NC}       - Deep specialist analysis (15-30 minutes)
+    ${PURPLE}comprehensive${NC} - Complete multi-perspective analysis (30+ minutes)
+
+${YELLOW}EXPERT ROLES:${NC}
+    ${PURPLE}content_creator${NC}     - Content strategy and audience engagement
+    ${PURPLE}marketing_expert${NC}    - Marketing effectiveness and ROI analysis
+    ${PURPLE}education_specialist${NC} - Educational value and learning outcomes
+    ${PURPLE}data_analyst${NC}        - Performance metrics and analytics
+    ${PURPLE}seo_specialist${NC}      - Search optimization and discoverability
+    ${PURPLE}brand_strategist${NC}    - Brand messaging and positioning
+    ${PURPLE}social_media_manager${NC} - Social media strategy and viral potential
+    ${PURPLE}technical_reviewer${NC}  - Technical accuracy and implementation
+    ${PURPLE}business_consultant${NC} - Business strategy and monetization
+
+${YELLOW}EXAMPLES:${NC}
+    # List all available templates
+    $0 list-templates
+    
+    # Show marketing expert templates only
+    $0 list-templates --role marketing_expert
+    
+    # Quick analysis with content creator perspective
+    $0 quick-analyze dQw4w9WgXcQ content_creator detailed_analysis
+    
+    # Start comprehensive marketing analysis
+    $0 start-analysis abc123xyz marketing_expert comprehensive_analysis
+    
+    # Check job with dashboard data
+    $0 check-job job_12345 --dashboard
+    
+    # List completed jobs
+    $0 list-jobs --status completed
+
+${YELLOW}ENVIRONMENT VARIABLES:${NC}
+    ${PURPLE}TUBEWHALE_API_BASE${NC} - API base URL (default: http://localhost:8000)
+
+EOF
+}
+
+# Validate CLI script exists
+if [[ ! -f "$CLI_SCRIPT" ]]; then
+    log_error "Enhanced CLI script not found at: $CLI_SCRIPT"
+    exit 1
+fi
+
+# Check if Python CLI script is executable
+if [[ ! -x "$CLI_SCRIPT" ]]; then
+    log_info "Making CLI script executable..."
+    chmod +x "$CLI_SCRIPT"
+fi
+
+# Main command handler
+case "${1:-help}" in
+    "list-templates")
+        log_info "Fetching available analysis templates..."
+        python3 "$CLI_SCRIPT" --api-base "$API_BASE" templates "${@:2}"
+        ;;
+        
+    "list-roles")
+        log_info "Fetching available expert roles..."
+        python3 "$CLI_SCRIPT" --api-base "$API_BASE" roles
+        ;;
+        
+    "quick-analyze")
+        if [[ $# -lt 4 ]]; then
+            log_error "Usage: $0 quick-analyze <video_id> <role> <template> [--format <format>]"
+            exit 1
+        fi
+        
+        VIDEO_ID="$2"
+        ROLE="$3"
+        TEMPLATE="$4"
+        FORMAT="${5:-summary}"
+        
+        log_info "Starting quick analysis for video: $VIDEO_ID"
+        log_info "Expert Role: $ROLE | Template: $TEMPLATE"
+        
+        python3 "$CLI_SCRIPT" --api-base "$API_BASE" analyze "$VIDEO_ID" \
+            --role "$ROLE" --template "$TEMPLATE" --format "$FORMAT"
+        ;;
+        
+    "start-analysis")
+        if [[ $# -lt 4 ]]; then
+            log_error "Usage: $0 start-analysis <video_id> <role> <template>"
+            exit 1
+        fi
+        
+        VIDEO_ID="$2"
+        ROLE="$3"
+        TEMPLATE="$4"
+        
+        log_info "Starting background analysis for video: $VIDEO_ID"
+        log_info "Expert Role: $ROLE | Template: $TEMPLATE"
+        
+        python3 "$CLI_SCRIPT" --api-base "$API_BASE" analyze "$VIDEO_ID" \
+            --role "$ROLE" --template "$TEMPLATE" --no-wait
+        ;;
+        
+    "check-job")
+        if [[ $# -lt 2 ]]; then
+            log_error "Usage: $0 check-job <job_id> [--dashboard] [--format <format>]"
+            exit 1
+        fi
+        
+        JOB_ID="$2"
+        
+        log_info "Checking job status: $JOB_ID"
+        
+        python3 "$CLI_SCRIPT" --api-base "$API_BASE" job "$JOB_ID" "${@:3}"
+        ;;
+        
+    "list-jobs")
+        log_info "Fetching analysis jobs..."
+        python3 "$CLI_SCRIPT" --api-base "$API_BASE" jobs "${@:2}"
+        ;;
+        
+    "help"|"--help"|"-h"|"")
+        show_help
+        ;;
+        
+    *)
+        log_error "Unknown command: $1"
+        echo ""
+        show_help
+        exit 1
+        ;;
+esac

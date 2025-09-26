@@ -6,6 +6,7 @@ TubeWhale Engine Models
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 import uuid
 
 User = get_user_model()
@@ -238,7 +239,12 @@ class AnalysisJob(models.Model):
     
     # Job status and timing
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='queued')
+    status_message = models.CharField(max_length=200, blank=True, help_text='Current status message')
     progress = models.IntegerField(default=0)  # 0-100
+    current_step = models.CharField(max_length=100, blank=True, help_text='Current processing step')
+    estimated_time_remaining = models.IntegerField(null=True, blank=True, help_text='Estimated seconds remaining')
+    steps_completed = models.IntegerField(default=0, help_text='Number of completed steps')
+    total_steps = models.IntegerField(default=5, help_text='Total number of steps')
     
     created_at = models.DateTimeField(auto_now_add=True)
     started_at = models.DateTimeField(null=True, blank=True)
@@ -251,6 +257,9 @@ class AnalysisJob(models.Model):
     # Analysis configuration
     custom_questions = models.JSONField(default=list, blank=True)
     analysis_options = models.JSONField(default=dict, blank=True)
+    
+    # Task tracking
+    celery_task_id = models.CharField(max_length=128, blank=True, default="", db_index=True, help_text="Celery task ID for async processing")
     
     # Client information
     ip_address = models.GenericIPAddressField(null=True, blank=True)
@@ -273,6 +282,145 @@ class AnalysisJob(models.Model):
     
     def __str__(self):
         return f"{self.job_id} - {self.analysis_type} ({self.status})"
+    
+    @property
+    def progress_percentage(self):
+        """获取进度百分比"""
+        if self.total_steps > 0:
+            return min(100, (self.steps_completed / self.total_steps) * 100)
+        return self.progress
+    
+    @property
+    def estimated_completion_time(self):
+        """估算完成时间"""
+        from django.utils import timezone
+        if self.started_at and self.estimated_time_remaining:
+            return timezone.now() + timezone.timedelta(seconds=self.estimated_time_remaining)
+        return None
+    
+    def update_progress(self, step_name, progress=None, steps_completed=None, estimated_remaining=None):
+        """更新任务进度"""
+        self.current_step = step_name
+        if progress is not None:
+            self.progress = progress
+        if steps_completed is not None:
+            self.steps_completed = steps_completed
+            self.progress = min(100, (steps_completed / self.total_steps) * 100)
+        if estimated_remaining is not None:
+            self.estimated_time_remaining = estimated_remaining
+        self.save(update_fields=['current_step', 'progress', 'steps_completed', 'estimated_time_remaining'])
+    
+    def log_execution_step(self, step_name, details=None, execution_time=None, cpu_usage=None, memory_usage=None):
+        """记录详细的执行步骤日志"""
+        ExecutionLog.objects.create(
+            job=self,
+            step_name=step_name,
+            details=details or {},
+            execution_time_ms=execution_time,
+            cpu_usage_percent=cpu_usage,
+            memory_usage_mb=memory_usage,
+            timestamp=timezone.now()
+        )
+    
+    def calculate_precise_eta(self):
+        """基于历史数据计算精确的预计完成时间"""
+        from django.utils import timezone
+        from django.db.models import Avg
+        import datetime
+        
+        if not self.started_at:
+            return None
+            
+        # 获取相同类型任务的历史数据
+        similar_jobs = AnalysisJob.objects.filter(
+            analysis_type=self.analysis_type,
+            expert_role=self.expert_role,
+            status='completed',
+            processing_time_seconds__isnull=False
+        ).order_by('-completed_at')[:10]  # 最近10个相似任务
+        
+        if similar_jobs:
+            avg_time = similar_jobs.aggregate(Avg('processing_time_seconds'))['processing_time_seconds__avg']
+            if avg_time:
+                elapsed = (timezone.now() - self.started_at).total_seconds()
+                progress_ratio = self.progress / 100.0 if self.progress > 0 else 0.1
+                estimated_total = elapsed / progress_ratio if progress_ratio > 0 else avg_time
+                remaining = max(0, estimated_total - elapsed)
+                return int(remaining)
+        
+        # 如果没有历史数据，基于当前进度估算
+        if self.progress > 0:
+            elapsed = (timezone.now() - self.started_at).total_seconds()
+            estimated_total = elapsed * (100 / self.progress)
+            remaining = max(0, estimated_total - elapsed)
+            return int(remaining)
+        
+        return None
+
+
+class ExecutionLog(models.Model):
+    """精确的任务执行日志"""
+    
+    job = models.ForeignKey(AnalysisJob, on_delete=models.CASCADE, related_name='execution_logs')
+    step_name = models.CharField(max_length=200, help_text="执行步骤名称")
+    details = models.JSONField(default=dict, help_text="详细执行信息")
+    
+    # 性能指标
+    execution_time_ms = models.IntegerField(null=True, blank=True, help_text="执行时间(毫秒)")
+    cpu_usage_percent = models.FloatField(null=True, blank=True, help_text="CPU使用率")
+    memory_usage_mb = models.FloatField(null=True, blank=True, help_text="内存使用量(MB)")
+    
+    # 网络相关
+    api_calls_count = models.IntegerField(default=0, help_text="API调用次数")
+    data_processed_kb = models.IntegerField(null=True, blank=True, help_text="处理的数据量(KB)")
+    
+    # 错误和警告
+    warnings = models.JSONField(default=list, blank=True, help_text="警告信息")
+    errors = models.JSONField(default=list, blank=True, help_text="错误信息")
+    
+    # 时间戳
+    timestamp = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'tubewhale_execution_logs'
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['job', 'timestamp']),
+            models.Index(fields=['step_name', 'timestamp']),
+        ]
+    
+    def __str__(self):
+        return f"{self.job.job_id} - {self.step_name} ({self.timestamp})"
+
+
+class PerformanceMetrics(models.Model):
+    """系统性能监控指标"""
+    
+    job = models.ForeignKey(AnalysisJob, on_delete=models.CASCADE, related_name='performance_metrics')
+    
+    # 系统资源
+    cpu_percent = models.FloatField(help_text="CPU使用百分比")
+    memory_percent = models.FloatField(help_text="内存使用百分比")
+    disk_io_read_mb = models.FloatField(default=0, help_text="磁盘读取量(MB)")
+    disk_io_write_mb = models.FloatField(default=0, help_text="磁盘写入量(MB)")
+    
+    # 网络资源
+    network_sent_kb = models.FloatField(default=0, help_text="网络发送量(KB)")
+    network_recv_kb = models.FloatField(default=0, help_text="网络接收量(KB)")
+    
+    # 任务特定指标
+    api_response_time_ms = models.IntegerField(null=True, blank=True, help_text="API响应时间(毫秒)")
+    queue_wait_time_ms = models.IntegerField(null=True, blank=True, help_text="队列等待时间(毫秒)")
+    
+    # 时间戳
+    timestamp = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'tubewhale_performance_metrics'
+        ordering = ['-timestamp']
+    
+    def __str__(self):
+        return f"{self.job.job_id} - Metrics ({self.timestamp})"
 
 
 class AnalysisResult(models.Model):

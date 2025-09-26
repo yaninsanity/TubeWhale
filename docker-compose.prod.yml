@@ -1,3 +1,4 @@
+version: '3.8'
 
 services:
   # PostgreSQL Database  
@@ -15,7 +16,7 @@ services:
     networks:
       - tubewhale_network
 
-  # Redis Cache
+  # Redis Cache & Message Broker
   redis:
     image: redis:7-alpine
     container_name: tubewhale_redis
@@ -46,46 +47,59 @@ services:
       - media_volume:/app/media
     networks:
       - tubewhale_network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/templates/health/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  # Celery Worker for Background Tasks
+  # Celery Worker - Analysis Tasks
   celery_worker:
     build:
       context: .
       dockerfile: Dockerfile.simple
     container_name: tubewhale_celery_worker
+    entrypoint: ["sh", "-c"]
+    command: ["sleep 10 && celery -A tubewhale_project worker --loglevel=info --queues=analysis,video_processing,default"]
     depends_on:
-      - postgres
+      - postgres  
       - redis
       - backend
     env_file:
       - .env.docker
-    command: celery -A tubewhale_project worker --loglevel=info --concurrency=2 --queues=celery,analysis
     volumes:
       - .:/app
+      - media_volume:/app/media
     networks:
       - tubewhale_network
+    healthcheck:
+      test: ["CMD", "celery", "-A", "tubewhale_project", "inspect", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     restart: unless-stopped
 
-  # Celery Beat Scheduler (optional)
+  # Celery Beat - Scheduled Tasks
   celery_beat:
     build:
       context: .
       dockerfile: Dockerfile.simple
     container_name: tubewhale_celery_beat
+    entrypoint: ["sh", "-c"]
+    command: ["sleep 15 && celery -A tubewhale_project beat --loglevel=info"]
     depends_on:
       - postgres
       - redis
       - backend
     env_file:
       - .env.docker
-    command: celery -A tubewhale_project beat --loglevel=info
     volumes:
       - .:/app
     networks:
-      - tubewhale_network
+      - tubewhale_network  
     restart: unless-stopped
 
-  # Nginx Reverse Proxy (optional)
+  # Nginx Reverse Proxy
   nginx:
     image: nginx:alpine
     container_name: tubewhale_nginx

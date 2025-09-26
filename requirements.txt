@@ -39,12 +39,20 @@ whitenoise==6.7.0
 # youtube_dl               # legacy; module is yt_dlp at runtime
 yt-dlp
 pydub
+# 音频处理增强支持 (pyaudio已从Docker构建中移除，在本地开发中可选)
+soundfile
+librosa
+scipy
+numpy
+# API限流和异步支持
 aiolimiter
+# 测试框架
 pytest
 pytest-django
 # sqlite3-rich 
 pytest-asyncio
 sqlalchemy
+# 视频下载
 pytube
 browser_cookie3
 pyyaml>=6.0

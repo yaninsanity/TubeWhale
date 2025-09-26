@@ -3,7 +3,7 @@ TubeWhale Engine URLs
 """
 
 from django.urls import path
-from . import views
+from . import views, api_views
 
 app_name = 'tubewhale_engine'
 
@@ -31,6 +31,7 @@ urlpatterns = [
     
     # Analysis Results Management - Enhanced
     path('api/analysis/<str:job_id>/', views.get_analysis_result, name='analysis-result'),
+    path('api/analysis/<str:job_id>/progress/', views.get_analysis_progress, name='analysis-progress'),
     path('api/analysis/<str:job_id>/download/', views.download_analysis_result, name='download-analysis-result'),
     path('api/analysis/history/', views.list_analysis_history, name='analysis-history'),
     
@@ -43,4 +44,18 @@ urlpatterns = [
     path('api/v1/wizard/tools/', views.wizard_tool_selection, name='wizard-tools'),
     path('api/v1/wizard/roles/', views.wizard_role_selection, name='wizard-roles'),
     path('api/v1/wizard/templates/', views.wizard_template_selection, name='wizard-templates'),
+
+    
+    # Enhanced Template System API
+    path('api/v1/templates/available/', api_views.get_available_templates, name='available-templates'),
+    path('api/v1/roles/available/', api_views.get_expert_roles, name='available-roles'),
+    path('api/v1/analysis/validate/', api_views.validate_analysis_config, name='validate-config'),
+    
+    # Job Management and Visualization
+    path('api/v1/jobs/', api_views.get_jobs_list, name='jobs-list'),
+    path('api/v1/jobs/<str:job_id>/', api_views.get_job_details, name='job-details'),
+    path('api/v1/jobs/<str:job_id>/dashboard/', api_views.get_analysis_dashboard, name='job-dashboard'),
+    
+    # Engine API dashboard (renamed to avoid conflict with main dashboard)
+    path('api/v1/engine/dashboard/', views.engine_dashboard, name='engine-dashboard'),
 ]

@@ -1,0 +1,553 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Analysis Jobs" %} - TubeWhale{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+<style>
+    .jobs-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 10px;
+        margin-bottom: 2rem;
+    }
+    
+    .job-card {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+        border-left: 4px solid #667eea;
+    }
+    
+    .job-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    
+    .status-badge {
+        padding: 0.4rem 0.8rem;
+        border-radius: 20px;
+        font-weight: bold;
+        font-size: 0.8rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+    }
+    
+    .status-completed { background: #10B981; color: white; }
+    .status-processing { background: #F59E0B; color: white; }
+    .status-pending { background: #6B7280; color: white; }
+    .status-failed { background: #EF4444; color: white; }
+    
+    .job-thumbnail {
+        width: 120px;
+        height: 68px;
+        object-fit: cover;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .expert-role-badge {
+        background: linear-gradient(135deg, #FEF3C7 0%, #FCD34D 100%);
+        color: #92400E;
+        padding: 0.3rem 0.6rem;
+        border-radius: 15px;
+        font-weight: bold;
+        font-size: 0.75rem;
+    }
+    
+    .template-badge {
+        background: linear-gradient(135deg, #E0E7FF 0%, #C7D2FE 100%);
+        color: #3730A3;
+        padding: 0.3rem 0.6rem;
+        border-radius: 15px;
+        font-weight: bold;
+        font-size: 0.75rem;
+    }
+    
+    .progress-bar-custom {
+        height: 6px;
+        background: #E5E7EB;
+        border-radius: 3px;
+        overflow: hidden;
+    }
+    
+    .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        border-radius: 3px;
+        transition: width 0.3s ease;
+    }
+    
+    .filter-card {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    
+    .stat-card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 10px;
+        text-align: center;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        border-left: 4px solid;
+    }
+    
+    .stat-card.total { border-left-color: #667eea; }
+    .stat-card.completed { border-left-color: #10B981; }
+    .stat-card.processing { border-left-color: #F59E0B; }
+    .stat-card.failed { border-left-color: #EF4444; }
+    
+    .stat-value {
+        font-size: 2rem;
+        font-weight: bold;
+        margin-bottom: 0.5rem;
+    }
+    
+    .stat-label {
+        color: #6B7280;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .pagination-custom {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 0.5rem;
+        margin-top: 2rem;
+    }
+    
+    .pagination-custom .page-link {
+        background: white;
+        border: 1px solid #D1D5DB;
+        color: #374151;
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        text-decoration: none;
+        transition: all 0.3s ease;
+    }
+    
+    .pagination-custom .page-link:hover {
+        background: #667eea;
+        color: white;
+        border-color: #667eea;
+    }
+    
+    .pagination-custom .page-link.active {
+        background: #667eea;
+        color: white;
+        border-color: #667eea;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 4rem 2rem;
+        color: #6B7280;
+    }
+    
+    .empty-state i {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+    
+    .btn-action {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-weight: bold;
+        text-decoration: none;
+        font-size: 0.8rem;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-action:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 3px 10px rgba(102, 126, 234, 0.3);
+        color: white;
+        text-decoration: none;
+    }
+    
+    .job-meta {
+        color: #6B7280;
+        font-size: 0.85rem;
+        margin-top: 0.5rem;
+    }
+    
+    .quick-filters {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        margin-bottom: 1rem;
+    }
+    
+    .filter-chip {
+        background: #F3F4F6;
+        color: #374151;
+        padding: 0.4rem 0.8rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        text-decoration: none;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        border: 1px solid transparent;
+    }
+    
+    .filter-chip:hover,
+    .filter-chip.active {
+        background: #667eea;
+        color: white;
+        text-decoration: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="jobs-header">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h1 class="mb-2">
+                    <i class="fas fa-tasks me-2"></i>
+                    {% trans "Analysis Jobs" %}
+                </h1>
+                <p class="mb-0 opacity-90">
+                    {% trans "Monitor and manage your video analysis jobs" %}
+                </p>
+            </div>
+            <div class="col-md-4 text-end">
+                <a href="{% url 'tubewhale_engine:start_analysis' %}" class="btn btn-light btn-lg">
+                    <i class="fas fa-plus me-2"></i>
+                    {% trans "New Analysis" %}
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics -->
+    <div class="stats-grid">
+        <div class="stat-card total">
+            <div class="stat-value" style="color: #667eea;">{{ stats.total }}</div>
+            <div class="stat-label">{% trans "Total Jobs" %}</div>
+        </div>
+        <div class="stat-card completed">
+            <div class="stat-value" style="color: #10B981;">{{ stats.completed }}</div>
+            <div class="stat-label">{% trans "Completed" %}</div>
+        </div>
+        <div class="stat-card processing">
+            <div class="stat-value" style="color: #F59E0B;">{{ stats.processing }}</div>
+            <div class="stat-label">{% trans "Processing" %}</div>
+        </div>
+        <div class="stat-card failed">
+            <div class="stat-value" style="color: #EF4444;">{{ stats.failed }}</div>
+            <div class="stat-label">{% trans "Failed" %}</div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filter-card">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <div class="quick-filters">
+                    <a href="?status=" class="filter-chip {% if not request.GET.status %}active{% endif %}">
+                        {% trans "All" %}
+                    </a>
+                    <a href="?status=completed" class="filter-chip {% if request.GET.status == 'completed' %}active{% endif %}">
+                        <i class="fas fa-check-circle me-1 text-success"></i>
+                        {% trans "Completed" %}
+                    </a>
+                    <a href="?status=processing" class="filter-chip {% if request.GET.status == 'processing' %}active{% endif %}">
+                        <i class="fas fa-spinner me-1 text-warning"></i>
+                        {% trans "Processing" %}
+                    </a>
+                    <a href="?status=pending" class="filter-chip {% if request.GET.status == 'pending' %}active{% endif %}">
+                        <i class="fas fa-clock me-1 text-secondary"></i>
+                        {% trans "Pending" %}
+                    </a>
+                    <a href="?status=failed" class="filter-chip {% if request.GET.status == 'failed' %}active{% endif %}">
+                        <i class="fas fa-exclamation-triangle me-1 text-danger"></i>
+                        {% trans "Failed" %}
+                    </a>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="input-group">
+                    <input type="text" 
+                           class="form-control" 
+                           placeholder="{% trans 'Search by video ID or job ID...' %}"
+                           value="{{ request.GET.search|default:'' }}"
+                           id="searchInput">
+                    <button class="btn btn-outline-secondary" type="button" onclick="performSearch()">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Jobs List -->
+    {% if jobs %}
+        {% for job in jobs %}
+        <div class="job-card">
+            <div class="row align-items-center">
+                <!-- Thumbnail -->
+                <div class="col-md-2 col-lg-1">
+                    {% if job.youtube.thumbnail_url %}
+                        <img src="{{ job.youtube.thumbnail_url }}" 
+                             alt="Video thumbnail" 
+                             class="job-thumbnail">
+                    {% else %}
+                        <div class="job-thumbnail d-flex align-items-center justify-content-center bg-light">
+                            <i class="fas fa-video text-muted"></i>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- Job Info -->
+                <div class="col-md-6 col-lg-7">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <span class="status-badge status-{{ job.status|lower }}">
+                            {% if job.status == 'completed' %}
+                                <i class="fas fa-check-circle"></i>
+                            {% elif job.status == 'processing' %}
+                                <i class="fas fa-spinner fa-spin"></i>
+                            {% elif job.status == 'pending' %}
+                                <i class="fas fa-clock"></i>
+                            {% elif job.status == 'failed' %}
+                                <i class="fas fa-exclamation-triangle"></i>
+                            {% endif %}
+                            {{ job.status|title }}
+                        </span>
+                        <span class="expert-role-badge">
+                            {{ job.expert_role|title }}
+                        </span>
+                        <span class="template-badge">
+                            {{ job.template_id|title }}
+                        </span>
+                    </div>
+                    
+                    <h6 class="mb-1">
+                        <strong>{% trans "Job" %}:</strong> {{ job.job_id }}
+                    </h6>
+                    
+                    <p class="mb-1">
+                        <strong>{% trans "Video" %}:</strong> 
+                        <a href="{{ job.youtube.video_url }}" target="_blank" class="text-decoration-none">
+                            {{ job.youtube.video_id }}
+                            <i class="fas fa-external-link-alt ms-1 small"></i>
+                        </a>
+                    </p>
+                    
+                    {% if job.summary %}
+                        <p class="mb-1 text-muted">{{ job.summary|truncatewords:15 }}</p>
+                    {% endif %}
+                    
+                    <!-- Progress Bar for Processing Jobs -->
+                    {% if job.status == 'processing' and job.progress %}
+                    <div class="progress-bar-custom mb-2">
+                        <div class="progress-fill" style="width: {{ job.progress }}%"></div>
+                    </div>
+                    <small class="text-muted">{{ job.progress|floatformat:0 }}% {% trans "complete" %}</small>
+                    {% endif %}
+                    
+                    <div class="job-meta">
+                        <i class="fas fa-calendar-alt me-1"></i>
+                        {% trans "Created" %}: {{ job.created_at|date:"M d, Y H:i" }}
+                        {% if job.completed_at %}
+                            | <i class="fas fa-check me-1"></i>
+                            {% trans "Completed" %}: {{ job.completed_at|date:"M d, Y H:i" }}
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="col-md-4 col-lg-4 text-end">
+                    <div class="d-flex gap-2 justify-content-end flex-wrap">
+                        <a href="{% url 'tubewhale_engine:job_detail' job.job_id %}" 
+                           class="btn-action">
+                            <i class="fas fa-eye me-1"></i>
+                            {% trans "View Details" %}
+                        </a>
+                        
+                        {% if job.status == 'completed' and job.results.download_links %}
+                            <div class="dropdown">
+                                <button class="btn-action dropdown-toggle" 
+                                        type="button" 
+                                        data-bs-toggle="dropdown" 
+                                        aria-expanded="false">
+                                    <i class="fas fa-download me-1"></i>
+                                    {% trans "Download" %}
+                                </button>
+                                <ul class="dropdown-menu">
+                                    {% for format, link in job.results.download_links.items %}
+                                    <li>
+                                        <a class="dropdown-item" href="{{ link }}" target="_blank">
+                                            <i class="fas fa-file me-2"></i>
+                                            {{ format|upper }}
+                                        </a>
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        {% endif %}
+                        
+                        {% if job.status == 'failed' %}
+                            <button class="btn btn-outline-warning btn-sm" 
+                                    onclick="retryJob('{{ job.job_id }}')">
+                                <i class="fas fa-redo me-1"></i>
+                                {% trans "Retry" %}
+                            </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+
+        <!-- Pagination -->
+        {% if pagination.total_pages > 1 %}
+        <div class="pagination-custom">
+            {% if pagination.has_previous %}
+                <a href="?page={{ pagination.previous_page_number }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}" 
+                   class="page-link">
+                    <i class="fas fa-chevron-left"></i>
+                </a>
+            {% endif %}
+            
+            {% for page_num in pagination.page_range %}
+                {% if page_num == pagination.current_page %}
+                    <span class="page-link active">{{ page_num }}</span>
+                {% else %}
+                    <a href="?page={{ page_num }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}" 
+                       class="page-link">{{ page_num }}</a>
+                {% endif %}
+            {% endfor %}
+            
+            {% if pagination.has_next %}
+                <a href="?page={{ pagination.next_page_number }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}" 
+                   class="page-link">
+                    <i class="fas fa-chevron-right"></i>
+                </a>
+            {% endif %}
+        </div>
+        
+        <div class="text-center mt-3 text-muted">
+            <small>
+                {% trans "Showing" %} {{ pagination.start_index }}-{{ pagination.end_index }} 
+                {% trans "of" %} {{ pagination.total_count }} {% trans "jobs" %}
+            </small>
+        </div>
+        {% endif %}
+
+    {% else %}
+        <!-- Empty State -->
+        <div class="empty-state">
+            <i class="fas fa-tasks"></i>
+            <h4>{% trans "No Analysis Jobs Found" %}</h4>
+            <p>{% trans "Start analyzing videos to see your jobs here." %}</p>
+            <a href="{% url 'tubewhale_engine:start_analysis' %}" class="btn-action">
+                <i class="fas fa-plus me-2"></i>
+                {% trans "Start New Analysis" %}
+            </a>
+        </div>
+    {% endif %}
+</div>
+
+<script>
+// Search functionality
+function performSearch() {
+    const searchTerm = document.getElementById('searchInput').value;
+    const currentParams = new URLSearchParams(window.location.search);
+    
+    if (searchTerm) {
+        currentParams.set('search', searchTerm);
+    } else {
+        currentParams.delete('search');
+    }
+    currentParams.delete('page'); // Reset to first page
+    
+    window.location.href = '?' + currentParams.toString();
+}
+
+// Enter key support for search
+document.getElementById('searchInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        performSearch();
+    }
+});
+
+// Retry job functionality
+function retryJob(jobId) {
+    if (confirm('{% trans "Are you sure you want to retry this analysis?" %}')) {
+        fetch(`/api/v1/jobs/${jobId}/retry/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('{% trans "Failed to retry job. Please try again." %}');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('{% trans "An error occurred. Please try again." %}');
+        });
+    }
+}
+
+// CSRF token helper
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Auto-refresh for jobs with processing status
+{% if has_processing_jobs %}
+setTimeout(function() {
+    location.reload();
+}, 10000); // Refresh every 10 seconds if there are processing jobs
+{% endif %}
+</script>
+{% endbox %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+{% endblock %}
+{% endblock %}

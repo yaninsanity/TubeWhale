@@ -455,3 +455,33 @@ class UserAnalysisHistory(models.Model):
         if self.processing_time_seconds:
             return round(self.processing_time_seconds / 60, 1)
         return None
+
+
+class UserProfile(models.Model):
+    """Extended User Profile Model"""
+    
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    
+    # API Keys storage
+    api_keys = models.JSONField(default=dict, blank=True, help_text=_("User API keys storage"))
+    
+    # User preferences
+    workspace_folder = models.CharField(max_length=500, blank=True, null=True)
+    preferred_language = models.CharField(max_length=10, default='en')
+    preferred_template = models.CharField(max_length=100, default='default_analysis')
+    subscription_tier = models.CharField(max_length=50, default='basic')
+    
+    # Settings
+    auto_analysis = models.BooleanField(default=False)
+    email_notifications = models.BooleanField(default=True)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = _("User Profile")
+        verbose_name_plural = _("User Profiles")
+    
+    def __str__(self):
+        return f"{self.user.username} Profile"

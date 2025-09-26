@@ -17,6 +17,13 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     default-libmysqlclient-dev \
     libpq-dev \
+    # 音频处理相关依赖
+    libasound2-dev \
+    portaudio19-dev \
+    libportaudio2 \
+    libportaudiocpp0 \
+    libav-tools \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Python & uv 环境
@@ -44,13 +51,24 @@ ENV PYTHONUNBUFFERED=1 \
     DJANGO_SETTINGS_MODULE=tubewhale_project.settings \
     PATH="/opt/venv/bin:$PATH"
 
-# 安装运行时依赖
+# 安装运行时依赖 - 完整的音频处理支持
 RUN apt-get update && apt-get install -y \
     libpq5 \
     default-mysql-client \
     gettext \
     curl \
+    # 完整音频处理依赖包
     ffmpeg \
+    libav-tools \
+    libasound2 \
+    portaudio19-dev \
+    libportaudio2 \
+    libportaudiocpp0 \
+    libsndfile1 \
+    libsndfile1-dev \
+    # Python音频处理支持
+    python3-dev \
+    python3-pyaudio \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 

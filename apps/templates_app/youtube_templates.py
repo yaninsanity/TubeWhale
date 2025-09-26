@@ -35,8 +35,236 @@ class YouTubeTemplateManager:
         self.templates = self._initialize_templates()
     
     def _initialize_templates(self) -> Dict[str, YouTubeTemplate]:
-        """初始化所有YouTube分析模板"""
+        """Initialize all YouTube analysis templates - English-first intelligent platform"""
         templates = {}
+        
+        # ========== ENGLISH-FIRST PROFESSIONAL TEMPLATES ==========
+        
+        # 1. Comprehensive Video Analysis - Premium Template
+        templates['comprehensive_analysis'] = YouTubeTemplate(
+            id='comprehensive_analysis',
+            name='Comprehensive Video Analysis',
+            description='Complete multi-dimensional analysis covering performance, content quality, audience engagement, and strategic recommendations',
+            role='content-creator',
+            category='comprehensive',
+            thinking_questions=[
+                ThinkingQuestion(
+                    id='content-quality-assessment',
+                    question='What is the overall production quality and content value of this video? How does it compare to industry standards?',
+                    purpose='Evaluate technical and creative quality benchmarks'
+                ),
+                ThinkingQuestion(
+                    id='audience-engagement-analysis',
+                    question='How effectively does this video engage its target audience? What engagement patterns and retention strategies are evident?',
+                    purpose='Analyze viewer interaction and engagement effectiveness'
+                ),
+                ThinkingQuestion(
+                    id='strategic-optimization-opportunities',
+                    question='What are the primary optimization opportunities for improving performance, reach, and monetization potential?',
+                    purpose='Identify actionable improvement strategies'
+                )
+            ],
+            analysis_focus=['content_quality', 'audience_engagement', 'performance_metrics', 'optimization_opportunities', 'strategic_recommendations'],
+            output_format='comprehensive_analysis_report'
+        )
+        
+        # 2. Performance Benchmark Analysis - Free Template
+        templates['performance_benchmark'] = YouTubeTemplate(
+            id='performance_benchmark',
+            name='Performance Benchmark Analysis',
+            description='Quick performance evaluation with scoring metrics and competitive benchmarking',
+            role='content-creator',
+            category='performance',
+            thinking_questions=[
+                ThinkingQuestion(
+                    id='performance-metrics-evaluation',
+                    question='How do the key performance indicators (views, engagement rate, retention) compare to channel averages and industry benchmarks?',
+                    purpose='Benchmark performance against standards'
+                ),
+                ThinkingQuestion(
+                    id='competitive-positioning',
+                    question='Where does this video rank compared to similar content in the niche? What competitive advantages or disadvantages are evident?',
+                    purpose='Assess competitive market position'
+                ),
+                ThinkingQuestion(
+                    id='improvement-priorities',
+                    question='Based on performance data, what are the top 3 areas for immediate improvement to boost results?',
+                    purpose='Prioritize optimization efforts'
+                )
+            ],
+            analysis_focus=['performance_scoring', 'benchmark_comparison', 'competitive_analysis', 'improvement_recommendations'],
+            output_format='performance_benchmark_report'
+        )
+        
+        # 3. Competitive Intelligence Report - Premium Template
+        templates['competitive_intelligence'] = YouTubeTemplate(
+            id='competitive_intelligence',
+            name='Competitive Intelligence Report',
+            description='In-depth competitor analysis, market positioning, and strategic differentiation opportunities',
+            role='marketing-expert',
+            category='competitive',
+            thinking_questions=[
+                ThinkingQuestion(
+                    id='competitor-strategy-analysis',
+                    question='What content strategies, formats, and approaches are top competitors using successfully in this niche?',
+                    purpose='Map competitive landscape and successful strategies'
+                ),
+                ThinkingQuestion(
+                    id='differentiation-opportunities',
+                    question='What unique angles, underserved topics, or content gaps exist that this creator could exploit for competitive advantage?',
+                    purpose='Identify strategic differentiation opportunities'
+                ),
+                ThinkingQuestion(
+                    id='market-positioning-strategy',
+                    question='How should this content be positioned relative to competitors to maximize market share and audience capture?',
+                    purpose='Develop competitive positioning strategy'
+                )
+            ],
+            analysis_focus=['competitor_analysis', 'market_gaps', 'differentiation_strategy', 'positioning_recommendations'],
+            output_format='competitive_intelligence_report'
+        )
+        
+        # 4. Trend Forecasting & Market Timing - Premium Template  
+        templates['trend_forecasting'] = YouTubeTemplate(
+            id='trend_forecasting',
+            name='Trend Forecasting & Market Timing',
+            description='Advanced trend analysis, market timing predictions, and strategic content planning for viral potential',
+            role='data-analyst',
+            category='trends',
+            thinking_questions=[
+                ThinkingQuestion(
+                    id='trend-lifecycle-analysis',
+                    question='What stage of the trend lifecycle is this topic/format in? Is it emerging, peaking, or declining?',
+                    purpose='Determine optimal timing for trend capitalization'
+                ),
+                ThinkingQuestion(
+                    id='market-timing-predictions',
+                    question='Based on current data patterns, when will this trend reach maximum virality and when should similar content be published?',
+                    purpose='Predict optimal market timing windows'
+                ),
+                ThinkingQuestion(
+                    id='future-trend-opportunities',
+                    question='What emerging trends or topics should this creator prepare content for in the next 30-90 days?',
+                    purpose='Forecast future content opportunities'
+                )
+            ],
+            analysis_focus=['trend_analysis', 'timing_optimization', 'viral_prediction', 'future_planning'],
+            output_format='trend_forecasting_report'
+        )
+        
+        # 5. Audience Psychographic Profile - Premium Template
+        templates['audience_psychographic'] = YouTubeTemplate(
+            id='audience_psychographic',
+            name='Audience Psychographic Profile',
+            description='Deep psychological analysis of audience behavior, motivations, preferences, and content consumption patterns',
+            role='data-analyst',
+            category='audience',
+            thinking_questions=[
+                ThinkingQuestion(
+                    id='psychological-drivers',
+                    question='What psychological needs, desires, and motivations drive this audience to consume this type of content?',
+                    purpose='Understand core audience psychology'
+                ),
+                ThinkingQuestion(
+                    id='behavioral-patterns',
+                    question='What specific viewing behaviors, engagement patterns, and content preferences characterize this audience segment?',
+                    purpose='Map audience behavioral characteristics'
+                ),
+                ThinkingQuestion(
+                    id='content-optimization-psychology',
+                    question='How can content be psychologically optimized to better resonate with this audiences emotional and rational triggers?',
+                    purpose='Develop psychologically-targeted content strategy'
+                )
+            ],
+            analysis_focus=['psychological_analysis', 'behavioral_mapping', 'audience_segmentation', 'psychological_optimization'],
+            output_format='audience_psychographic_report'
+        )
+        
+        # 6. YouTube SEO Audit & Optimization - Free Template
+        templates['seo_audit'] = YouTubeTemplate(
+            id='seo_audit',
+            name='YouTube SEO Audit & Optimization',
+            description='Complete SEO analysis covering keyword optimization, discoverability, and search ranking factors',
+            role='marketing-expert',
+            category='seo',
+            thinking_questions=[
+                ThinkingQuestion(
+                    id='keyword-optimization-analysis',
+                    question='How effectively are relevant keywords integrated in the title, description, tags, and content for maximum discoverability?',
+                    purpose='Evaluate keyword optimization effectiveness'
+                ),
+                ThinkingQuestion(
+                    id='search-ranking-factors',
+                    question='Which YouTube ranking factors (watch time, CTR, engagement) are optimized and which need improvement for better search visibility?',
+                    purpose='Assess search ranking optimization'
+                ),
+                ThinkingQuestion(
+                    id='discoverability-enhancement',
+                    question='What specific SEO improvements would have the highest impact on organic discovery and suggested video placement?',
+                    purpose='Prioritize SEO optimization efforts'
+                )
+            ],
+            analysis_focus=['keyword_optimization', 'search_rankings', 'discoverability', 'seo_recommendations'],
+            output_format='seo_audit_report'
+        )
+        
+        # 7. Monetization Strategy & Revenue Optimization - Premium Template
+        templates['monetization_strategy'] = YouTubeTemplate(
+            id='monetization_strategy',
+            name='Monetization Strategy & Revenue Optimization',
+            description='Advanced revenue analysis, monetization opportunities, and strategic income diversification planning',
+            role='marketing-expert',
+            category='monetization',
+            thinking_questions=[
+                ThinkingQuestion(
+                    id='revenue-stream-analysis',
+                    question='What monetization opportunities (ads, sponsorships, products, memberships) are currently being leveraged or missed?',
+                    purpose='Identify revenue optimization opportunities'
+                ),
+                ThinkingQuestion(
+                    id='audience-monetization-potential',
+                    question='Based on audience demographics and engagement, what monetization strategies would be most effective and profitable?',
+                    purpose='Match monetization to audience characteristics'
+                ),
+                ThinkingQuestion(
+                    id='revenue-scaling-strategy',
+                    question='What systematic approach should be implemented to scale revenue while maintaining content quality and audience satisfaction?',
+                    purpose='Develop sustainable revenue growth strategy'
+                )
+            ],
+            analysis_focus=['revenue_analysis', 'monetization_opportunities', 'audience_value', 'scaling_strategy'],
+            output_format='monetization_strategy_report'
+        )
+        
+        # 8. Strategic Content Planning & Series Development - Free Template
+        templates['content_planning'] = YouTubeTemplate(
+            id='content_planning',
+            name='Strategic Content Planning & Series Development',
+            description='Long-term content strategy, series planning, and systematic content development for sustained growth',
+            role='content-creator',
+            category='strategy',
+            thinking_questions=[
+                ThinkingQuestion(
+                    id='content-series-potential',
+                    question='How can this video concept be expanded into a series or content pillar for sustained audience growth and engagement?',
+                    purpose='Identify series and content expansion opportunities'
+                ),
+                ThinkingQuestion(
+                    id='strategic-content-gaps',
+                    question='What content gaps exist in the creators current strategy that should be filled to create a comprehensive content ecosystem?',
+                    purpose='Map content strategy completeness'
+                ),
+                ThinkingQuestion(
+                    id='long-term-planning',
+                    question='What 90-day content roadmap would maximize growth potential while maintaining consistent quality and audience satisfaction?',
+                    purpose='Develop strategic content calendar'
+                )
+            ],
+            analysis_focus=['series_development', 'content_gaps', 'strategic_planning', 'growth_roadmap'],
+            output_format='content_planning_report'
+        )
+        
+        # ========== LEGACY CHINESE TEMPLATES (for backward compatibility) ==========
         
         # 内容创作者模板
         templates['content-engagement'] = YouTubeTemplate(
