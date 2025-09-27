@@ -401,6 +401,10 @@ class OpenAIService:
         prompt: Optional[str] = None,
         prompt_template: Optional[str] = None,
         template_vars: Optional[Dict[str, Any]] = None,
+        expert_role: Optional[str] = None,
+        template_domain: Optional[str] = None,
+        video_data: Optional[Dict[str, Any]] = None,
+        force_json_output: bool = True,
         **kwargs
     ) -> str:
         mk = model or self.default_model
@@ -408,8 +412,61 @@ class OpenAIService:
             raise ValueError(f"Model '{mk}' not configured.")
         cfg = self.models[mk]
 
+        # ✨ Enhanced template integration with admin-managed templates
+        try:
+            from apps.templates_app.integrator import template_openai_integrator
+            
+            # Use template integrator if prompt_template is provided
+            if prompt_template:
+                integrated_config = template_openai_integrator.get_integrated_prompt(
+                    template_id=prompt_template,
+                    role=expert_role,
+                    domain=template_domain or "general",
+                    video_data=video_data,
+                    custom_variables=template_vars
+                )
+                
+                # Build messages using integrated prompt
+                msgs = []
+                if integrated_config["system_prompt"]:
+                    msgs.append({"role": "system", "content": integrated_config["system_prompt"]})
+                
+                user_content = integrated_config["user_prompt"]
+                if prompt:  # Append additional prompt if provided
+                    user_content += f"\n\n{prompt}"
+                
+                msgs.append({"role": "user", "content": user_content})
+                
+                # Apply template config parameters
+                template_config = integrated_config.get("template_config", {})
+                if "max_tokens" in template_config:
+                    kwargs.setdefault("max_tokens", template_config["max_tokens"])
+                if "temperature" in template_config:
+                    kwargs.setdefault("temperature", template_config["temperature"])
+                
+                # Force JSON output if requested and schema available
+                if force_json_output and integrated_config.get("json_schema"):
+                    json_instruction = f"\n\nIMPORTANT: Return your response as valid JSON following this structure: {integrated_config['json_schema']}"
+                    msgs[-1]["content"] += json_instruction
+                
+                self.logger.info(f"✅ Using integrated template: {prompt_template} with role: {expert_role}")
+                
+            else:
+                # Fallback to original message building
+                if cfg["type"] == "chat":
+                    msgs = self._build_chat_messages(prompt, prompt_template, template_vars)
+                else:
+                    raise ValueError("Non-chat models require template integration")
+                    
+        except ImportError:
+            self.logger.warning("Template integrator not available, using fallback")
+            if cfg["type"] == "chat":
+                msgs = self._build_chat_messages(prompt, prompt_template, template_vars)
+            else:
+                txt = self._build_plain_prompt(prompt, prompt_template, template_vars)
+
+        # Execute API call
         if cfg["type"] == "chat":
-            msgs = self._build_chat_messages(prompt, prompt_template, template_vars)
             resp = self._retry_api_call(
                 self.client.chat.completions.create,
                 model=cfg["model_name"],

@@ -172,228 +172,138 @@
 {% endblock %}
 
 {% block content %}
-<div class="welcome-header">
+<div class="welcome-header text-center">
     <h1 class="welcome-title">
-        {% trans "Welcome back," %} {{ user.username }}!
+        <i class="fas fa-video text-primary me-3"></i>
+        {% trans "TubeWhale Dashboard" %}
     </h1>
     <p class="welcome-subtitle">
-        {% trans "Your analysis platform is ready. Choose your next action below." %}
+        {% trans "Welcome back," %} {{ user.username }}!
         <span class="tier-badge tier-{{ user.tier }}">{{ user.get_tier_display_name }}</span>
+    </p>
+    <p class="lead text-muted mb-4">
+        {% trans "Choose your next action to get started with AI-powered video analysis" %}
     </p>
 </div>
 
-<div class="dashboard-grid">
-    <!-- Template Selection -->
-    <div class="dashboard-card" onclick="window.location.href='{% url 'dashboard:template_selection' %}'">
-        <div class="card-header">
-            <div class="card-icon">
-                <i class="fas fa-clipboard-list"></i>
+<!-- Simplified Two-Choice Interface -->
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <div class="row g-4">
+    <!-- Main Action Choices -->
+    <div class="row justify-content-center">
+        <!-- Start New Analysis -->
+        <div class="col-md-5 mb-4">
+            <div class="dashboard-card h-100" style="cursor: pointer;" onclick="window.location.href='{% url \'dashboard:intelligent_wizard\' %}'"
+                <div class="card-header text-center">
+                    <div class="card-icon mb-3">
+                        <i class="fas fa-plus-circle fa-3x text-primary"></i>
+                    </div>
+                    <div class="card-title h4">{% trans "Start New Analysis" %}</div>
+                    <div class="card-subtitle">{% trans "Begin intelligent video content analysis" %}</div>
+                </div>
+                <div class="card-body text-center">
+                    <p class="text-muted">
+                        {% trans "Launch our intelligent wizard to analyze video content with AI-powered templates and expert analysis." %}
+                    </p>
+                    <ul class="list-unstyled mt-3">
+                        <li class="mb-2">
+                            <i class="fas fa-check text-success me-2"></i>
+                            {% trans "Smart Template Selection" %}
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-check text-success me-2"></i>
+                            {% trans "AI-Powered Analysis" %}
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-check text-success me-2"></i>
+                            {% trans "Professional Reports" %}
+                        </li>
+                    </ul>
+                    <div class="mt-4">
+                        <a href="{% url 'dashboard:intelligent_wizard' %}" class="btn btn-primary btn-lg">
+                            <i class="fas fa-magic me-2"></i>
+                            {% trans "Start Wizard" %}
+                        </a>
+                    </div>
+                </div>
             </div>
-            <div class="card-title">{% trans "Analysis Templates" %}</div>
-            <div class="card-subtitle">{% trans "Choose from professional analysis templates" %}</div>
         </div>
-        <div class="card-body">
-            <ul class="feature-list">
-                <li>
-                    <i class="fas fa-check feature-icon"></i>
-                    {% trans "Sentiment Analysis" %}
-                </li>
-                <li>
-                    <i class="fas fa-check feature-icon"></i>
-                    {% trans "Content Summarization" %}
-                </li>
-                <li>
-                    <i class="fas fa-check feature-icon"></i>
-                    {% trans "Keyword Extraction" %}
-                </li>
-                <li>
-                    <i class="fas fa-check feature-icon"></i>
-                    {% trans "Advanced Analytics" %}
-                </li>
-            </ul>
-            <div class="mt-3">
-                <a href="{% url 'dashboard:template_selection' %}" class="action-btn">
-                    <i class="fas fa-rocket me-2"></i>
-                    {% trans "Start Analysis" %}
-                </a>
+
+        <!-- View Analysis History -->
+        <div class="col-md-5 mb-4">
+            <div class="dashboard-card h-100" style="cursor: pointer;" onclick="window.location.href='{% url \'dashboard:jobs\' %}'"
+                <div class="card-header text-center">
+                    <div class="card-icon mb-3">
+                        <i class="fas fa-history fa-3x text-secondary"></i>
+                    </div>
+                    <div class="card-title h4">{% trans "View Analysis History" %}</div>
+                    <div class="card-subtitle">{% trans "Access your previous analysis results" %}</div>
+                </div>
+                <div class="card-body text-center">
+                    <p class="text-muted">
+                        {% trans "Review completed analyses, monitor job progress, and access all your historical analysis data." %}
+                    </p>
+                    <ul class="list-unstyled mt-3">
+                        <li class="mb-2">
+                            <i class="fas fa-check text-success me-2"></i>
+                            {% trans "Job Status Monitoring" %}
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-check text-success me-2"></i>
+                            {% trans "Result Downloads" %}
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-check text-success me-2"></i>
+                            {% trans "Analysis Archives" %}
+                        </li>
+                    </ul>
+                    <div class="mt-4">
+                        <a href="{% url 'dashboard:jobs' %}" class="btn btn-outline-secondary btn-lg">
+                            <i class="fas fa-folder-open me-2"></i>
+                            {% trans "View History" %}
+                        </a>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Job Management -->
-    <div class="dashboard-card" onclick="window.location.href='{% url 'dashboard:job_runner' %}'">
-        <div class="card-header">
-            <div class="card-icon">
-                <i class="fas fa-tasks"></i>
-            </div>
-            <div class="card-title">{% trans "Job Management" %}</div>
-            <div class="card-subtitle">{% trans "Monitor and control your analysis jobs" %}</div>
-        </div>
-        <div class="card-body">
-            <div class="stats-grid">
-                <div class="stat-item">
-                    <div class="stat-value">3</div>
-                    <div class="stat-label">{% trans "Active Jobs" %}</div>
+    <!-- Quick Actions Bar -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card bg-light">
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-3 mb-2">
+                            <a href="{% url 'dashboard:template_selection' %}" class="btn btn-outline-primary btn-sm">
+                                <i class="fas fa-clipboard-list me-1"></i>
+                                {% trans "Templates" %}
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <a href="{% url 'dashboard:transparent_terminal' %}" class="btn btn-outline-info btn-sm">
+                                <i class="fas fa-terminal me-1"></i>
+                                {% trans "Terminal" %}
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <a href="{% url 'dashboard:theme_search' %}" class="btn btn-outline-success btn-sm">
+                                <i class="fas fa-search me-1"></i>
+                                {% trans "Search" %}
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <a href="{% url 'dashboard:cli_interface' %}" class="btn btn-outline-dark btn-sm">
+                                <i class="fas fa-code me-1"></i>
+                                {% trans "CLI" %}
+                            </a>
+                        </div>
+                    </div>
                 </div>
-                <div class="stat-item">
-                    <div class="stat-value">12</div>
-                    <div class="stat-label">{% trans "Completed" %}</div>
-                </div>
-            </div>
-            <div class="mt-3">
-                <a href="{% url 'dashboard:job_runner' %}" class="action-btn">
-                    <i class="fas fa-cogs me-2"></i>
-                    {% trans "Manage Jobs" %}
-                </a>
             </div>
         </div>
     </div>
-
-    <!-- Theme Search -->
-    <div class="dashboard-card" onclick="window.location.href='{% url 'dashboard:theme_search' %}'">
-        <div class="card-header">
-            <div class="card-icon">
-                <i class="fas fa-search"></i>
-            </div>
-            <div class="card-title">{% trans "Theme Search" %}</div>
-            <div class="card-subtitle">{% trans "Intelligent theme-based template discovery" %}</div>
-        </div>
-        <div class="card-body">
-            <ul class="feature-list">
-                <li>
-                    <i class="fas fa-check feature-icon"></i>
-                    {% trans "Smart Theme Recognition" %}
-                </li>
-                <li>
-                    <i class="fas fa-check feature-icon"></i>
-                    {% trans "Advanced Filtering" %}
-                </li>
-                <li>
-                    <i class="fas fa-check feature-icon"></i>
-                    {% trans "Professional Categories" %}
-                </li>
-                <li>
-                    <i class="fas fa-check feature-icon"></i>
-                    {% trans "Intelligent Recommendations" %}
-                </li>
-            </ul>
-            <div class="mt-3">
-                <a href="{% url 'dashboard:theme_search' %}" class="action-btn">
-                    <i class="fas fa-brain me-2"></i>
-                    {% trans "Search Themes" %}
-                </a>
-            </div>
-        </div>
-    </div>
-
-    <!-- Transparent Analysis Terminal -->
-    <div class="dashboard-card" onclick="window.location.href='{% url 'dashboard:transparent_terminal' %}'">
-        <div class="card-header">
-            <div class="card-icon">
-                <i class="fas fa-terminal"></i>
-            </div>
-            <div class="card-title">透明分析终端</div>
-            <div class="card-subtitle">实时查看分析过程，支持样本数据测试</div>
-        </div>
-        <div class="card-body">
-            <ul class="feature-list">
-                <li>
-                    <i class="fas fa-check feature-icon"></i>
-                    实时进度显示
-                </li>
-                <li>
-                    <i class="fas fa-check feature-icon"></i>
-                    详细日志输出
-                </li>
-                <li>
-                    <i class="fas fa-check feature-icon"></i>
-                    样本数据测试
-                </li>
-                <li>
-                    <i class="fas fa-check feature-icon"></i>
-                    无需登录演示
-                </li>
-            </ul>
-            <div class="mt-3">
-                <a href="{% url 'dashboard:transparent_terminal' %}" class="action-btn">
-                    <i class="fas fa-play me-2"></i>
-                    开始透明分析
-                </a>
-            </div>
-        </div>
-    </div>
-
-    <!-- CLI Interface -->
-    <div class="dashboard-card" onclick="window.location.href='{% url 'dashboard:cli_interface' %}'">
-        <div class="card-header">
-            <div class="card-icon">
-                <i class="fas fa-terminal"></i>
-            </div>
-            <div class="card-title">{% trans "CLI Interface" %}</div>
-            <div class="card-subtitle">{% trans "Professional command-line control system" %}</div>
-        </div>
-        <div class="card-body">
-            <ul class="feature-list">
-                <li>
-                    <i class="fas fa-check feature-icon"></i>
-                    {% trans "System Status Monitoring" %}
-                </li>
-                <li>
-                    <i class="fas fa-check feature-icon"></i>
-                    {% trans "Real-time Job Control" %}
-                </li>
-                <li>
-                    <i class="fas fa-check feature-icon"></i>
-                    {% trans "Docker Management" %}
-                </li>
-                <li>
-                    <i class="fas fa-check feature-icon"></i>
-                    {% trans "Advanced Operations" %}
-                </li>
-            </ul>
-            <div class="mt-3">
-                <a href="{% url 'dashboard:cli_interface' %}" class="action-btn">
-                    <i class="fas fa-code me-2"></i>
-                    {% trans "Open CLI" %}
-                </a>
-            </div>
-        </div>
-    </div>
-
-    <!-- System Status -->
-    <div class="dashboard-card">
-        <div class="card-header">
-            <div class="card-icon">
-                <i class="fas fa-heartbeat"></i>
-            </div>
-            <div class="card-title">{% trans "System Status" %}</div>
-            <div class="card-subtitle">{% trans "Real-time health monitoring" %}</div>
-        </div>
-        <div class="card-body">
-            <div class="stats-grid">
-                <div class="stat-item">
-                    <div class="stat-value text-success">●</div>
-                    <div class="stat-label">{% trans "Docker Services" %}</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-value text-success">●</div>
-                    <div class="stat-label">{% trans "Analysis Engine" %}</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-value text-success">●</div>
-                    <div class="stat-label">{% trans "Database" %}</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-value text-warning">●</div>
-                    <div class="stat-label">{% trans "Queue" %}</div>
-                </div>
-            </div>
-            <div class="mt-3">
-                <button class="action-btn" onclick="checkSystemHealth()">
-                    <i class="fas fa-sync me-2"></i>
-                    {% trans "Refresh Status" %}
-                </button>
-            </div>
         </div>
     </div>
 </div>
@@ -401,45 +311,29 @@
 
 {% block extra_js %}
 <script>
-function checkSystemHealth() {
-    // Simulate system health check
-    const button = event.target;
-    const originalText = button.innerHTML;
-    
-    button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>{% trans "Checking..." %}';
-    button.disabled = true;
-    
-    setTimeout(() => {
-        button.innerHTML = originalText;
-        button.disabled = false;
-        
-        // Show a simple notification
-        const alert = document.createElement('div');
-        alert.className = 'alert alert-success position-fixed';
-        alert.style.top = '20px';
-        alert.style.right = '20px';
-        alert.style.zIndex = '9999';
-        alert.innerHTML = '<i class="fas fa-check me-2"></i>{% trans "All systems operational" %}';
-        
-        document.body.appendChild(alert);
-        
-        setTimeout(() => {
-            alert.remove();
-        }, 3000);
-    }, 1500);
-}
-
-// Add smooth hover effects
+// Enhanced hover effects for dashboard cards
 document.addEventListener('DOMContentLoaded', () => {
     const cards = document.querySelectorAll('.dashboard-card');
     
     cards.forEach(card => {
         card.addEventListener('mouseenter', () => {
-            card.style.transform = 'translateY(-4px)';
+            card.style.transform = 'translateY(-6px)';
+            card.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)';
         });
         
         card.addEventListener('mouseleave', () => {
-            card.style.transform = 'translateY(0)';
+            card.style.transform = 'translateY(-4px)';
+            card.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)';
+        });
+    });
+
+    // Add click animation
+    cards.forEach(card => {
+        card.addEventListener('click', (e) => {
+            card.style.transform = 'translateY(-2px)';
+            setTimeout(() => {
+                card.style.transform = 'translateY(-4px)';
+            }, 150);
         });
     });
 });

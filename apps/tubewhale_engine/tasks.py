@@ -169,7 +169,26 @@ def analyze_video_task(self, job_id: str):
             if not template:
                 raise ValueError(f"Template {analysis_job.template_id} not found")
             
-            expert_role = ExpertRole(analysis_job.expert_role)
+            # 角色映射 - 支持旧的角色名称
+            role_mapping = {
+                'content_analyst': ExpertRole.CONTENT_CREATOR,
+                'marketing_expert': ExpertRole.MARKETING_EXPERT,
+                'data_analyst': ExpertRole.DATA_ANALYST,
+                'business_analyst': ExpertRole.BUSINESS_ANALYST,
+                'educational_specialist': ExpertRole.EDUCATIONAL_SPECIALIST,
+                'research_scientist': ExpertRole.RESEARCH_SCIENTIST,
+                'social_scientist': ExpertRole.SOCIAL_SCIENTIST,
+                'hci_specialist': ExpertRole.HCI_SPECIALIST,
+                'music_educator': ExpertRole.MUSIC_EDUCATOR
+            }
+            
+            expert_role = role_mapping.get(analysis_job.expert_role)
+            if not expert_role:
+                # 尝试直接匹配枚举值
+                try:
+                    expert_role = ExpertRole(analysis_job.expert_role)
+                except ValueError:
+                    raise ValueError(f"Invalid expert role: {analysis_job.expert_role}")
             
             # 加载配置获取YouTube API密钥
             config_path = '/app/config.yaml'
@@ -252,8 +271,11 @@ def analyze_video_task(self, job_id: str):
             custom_requirements=analysis_job.custom_questions
         )
         
-        # Call OpenAI API with template-specific parameters
+        # Call OpenAI API with integrated template system
         analysis_job.update_progress(f"Executing {template.level.value} level AI analysis", steps_completed=3, estimated_remaining=90)
+        
+        # Prepare template integration data
+        template_integration_data = analysis_job.analysis_options.get('template_integration', {})
         
         # Industrial-grade retry mechanism with exponential backoff
         max_retries = 3
@@ -261,11 +283,17 @@ def analyze_video_task(self, job_id: str):
         
         for retry_count in range(max_retries):
             try:
+                # Use enhanced OpenAI completion with template integration
                 ai_response = openai_service.completion(
                     prompt=prompt,
                     max_tokens=template.max_tokens,
                     temperature=template.temperature,
-                    model="gpt-4o-mini"
+                    model="gpt-4o-mini",
+                    # New parameters for template integration
+                    expert_role=analysis_job.expert_role,
+                    template_domain=template_integration_data.get('template_domain', 'video_analysis'),
+                    video_data=video_data,
+                    force_json_output=True
                 )
                 
                 if ai_response and len(ai_response.strip()) > 50:

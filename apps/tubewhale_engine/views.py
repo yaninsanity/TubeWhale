@@ -705,8 +705,132 @@ def wizard_role_selection(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def wizard_template_selection(request):
-    """Wizard template selection - stub implementation"""
-    return list_templates(request)
+    """Wizard template selection with proper role-based structure"""
+    return Response({
+        'status': 'success',
+        'templates': {
+            'content-creator': [
+                {
+                    'id': 'audio-transcript-analysis',
+                    'name': 'Audio & Transcript Deep Dive',
+                    'description': 'Uses Audio Agent + Transcript Agent for complete content analysis',
+                    'desc': 'Uses Audio Agent + Transcript Agent for complete content analysis',
+                    'agent': 'audio_agent + transcript_agent',
+                    'type': 'custom',
+                    'features': ['Full transcript extraction', 'Audio quality analysis', 'Content timing optimization', 'Voice pattern insights'],
+                    'questions': [
+                        'How does the audio quality and voice clarity impact viewer engagement throughout the video?',
+                        'What timing patterns in speech delivery correlate with high engagement moments?',
+                        'How can the transcript content be optimized for better searchability and accessibility?'
+                    ]
+                },
+                {
+                    'id': 'content-summarization',
+                    'name': 'Smart Content Summarizer',
+                    'description': 'Summarizer Agent creates audience-friendly content insights',
+                    'desc': 'Summarizer Agent creates audience-friendly content insights',
+                    'agent': 'summarizer_agent',
+                    'type': 'custom',
+                    'features': ['Key message extraction', 'Audience-friendly summaries', 'Content structure analysis', 'Engagement point identification'],
+                    'questions': [
+                        'What are the key messages and takeaways that resonate most with viewers?',
+                        'How can the content structure be optimized for better retention?',
+                        'What are the most engaging moments that could be highlighted or replicated?'
+                    ]
+                },
+                {
+                    'id': 'general-analyst',
+                    'name': 'General Content Analysis',
+                    'description': 'Comprehensive analysis for content creators',
+                    'desc': 'Comprehensive analysis for content creators',
+                    'agent': 'general_analyst',
+                    'type': 'standard',
+                    'features': ['Performance metrics', 'Content insights', 'Engagement analysis', 'Optimization tips'],
+                    'questions': [
+                        'What are the key performance indicators for this content?',
+                        'How can engagement be improved?',
+                        'What content elements work best?'
+                    ]
+                }
+            ],
+            'marketing-expert': [
+                {
+                    'id': 'brand-voice-analysis',
+                    'name': 'Brand Voice & Message Analysis',
+                    'description': 'Audio Agent + Summarizer Agent for brand consistency analysis',
+                    'desc': 'Audio Agent + Summarizer Agent for brand consistency analysis',
+                    'agent': 'audio_agent + summarizer_agent',
+                    'type': 'enterprise',
+                    'features': ['Brand voice consistency', 'Message clarity assessment', 'Emotional tone analysis', 'Brand positioning insights'],
+                    'questions': [
+                        'How consistent is the brand voice and messaging throughout the video content?',
+                        'What emotional tones and brand values are effectively communicated to the audience?',
+                        'How does the content positioning compare to competitors in the market?'
+                    ]
+                },
+                {
+                    'id': 'marketing-analyst',
+                    'name': 'Marketing Performance Analysis',
+                    'description': 'Marketing-focused analysis and insights',
+                    'desc': 'Marketing-focused analysis and insights',
+                    'agent': 'marketing_analyst',
+                    'type': 'standard',
+                    'features': ['Campaign performance', 'ROI analysis', 'Audience targeting', 'Conversion optimization'],
+                    'questions': [
+                        'What is the marketing ROI of this content?',
+                        'How effectively does it reach the target audience?',
+                        'What conversion opportunities exist?'
+                    ]
+                }
+            ],
+            'data-analyst': [
+                {
+                    'id': 'comprehensive-metrics',
+                    'name': 'Comprehensive Metrics Analysis',
+                    'description': 'All agents working together for complete data insights',
+                    'desc': 'All agents working together for complete data insights',
+                    'agent': 'all_agents',
+                    'type': 'enterprise',
+                    'features': ['Statistical performance analysis', 'Predictive modeling', 'Audience behavior patterns', 'Content optimization recommendations'],
+                    'questions': [
+                        'What statistical patterns emerge from comprehensive performance data analysis?',
+                        'How can predictive modeling guide future content strategy and optimization?',
+                        'What audience behavior insights drive the highest engagement and conversion rates?'
+                    ]
+                },
+                {
+                    'id': 'data-scientist',
+                    'name': 'Data Science Analysis',
+                    'description': 'Advanced statistical and predictive analysis',
+                    'desc': 'Advanced statistical and predictive analysis',
+                    'agent': 'data_scientist',
+                    'type': 'standard',
+                    'features': ['Statistical analysis', 'Predictive modeling', 'Data visualization', 'Trend analysis'],
+                    'questions': [
+                        'What data patterns can be identified?',
+                        'What predictions can be made from this data?',
+                        'How can data insights drive strategy?'
+                    ]
+                }
+            ],
+            'business-analyst': [
+                {
+                    'id': 'business-performance',
+                    'name': 'Business Performance Analysis',
+                    'description': 'Business-focused analysis and strategic insights',
+                    'desc': 'Business-focused analysis and strategic insights',
+                    'agent': 'business_analyst',
+                    'type': 'standard',
+                    'features': ['Business metrics', 'Strategic insights', 'Competitive analysis', 'Growth opportunities'],
+                    'questions': [
+                        'What business value does this content provide?',
+                        'How does it compare to competitive content?',
+                        'What growth opportunities exist?'
+                    ]
+                }
+            ]
+        }
+    })
 
 @api_view(['GET'])
 @permission_classes([AllowAny])

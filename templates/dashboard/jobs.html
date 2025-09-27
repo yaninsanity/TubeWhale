@@ -39,11 +39,17 @@
             100% { opacity: 1; }
         }
         
-        /* Enhanced progress styling */
-        .clickable-progress:hover {
+        /* Enhanced progress styling with accessibility */
+        .clickable-progress:hover,
+        .clickable-progress:focus {
             transform: translateY(-1px);
             box-shadow: 0 2px 8px rgba(0,0,0,0.15);
             transition: all 0.2s ease;
+        }
+        
+        .clickable-progress:focus {
+            outline: 2px solid #0d6efd;
+            outline-offset: 2px;
         }
         
         .progress {
@@ -108,6 +114,83 @@
                         <a href="/dashboard/" class="btn btn-outline-primary">
                             <i class="fas fa-arrow-left me-2"></i>{% trans "Back to Dashboard" %}
                         </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Queue Status Transparency -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card bg-light border-0">
+                    <div class="card-body py-3">
+                        <div class="row text-center">
+                            <div class="col-md-3">
+                                <div class="d-flex align-items-center justify-content-center">
+                                    <i class="fas fa-play-circle text-primary me-2"></i>
+                                    <div>
+                                        <div class="fw-bold">{{ job_stats.running|default:0 }}</div>
+                                        <small class="text-muted">{% trans "Running" %}</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="d-flex align-items-center justify-content-center">
+                                    <i class="fas fa-clock text-warning me-2"></i>
+                                    <div>
+                                        <div class="fw-bold">{{ job_stats.pending|default:0 }}</div>
+                                        <small class="text-muted">{% trans "In Queue" %}</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="d-flex align-items-center justify-content-center">
+                                    <i class="fas fa-check-circle text-success me-2"></i>
+                                    <div>
+                                        <div class="fw-bold">{{ job_stats.completed|default:0 }}</div>
+                                        <small class="text-muted">{% trans "Completed" %}</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="d-flex align-items-center justify-content-center">
+                                    <i class="fas fa-exclamation-triangle text-danger me-2"></i>
+                                    <div>
+                                        <div class="fw-bold">{{ job_stats.failed|default:0 }}</div>
+                                        <small class="text-muted">{% trans "Issues" %}</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% if job_stats.pending > 0 and job_stats.running > 0 %}
+                        <div class="text-center mt-2">
+                            <small class="text-success">
+                                <i class="fas fa-cog fa-spin me-1"></i>
+                                {% trans "Queue is processing - workers are active" %}
+                            </small>
+                        </div>
+                        {% elif job_stats.pending > 0 %}
+                        <div class="text-center mt-2">
+                            <small class="text-warning">
+                                <i class="fas fa-clock me-1"></i>
+                                {% trans "Jobs queued - waiting for worker availability" %}
+                            </small>
+                        </div>
+                        {% elif job_stats.running > 0 %}
+                        <div class="text-center mt-2">
+                            <small class="text-primary">
+                                <i class="fas fa-rocket me-1"></i>
+                                {% trans "Analysis in progress" %}
+                            </small>
+                        </div>
+                        {% else %}
+                        <div class="text-center mt-2">
+                            <small class="text-muted">
+                                <i class="fas fa-check me-1"></i>
+                                {% trans "Queue clear - ready for new jobs" %}
+                            </small>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -235,18 +318,26 @@
                                         <div class="progress mb-2 clickable-progress" 
                                              style="height: 8px; cursor: pointer;"
                                              title="Click to see detailed progress"
-                                             onclick="showProgressDetail('{{ job.job_id }}')">
+                                             onclick="showProgressDetail('{{ job.job_id }}')"
+                                             tabindex="0"
+                                             onkeydown="if(event.key==='Enter'||event.key===' ') showProgressDetail('{{ job.job_id }}')"
+                                             role="button"
+                                             aria-label="{% trans 'View progress details for job' %} {{ job.job_id }}">
                                             <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" 
                                                  role="progressbar" 
-                                                 style="width: {{ job.progress|default:0 }}%"
-                                                 data-progress="{{ job.progress|default:0 }}"></div>
+                                                 style="width: {{ job.progress|default_if_none:0|floatformat:0 }}%;"
+                                                 aria-valuenow="{{ job.progress|default_if_none:0|floatformat:0 }}"
+                                                 aria-valuemin="0"
+                                                 aria-valuemax="100"
+                                                 aria-label="{% trans 'Analysis progress' %}: {{ job.progress|default_if_none:0|floatformat:0 }}%"
+                                                 data-progress="{{ job.progress|default_if_none:0|floatformat:0 }}"></div>
                                         </div>
                                         <div class="small text-muted mb-2 job-status-text">
                                             <i class="fas fa-cog fa-spin me-1"></i>
                                             <span class="current-step">{{ job.current_step|default:"Initializing..." }}</span>
                                             <div class="mt-1">
-                                                <span class="badge bg-light text-dark me-1">{{ job.progress|default:0 }}%</span>
-                                                <span class="badge bg-light text-dark me-1">Step {{ job.steps_completed|default:0 }}/{{ job.total_steps|default:5 }}</span>
+                                                <span class="badge bg-light text-dark me-1">{{ job.progress|default_if_none:0 }}%</span>
+                                                <span class="badge bg-light text-dark me-1">Step {{ job.steps_completed|default_if_none:0 }}/{{ job.total_steps|default:5 }}</span>
                                                 {% if job.estimated_time_remaining %}
                                                 <span class="badge bg-warning text-dark">~{{ job.estimated_time_remaining }}s left</span>
                                                 {% endif %}
@@ -261,8 +352,18 @@
                                         <div class="progress mb-2 clickable-progress" 
                                              style="height: 6px; cursor: pointer;"
                                              title="Click to view completion details"
-                                             onclick="showCompletionDetail('{{ job.job_id }}')">
-                                            <div class="progress-bar bg-success" style="width: 100%"></div>
+                                             onclick="showCompletionDetail('{{ job.job_id }}')"
+                                             tabindex="0"
+                                             onkeydown="if(event.key==='Enter'||event.key===' ') showCompletionDetail('{{ job.job_id }}')"
+                                             role="button"
+                                             aria-label="{% trans 'View completion details for completed job' %} {{ job.job_id }}">
+                                            <div class="progress-bar bg-success" 
+                                                 style="width: 100%"
+                                                 role="progressbar"
+                                                 aria-valuenow="100"
+                                                 aria-valuemin="0"
+                                                 aria-valuemax="100"
+                                                 aria-label="{% trans 'Analysis completed' %}: 100%"></div>
                                         </div>
                                         <div class="small text-success mb-2">
                                             <i class="fas fa-check-circle me-1"></i>
@@ -270,33 +371,59 @@
                                             <span class="badge bg-success ms-2">100%</span>
                                             <button class="btn btn-xs btn-outline-success ms-2" 
                                                     onclick="showCompletionDetail('{{ job.job_id }}')" 
-                                                    title="View completion summary">
-                                                <i class="fas fa-eye"></i>
+                                                    title="View completion summary"
+                                                    aria-label="{% trans 'View completion details for job' %} {{ job.job_id }}">
+                                                <i class="fas fa-eye" aria-hidden="true"></i>
+                                                <span class="visually-hidden">{% trans 'View Details' %}</span>
                                             </button>
                                         </div>
-                                        {% elif job.status == 'failed' %}
-                                        <div class="progress mb-2 clickable-progress" 
-                                             style="height: 6px; cursor: pointer;"
-                                             title="Click to view error details"
-                                             onclick="showErrorDetail('{{ job.job_id }}')">
-                                            <div class="progress-bar bg-danger" style="width: {{ job.progress|default:25 }}%"></div>
-                                        </div>
+                    {% elif job.status == 'failed' %}
+                    {% with failure_progress=job.progress|default_if_none:25|stringformat:'d' %}
+                    <div class="progress mb-2 clickable-progress" 
+                         style="height: 6px; cursor: pointer;"
+                         title="Click to view error details"
+                         onclick="showErrorDetail('{{ job.job_id }}')"
+                         tabindex="0"
+                         onkeydown="if(event.key==='Enter'||event.key===' ') showErrorDetail('{{ job.job_id }}')"
+                         role="button"
+                         aria-label="{% trans 'View error details for failed job' %} {{ job.job_id }}">
+                                    <div class="progress-bar bg-danger" 
+                                        style="width: {{ failure_progress }}%;"
+                         role="progressbar"
+                         aria-valuenow="{{ failure_progress }}"
+                         aria-valuemin="0"
+                         aria-valuemax="100"
+                         aria-label="{% trans 'Analysis failed at' %}: {{ failure_progress }}%"></div>
+                    </div>
+                    {% endwith %}
                                         <div class="small text-danger mb-2">
                                             <i class="fas fa-exclamation-triangle me-1"></i>
                                             {{ job.error_message|default:"Processing failed"|truncatechars:50 }}
-                                            <span class="badge bg-danger ms-2">{{ job.progress|default:0 }}%</span>
+                                            <span class="badge bg-danger ms-2">{{ job.progress|default_if_none:0 }}%</span>
                                             <button class="btn btn-xs btn-outline-danger ms-2" 
                                                     onclick="showErrorDetail('{{ job.job_id }}')" 
-                                                    title="View error details">
-                                                <i class="fas fa-bug"></i>
+                                                    title="View error details"
+                                                    aria-label="{% trans 'View error details for job' %} {{ job.job_id }}">
+                                                <i class="fas fa-bug" aria-hidden="true"></i>
+                                                <span class="visually-hidden">{% trans 'View Error' %}</span>
                                             </button>
                                         </div>
                                         {% elif job.status == 'pending' or job.status == 'queued' %}
                                         <div class="progress mb-2 clickable-progress" 
                                              style="height: 6px; cursor: pointer;"
                                              title="Click to view queue position"
-                                             onclick="showQueueDetail('{{ job.job_id }}')">
-                                            <div class="progress-bar bg-secondary" style="width: 5%"></div>
+                                             onclick="showQueueDetail('{{ job.job_id }}')"
+                                             tabindex="0"
+                                             onkeydown="if(event.key==='Enter'||event.key===' ') showQueueDetail('{{ job.job_id }}')"
+                                             role="button"
+                                             aria-label="{% trans 'View queue position for queued job' %} {{ job.job_id }}">
+                                            <div class="progress-bar bg-secondary" 
+                                                 style="width: 5%"
+                                                 role="progressbar"
+                                                 aria-valuenow="0"
+                                                 aria-valuemin="0"
+                                                 aria-valuemax="100"
+                                                 aria-label="{% trans 'Analysis queued' %}: 0%"></div>
                                         </div>
                                         <div class="small text-muted mb-2">
                                             <i class="fas fa-clock me-1"></i>
@@ -304,8 +431,10 @@
                                             <span class="badge bg-secondary ms-2">0%</span>
                                             <button class="btn btn-xs btn-outline-secondary ms-2" 
                                                     onclick="showQueueDetail('{{ job.job_id }}')" 
-                                                    title="View queue status">
-                                                <i class="fas fa-list"></i>
+                                                    title="View queue status"
+                                                    aria-label="{% trans 'View queue status for job' %} {{ job.job_id }}">
+                                                <i class="fas fa-list" aria-hidden="true"></i>
+                                                <span class="visually-hidden">{% trans 'View Queue' %}</span>
                                             </button>
                                         </div>
                                         {% endif %}
@@ -318,11 +447,15 @@
                                         
                                         <!-- Job actions -->
                                         <div class="mt-auto">
-                                            {% if job.status == 'completed' %}
+                                            {% if job.status == 'completed' and job.job_id %}
                                             <button class="btn btn-sm btn-outline-primary"
                                                     data-download-url="{% url 'tubewhale_engine:download-analysis-result' job.job_id %}?format=json"
                                                     onclick="downloadReport(this.dataset.downloadUrl)">
                                                 <i class="fas fa-download me-1"></i>{% trans "Download" %}
+                                            </button>
+                                            {% elif job.status == 'completed' %}
+                                            <button class="btn btn-sm btn-outline-primary" disabled>
+                                                <i class="fas fa-download me-1"></i>{% trans "Download" %} (No ID)
                                             </button>
                                             {% elif job.status == 'processing' %}
                                             <button class="btn btn-sm btn-outline-danger" onclick="cancelJob('{{ job.job_id }}')">
@@ -333,11 +466,17 @@
                                                 <i class="fas fa-redo me-1"></i>{% trans "Retry" %}
                                             </button>
                                             {% endif %}
+                                            {% if job.job_id %}
                                             <button class="btn btn-sm btn-outline-secondary"
                                                     data-detail-url="{% url 'dashboard:job_detail' job.job_id %}"
                                                     onclick="viewJob(this.dataset.detailUrl)">
                                                 <i class="fas fa-eye me-1"></i>{% trans "View" %}
                                             </button>
+                                            {% else %}
+                                            <button class="btn btn-sm btn-outline-secondary" disabled>
+                                                <i class="fas fa-eye me-1"></i>{% trans "View" %} (No ID)
+                                            </button>
+                                            {% endif %}
                                         </div>
                                     </div>
                                 </div>
@@ -387,7 +526,12 @@
         
         function fetchJobProgress(jobId) {
             fetch(`/dashboard/api/jobs/${jobId}/progress/`)
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     if (data.error) {
                         console.error('Progress fetch error:', data.error);
@@ -603,55 +747,72 @@ Your job will start processing automatically.
                 });
         }
 
-        // Job management functions
-        function retryJob(jobId) {
-            if (!confirm('{% trans "Are you sure you want to retry this job?" %}')) return;
-            
-            fetch(`/dashboard/jobs/${jobId}/retry/`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
-                    'Content-Type': 'application/json'
+        const JOB_ACTIONS = {
+            retry: {
+                endpoint: jobId => `/dashboard/jobs/${jobId}/retry/`,
+                confirmMessage: '{% trans "Are you sure you want to retry this job?" %}',
+                successMessage: '{% trans "Job retry started successfully!" %}',
+                failureMessage: '{% trans "Retry failed. Please try again." %}',
+                logLabel: 'Retry'
+            },
+            cancel: {
+                endpoint: jobId => `/dashboard/jobs/${jobId}/cancel/`,
+                confirmMessage: '{% trans "Are you sure you want to cancel this job?" %}',
+                successMessage: '{% trans "Job cancelled successfully!" %}',
+                failureMessage: '{% trans "Cancel failed. Please try again." %}',
+                logLabel: 'Cancel'
+            }
+        };
+
+        async function postJobAction(jobId, actionKey) {
+            const action = JOB_ACTIONS[actionKey];
+            if (!action || !jobId) {
+                return;
+            }
+
+            if (!confirm(action.confirmMessage)) {
+                return;
+            }
+
+            const csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
+            const csrfToken = csrfInput ? csrfInput.value : null;
+
+            if (!csrfToken) {
+                console.error('CSRF token not found');
+                alert('{% trans "Security token missing. Please refresh the page and try again." %}');
+                return;
+            }
+
+            try {
+                const response = await fetch(action.endpoint(jobId), {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrfToken,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+
+                if (!response.ok || data.error) {
+                    throw new Error(data.error || response.statusText || 'Request failed');
                 }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    alert(`Error: ${data.error}`);
-                } else {
-                    alert('{% trans "Job retry started successfully!" %}');
-                    location.reload();
-                }
-            })
-            .catch(error => {
-                console.error('Retry failed:', error);
-                alert('{% trans "Retry failed. Please try again." %}');
-            });
+
+                alert(action.successMessage);
+                location.reload();
+            } catch (error) {
+                console.error(`${action.logLabel} failed:`, error);
+                const detail = error && error.message ? ` (${error.message})` : '';
+                alert(`${action.failureMessage}${detail}`);
+            }
         }
-        
+
+        function retryJob(jobId) {
+            postJobAction(jobId, 'retry');
+        }
+
         function cancelJob(jobId) {
-            if (!confirm('{% trans "Are you sure you want to cancel this job?" %}')) return;
-            
-            fetch(`/dashboard/jobs/${jobId}/cancel/`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
-                    'Content-Type': 'application/json'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    alert(`Error: ${data.error}`);
-                } else {
-                    alert('{% trans "Job cancelled successfully!" %}');
-                    location.reload();
-                }
-            })
-            .catch(error => {
-                console.error('Cancel failed:', error);
-                alert('{% trans "Cancel failed. Please try again." %}');
-            });
+            postJobAction(jobId, 'cancel');
         }
         
         function viewJob(target) {
@@ -693,6 +854,62 @@ Your job will start processing automatically.
                 stopProgressMonitoring(jobId);
             });
         });
+
+        // Accessibility help toggle
+        function toggleAccessibilityHelp() {
+            const helpPanel = document.getElementById('accessibilityHelp');
+            if (helpPanel.style.display === 'none' || !helpPanel.style.display) {
+                helpPanel.style.display = 'block';
+                helpPanel.focus();
+            } else {
+                helpPanel.style.display = 'none';
+            }
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            // Alt + H: Toggle accessibility help
+            if (e.altKey && e.key === 'h') {
+                e.preventDefault();
+                toggleAccessibilityHelp();
+            }
+            // Alt + R: Refresh page
+            if (e.altKey && e.key === 'r') {
+                e.preventDefault();
+                location.reload();
+            }
+        });
     </script>
+
+    <!-- Accessibility Help Panel -->
+    <div id="accessibilityHelp" style="display: none; position: fixed; bottom: 20px; right: 20px; background: white; border: 2px solid #0d6efd; border-radius: 8px; padding: 20px; max-width: 300px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000;">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="mb-0">{% trans "Accessibility Guide" %}</h6>
+            <button type="button" class="btn-close" aria-label="{% trans 'Close help' %}" onclick="toggleAccessibilityHelp()"></button>
+        </div>
+        <div class="small">
+            <p><strong>{% trans "Keyboard Shortcuts" %}:</strong></p>
+            <ul class="list-unstyled ps-2">
+                <li>• <kbd>Alt</kbd> + <kbd>H</kbd>: {% trans "Toggle this help" %}</li>
+                <li>• <kbd>Alt</kbd> + <kbd>R</kbd>: {% trans "Refresh page" %}</li>
+                <li>• <kbd>Tab</kbd>: {% trans "Navigate between elements" %}</li>
+                <li>• <kbd>Enter/Space</kbd>: {% trans "Activate progress bars" %}</li>
+            </ul>
+            <p class="text-muted mb-0">
+                <small>{% trans "Progress bars and buttons are keyboard accessible. Screen readers will announce status changes." %}</small>
+            </p>
+        </div>
+    </div>
+
+    <!-- Accessibility Help Trigger Button -->
+    <button type="button" 
+            class="btn btn-outline-primary btn-sm" 
+            style="position: fixed; bottom: 20px; left: 20px; z-index: 999;"
+            onclick="toggleAccessibilityHelp()"
+            aria-label="{% trans 'Show accessibility help' %}"
+            title="{% trans 'Accessibility Help' %} (Alt+H)">
+        <i class="fas fa-universal-access" aria-hidden="true"></i>
+        <span class="d-none d-md-inline ms-1">{% trans "Help" %}</span>
+    </button>
 </body>
 </html>

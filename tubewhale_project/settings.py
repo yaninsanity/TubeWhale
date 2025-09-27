@@ -146,19 +146,47 @@ WSGI_APPLICATION = 'tubewhale_project.wsgi.application'
 ASGI_APPLICATION = 'tubewhale_project.asgi.application'
 
 # ============== DATABASE CONFIGURATION ==============
-DATABASES = {
-    'default': {
-        'ENGINE': os.environ.get('DB_ENGINE', 'django.db.backends.sqlite3'),
-        'NAME': os.environ.get('DB_NAME', BASE_DIR / 'tubewhale.db'),
-        'USER': os.environ.get('DB_USER', ''),
-        'PASSWORD': os.environ.get('DB_PASSWORD', ''),
-        'HOST': os.environ.get('DB_HOST', ''),
-        'PORT': os.environ.get('DB_PORT', ''),
-        'OPTIONS': {
-            'charset': 'utf8mb4',
-        } if os.environ.get('DB_ENGINE', '').endswith('mysql') else {},
+# Support for both DATABASE_URL and individual env vars (flexibility for team)
+database_url = os.environ.get('DATABASE_URL')
+if database_url:
+    # Parse DATABASE_URL for Docker deployment
+    try:
+        import dj_database_url
+        DATABASES = {
+            'default': dj_database_url.parse(database_url, conn_max_age=600)
+        }
+        print(f"✅ Using DATABASE_URL: {database_url.split('@')[0]}@***")
+    except ImportError:
+        print("⚠️  dj-database-url not installed, falling back to individual env vars")
+        # Fallback to individual vars
+        DATABASES = {
+            'default': {
+                'ENGINE': os.environ.get('DB_ENGINE', 'django.db.backends.sqlite3'),
+                'NAME': os.environ.get('DB_NAME', BASE_DIR / 'tubewhale.db'),
+                'USER': os.environ.get('DB_USER', ''),
+                'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+                'HOST': os.environ.get('DB_HOST', ''),
+                'PORT': os.environ.get('DB_PORT', ''),
+                'OPTIONS': {
+                    'charset': 'utf8mb4',
+                } if os.environ.get('DB_ENGINE', '').endswith('mysql') else {},
+            }
+        }
+else:
+    # Fallback to individual environment variables
+    DATABASES = {
+        'default': {
+            'ENGINE': os.environ.get('DB_ENGINE', 'django.db.backends.sqlite3'),
+            'NAME': os.environ.get('DB_NAME', BASE_DIR / 'tubewhale.db'),
+            'USER': os.environ.get('DB_USER', ''),
+            'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+            'HOST': os.environ.get('DB_HOST', ''),
+            'PORT': os.environ.get('DB_PORT', ''),
+            'OPTIONS': {
+                'charset': 'utf8mb4',
+            } if os.environ.get('DB_ENGINE', '').endswith('mysql') else {},
+        }
     }
-}
 
 # ============== CACHES CONFIGURATION ==============
 CACHES = {

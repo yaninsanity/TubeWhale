@@ -18,7 +18,7 @@ sys.path.insert(0, current_dir)
 
 try:
     # 导入现有的service模块
-    from service.video_analysis_service import VideoAnalysisService
+    from service.video_analysis_service import TubeWhaleService as VideoAnalysisService
     from agents.transcript_agent import TranscriptAgent
     from agents.audio_agent import AudioAgent
     from agents.search_agent import SearchAgent

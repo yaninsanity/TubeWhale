@@ -13,35 +13,71 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RenameIndex(
-            model_name='cliexecution',
-            new_name='templates_c_command_37f35f_idx',
-            old_name='templates_c_command_a74b23_idx',
+        migrations.RunSQL(
+            sql='ALTER INDEX IF EXISTS "templates_c_command_a74b23_idx" RENAME TO "templates_c_command_37f35f_idx";',
+            reverse_sql='ALTER INDEX IF EXISTS "templates_c_command_37f35f_idx" RENAME TO "templates_c_command_a74b23_idx";',
+            state_operations=[
+                migrations.RenameIndex(
+                    model_name='cliexecution',
+                    new_name='templates_c_command_37f35f_idx',
+                    old_name='templates_c_command_a74b23_idx',
+                )
+            ],
         ),
-        migrations.RenameIndex(
-            model_name='cliexecution',
-            new_name='templates_c_status_89bad2_idx',
-            old_name='templates_c_status_caeaf2_idx',
+        migrations.RunSQL(
+            sql='ALTER INDEX IF EXISTS "templates_c_status_caeaf2_idx" RENAME TO "templates_c_status_89bad2_idx";',
+            reverse_sql='ALTER INDEX IF EXISTS "templates_c_status_89bad2_idx" RENAME TO "templates_c_status_caeaf2_idx";',
+            state_operations=[
+                migrations.RenameIndex(
+                    model_name='cliexecution',
+                    new_name='templates_c_status_89bad2_idx',
+                    old_name='templates_c_status_caeaf2_idx',
+                )
+            ],
         ),
-        migrations.RenameIndex(
-            model_name='cliexecution',
-            new_name='templates_c_templat_1f82c1_idx',
-            old_name='templates_c_template_05b40e_idx',
+        migrations.RunSQL(
+            sql='ALTER INDEX IF EXISTS "templates_c_template_05b40e_idx" RENAME TO "templates_c_templat_1f82c1_idx";',
+            reverse_sql='ALTER INDEX IF EXISTS "templates_c_templat_1f82c1_idx" RENAME TO "templates_c_template_05b40e_idx";',
+            state_operations=[
+                migrations.RenameIndex(
+                    model_name='cliexecution',
+                    new_name='templates_c_templat_1f82c1_idx',
+                    old_name='templates_c_template_05b40e_idx',
+                )
+            ],
         ),
-        migrations.RenameIndex(
-            model_name='expertprompt',
-            new_name='templates_e_role_514520_idx',
-            old_name='templates_a_role_do_5f25cc_idx',
+        migrations.RunSQL(
+            sql='ALTER INDEX IF EXISTS "templates_a_role_do_5f25cc_idx" RENAME TO "templates_e_role_514520_idx";',
+            reverse_sql='ALTER INDEX IF EXISTS "templates_e_role_514520_idx" RENAME TO "templates_a_role_do_5f25cc_idx";',
+            state_operations=[
+                migrations.RenameIndex(
+                    model_name='expertprompt',
+                    new_name='templates_e_role_514520_idx',
+                    old_name='templates_a_role_do_5f25cc_idx',
+                )
+            ],
         ),
-        migrations.RenameIndex(
-            model_name='job',
-            new_name='templates_j_status_fe0e0b_idx',
-            old_name='job_status_created_idx',
+        migrations.RunSQL(
+            sql='ALTER INDEX IF EXISTS "job_status_created_idx" RENAME TO "templates_j_status_fe0e0b_idx";',
+            reverse_sql='ALTER INDEX IF EXISTS "templates_j_status_fe0e0b_idx" RENAME TO "job_status_created_idx";',
+            state_operations=[
+                migrations.RenameIndex(
+                    model_name='job',
+                    new_name='templates_j_status_fe0e0b_idx',
+                    old_name='job_status_created_idx',
+                )
+            ],
         ),
-        migrations.RenameIndex(
-            model_name='usertemplateselection',
-            new_name='templates_u_user_id_751324_idx',
-            old_name='templates__user_id_9f4f2c_idx',
+        migrations.RunSQL(
+            sql='ALTER INDEX IF EXISTS "templates__user_id_9f4f2c_idx" RENAME TO "templates_u_user_id_751324_idx";',
+            reverse_sql='ALTER INDEX IF EXISTS "templates_u_user_id_751324_idx" RENAME TO "templates__user_id_9f4f2c_idx";',
+            state_operations=[
+                migrations.RenameIndex(
+                    model_name='usertemplateselection',
+                    new_name='templates_u_user_id_751324_idx',
+                    old_name='templates__user_id_9f4f2c_idx',
+                )
+            ],
         ),
         migrations.AlterField(
             model_name='expertprompt',

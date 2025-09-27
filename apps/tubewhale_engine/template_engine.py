@@ -239,8 +239,28 @@ class DynamicTemplateEngine:
         }
     
     def get_template(self, template_id: str) -> Optional[AnalysisTemplate]:
-        """Get template by ID"""
-        return self.templates.get(template_id)
+        """Get template by ID with backward compatibility mapping"""
+        
+        # ID映射表 - 支持旧的简化ID
+        id_mapping = {
+            'BASIC': 'basic_performance',
+            'DETAILED': 'detailed_analysis', 
+            'EXPERT': 'expert_deep_dive',
+            'COMPREHENSIVE': 'comprehensive_intelligence'
+        }
+        
+        # 首先尝试直接匹配
+        if template_id in self.templates:
+            return self.templates[template_id]
+        
+        # 尝试映射匹配
+        mapped_id = id_mapping.get(template_id)
+        if mapped_id and mapped_id in self.templates:
+            return self.templates[mapped_id]
+        
+        # 如果都没找到，返回None
+        logger.warning(f"Template not found: {template_id}")
+        return None
     
     def get_compatible_templates(self, role: ExpertRole) -> List[AnalysisTemplate]:
         """Get templates compatible with a specific role"""
@@ -335,14 +355,29 @@ Provide a comprehensive analysis in valid JSON format that addresses all require
     
     def validate_combination(self, template_id: str, role: str) -> Dict[str, Any]:
         """Validate template and role combination"""
-        template = self.templates.get(template_id)
+        template = self.get_template(template_id)  # 使用get_template方法，包含映射逻辑
         if not template:
             return {"valid": False, "error": "Template not found"}
         
-        try:
-            role_enum = ExpertRole(role)
-        except ValueError:
-            return {"valid": False, "error": "Invalid expert role"}
+        # 角色映射 - 支持旧的角色名称
+        role_mapping = {
+            'content_analyst': ExpertRole.CONTENT_CREATOR,
+            'marketing_expert': ExpertRole.MARKETING_EXPERT,
+            'data_analyst': ExpertRole.DATA_ANALYST,
+            'business_analyst': ExpertRole.BUSINESS_ANALYST,
+            'educational_specialist': ExpertRole.EDUCATIONAL_SPECIALIST,
+            'research_scientist': ExpertRole.RESEARCH_SCIENTIST,
+            'social_scientist': ExpertRole.SOCIAL_SCIENTIST,
+            'hci_specialist': ExpertRole.HCI_SPECIALIST,
+            'music_educator': ExpertRole.MUSIC_EDUCATOR
+        }
+        
+        role_enum = role_mapping.get(role)
+        if not role_enum:
+            try:
+                role_enum = ExpertRole(role)
+            except ValueError:
+                return {"valid": False, "error": "Invalid expert role"}
         
         if role_enum not in template.compatible_roles:
             return {

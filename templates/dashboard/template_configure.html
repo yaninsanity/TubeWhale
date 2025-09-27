@@ -381,7 +381,7 @@ function startAnalysis() {
         alert('分析任务已启动！\n\n任务ID: TASK-' + Date.now() + '\n\n您可以在"任务管理"页面查看进度。');
         
         // 跳转到任务管理页面
-        window.location.href = '{% url "dashboard:job_runner" %}';
+        window.location.href = '{% url "dashboard:jobs" %}';
     }, 2000);
 }
 </script>

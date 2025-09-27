@@ -33,7 +33,7 @@ urlpatterns = [
     # Job management
     path('jobs/', views.jobs_view, name='jobs'),
     path('jobs/<str:job_id>/', views.job_detail_view, name='job_detail'),
-    path('job-runner/', views.job_runner_view, name='job_runner'),
+    # path('job-runner/', views.job_runner_view, name='job_runner'),  # 删除有问题的路由
     path('jobs/<str:job_id>/retry/', views.retry_job_view, name='retry_job'),
     path('jobs/<str:job_id>/cancel/', views.cancel_job_view, name='cancel_job'),
     path('api/jobs/<str:job_id>/progress/', views.job_progress_api, name='job_progress'),

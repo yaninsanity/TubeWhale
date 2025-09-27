@@ -479,15 +479,17 @@ class YouTubeService:
             return None
 
         ydl_opts = {
-            'format': 'bestaudio/best',
+            'format': 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best[height<=720]/best',
             'outtmpl': os.path.join(downloads_dir, f"{video_id}.%(ext)s"),
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'mp3',
                 'preferredquality': '192',
             }],
-            'quiet': True,
-            'no_warnings': True,
+            'quiet': False,  # Enable output for debugging
+            'no_warnings': False,  # Show warnings for debugging
+            'ignoreerrors': False,
+            'extract_flat': False,
         }
 
         # 处理 cookies 参数：

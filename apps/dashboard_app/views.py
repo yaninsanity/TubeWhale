@@ -397,6 +397,7 @@ def serialize_analysis_job(job: AnalysisJob) -> dict:
 
     return {
         'id': job.job_id,
+        'job_id': job.job_id,  # 添加job_id字段以确保模板兼容性
         'video_id': display_name,
         'task_type': task_type.replace('_', ' ').title() if isinstance(task_type, str) else task_type,
         'status': job.status,
@@ -425,6 +426,8 @@ def create_analysis_job_entry(
     additional_options: dict | None = None,
 ) -> AnalysisJob:
     """Create a persisted analysis job record for wizard submissions"""
+    from apps.templates_app.models import CustomTemplate
+    from apps.templates_app.integrator import TemplateOpenAIIntegrator
 
     custom_questions = custom_questions or []
     additional_options = additional_options or {}
@@ -440,6 +443,52 @@ def create_analysis_job_entry(
     safe_role = (role or 'general').replace(' ', '-').lower()
     safe_template = template_id or 'default-template'
 
+    # Try to resolve template from admin-managed system
+    admin_template = None
+    try:
+        # First try to find by template_id
+        admin_template = CustomTemplate.objects.filter(
+            template_id=template_id
+        ).first()
+        
+        # If not found, try by name
+        if not admin_template and additional_options.get('template_name'):
+            admin_template = CustomTemplate.objects.filter(
+                name=additional_options['template_name']
+            ).first()
+            
+        # If still not found, try by slug or similar field
+        if not admin_template:
+            template_slug = template_id.replace('_', '-').replace(' ', '-').lower()
+            admin_template = CustomTemplate.objects.filter(
+                name__icontains=template_id.replace('_', ' ').replace('-', ' ')
+            ).first()
+            
+    except Exception as e:
+        # Log the error but continue with fallback
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Failed to resolve admin template for {template_id}: {e}")
+
+    # Prepare template integration data
+    template_integration_data = {}
+    if admin_template:
+        try:
+            integrator = TemplateOpenAIIntegrator()
+            template_integration_data = {
+                'admin_template_id': admin_template.id,
+                'admin_template_name': admin_template.name,
+                'template_domain': admin_template.domain or 'video_analysis',
+                'has_admin_template': True,
+                'template_structure': admin_template.template_structure,
+                'analysis_focus': admin_template.analysis_focus,
+                'expert_prompts_available': admin_template.expert_prompts.filter(is_active=True).exists(),
+            }
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to prepare template integration for {admin_template.name}: {e}")
+
     options = {
         'tool_type': tool_type,
         'input_value': input_value,
@@ -447,6 +496,7 @@ def create_analysis_job_entry(
         'report_language': report_language,
         'custom_questions': custom_questions,
         'created_via': additional_options.get('created_via', 'wizard'),
+        'template_integration': template_integration_data,
     }
     options.update(additional_options)
 
@@ -454,6 +504,8 @@ def create_analysis_job_entry(
     if not display_name:
         if tool_type == 'brainstorm':
             display_name = options.get('brainstorm_topic') or _('AI Brainstorm Session')
+        elif admin_template:
+            display_name = f"{admin_template.name} Analysis"
         else:
             display_name = content_id or _('Video Analysis')
 
@@ -470,6 +522,81 @@ def create_analysis_job_entry(
         custom_questions=custom_questions,
         analysis_options=options,
     )
+
+    # 🚀 CRITICAL FIX: Actually submit the job to Celery for execution
+    try:
+        from apps.tubewhale_engine.tasks import analyze_video_task
+        from celery import current_app
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        # Check if Celery is available
+        celery_available = False
+        try:
+            inspector = current_app.control.inspect()
+            active_workers = inspector.active()
+            if active_workers:
+                celery_available = True
+                logger.info(f"✅ Celery workers detected for job {job.job_id}")
+            else:
+                logger.warning(f"⚠️ No Celery workers detected for job {job.job_id}")
+        except Exception as celery_check_error:
+            logger.warning(f"⚠️ Celery check failed for job {job.job_id}: {celery_check_error}")
+        
+        if celery_available:
+            # Submit to Celery for async processing
+            task_result = analyze_video_task.delay(job.job_id)
+            job.celery_task_id = task_result.id
+            job.status = 'processing'
+            job.status_message = f'Submitted to worker: {task_result.id}'
+            job.save()
+            logger.info(f"🚀 Job {job.job_id} submitted to Celery: {task_result.id}")
+        else:
+            # Fallback to demo/sync processing
+            job.status_message = 'Celery unavailable, will process in demo mode'
+            job.save()
+            logger.info(f"🔄 Job {job.job_id} queued for demo processing")
+            
+            # Optionally trigger immediate demo processing
+            try:
+                # Use a background thread to avoid blocking the request
+                import threading
+                def demo_process():
+                    try:
+                        analyze_video_task(job.job_id)  # Call directly
+                    except Exception as e:
+                        logger.error(f"Demo processing failed for {job.job_id}: {e}")
+                        job.refresh_from_db()
+                        job.status = 'failed'
+                        job.error_message = f'Demo processing failed: {e}'
+                        job.save()
+                
+                # Start demo processing in background
+                thread = threading.Thread(target=demo_process)
+                thread.daemon = True
+                thread.start()
+                
+                job.status = 'processing'
+                job.status_message = 'Processing in demo mode...'
+                job.save()
+                logger.info(f"🎭 Job {job.job_id} started in demo mode")
+                
+            except Exception as demo_error:
+                logger.error(f"Failed to start demo processing for {job.job_id}: {demo_error}")
+                job.status = 'failed'
+                job.error_message = f'Failed to start processing: {demo_error}'
+                job.save()
+        
+    except Exception as submission_error:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"❌ Failed to submit job {job.job_id}: {submission_error}")
+        
+        # Update job status to reflect the error
+        job.status = 'failed'
+        job.error_message = f'Failed to submit job: {submission_error}'
+        job.save()
 
     return job
 
@@ -1517,6 +1644,7 @@ def job_detail_view(request, job_id):
     return render(request, 'dashboard/job_detail.html', context)
 
 
+@scientist_login_required
 def jobs_view(request):
     """Display user's analysis jobs and handle unified wizard submissions"""
     from django.shortcuts import render
@@ -1620,25 +1748,63 @@ def jobs_view(request):
                     tool_names.get(tool, _('Analysis')), job.job_id, role, display_name
                 )
             )
-            return redirect('dashboard:job_runner')
+            return redirect('dashboard:jobs')
 
         except Exception as exc:
             messages.error(request, _('Error starting analysis: {}').format(str(exc)))
             return HttpResponseRedirect(reverse('dashboard:smart_wizard'))
 
-    # Get user's actual jobs
+    # GET request - show job management interface
+    # Get ALL user jobs for complete visibility
     if request.user.is_authenticated:
-        recent_jobs = AnalysisJob.objects.filter(
+        all_jobs = AnalysisJob.objects.filter(
             user=request.user
-        ).order_by('-created_at')[:10]
+        ).order_by('-created_at')[:50]  # 显示更多任务
     else:
-        # Show all jobs for anonymous users (demo mode)
-        recent_jobs = AnalysisJob.objects.all().order_by('-created_at')[:10]
+        all_jobs = AnalysisJob.objects.all().order_by('-created_at')[:20]
     
-    return render(request, 'dashboard/jobs.html', {
+    # Serialize all jobs
+    serialized_jobs = [serialize_analysis_job(job) for job in all_jobs]
+    
+    # Separate active and completed jobs
+    active_jobs = [job for job in serialized_jobs if job['status'] in ['pending', 'queued', 'processing']]
+    recent_jobs = [job for job in serialized_jobs if job['status'] in ['completed', 'failed', 'cancelled']]
+    
+    # Check for wizard job parameters
+    wizard_params = request.session.get('wizard_job_params')
+    if wizard_params:
+        # Clear from session after retrieving
+        del request.session['wizard_job_params']
+        messages.info(
+            request, 
+            _('Ready to start {} analysis with {} template').format(
+                wizard_params.get('tool_type', 'unknown').replace('_', ' ').title(),
+                wizard_params.get('template', 'unknown')
+            )
+        )
+    
+    # Calculate job statistics
+    job_stats = {
+        'pending': sum(1 for job in serialized_jobs if job['status'] in ['pending', 'queued']),
+        'running': sum(1 for job in serialized_jobs if job['status'] == 'processing'),
+        'completed': sum(1 for job in serialized_jobs if job['status'] == 'completed'),
+        'failed': sum(1 for job in serialized_jobs if job['status'] in ['failed', 'cancelled']),
+    }
+
+    context = {
         'user': request.user,
-        'jobs': recent_jobs,
-    })
+        'user_tier': getattr(request.user, 'tier', 'basic'),
+        'user_tier_display': getattr(request.user, 'get_tier_display', lambda: 'Basic')(),
+        'active_jobs': active_jobs,
+        'recent_jobs': recent_jobs,
+        'job_stats': job_stats,
+        'wizard_params': wizard_params,
+        'title': _('Job Management'),
+        'subtitle': _('Monitor and manage your video analysis jobs'),
+        'jobs': serialized_jobs,  # 显示所有任务
+    }
+    
+    return render(request, 'dashboard/jobs.html', context)
 
 
 def transparent_analysis_terminal(request):

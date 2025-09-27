@@ -1,6 +1,8 @@
 
+version: '3.8'
+
 services:
-  # PostgreSQL Database
+  # PostgreSQL Database - 解决队友的PostgreSQL问题
   postgres:
     image: postgres:15-alpine
     container_name: tubewhale_postgres
@@ -19,10 +21,10 @@ services:
       - tubewhale_network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U tubewhale -d tubewhale"]
-      interval: 5s
-      timeout: 3s
-      retries: 12
-      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   # Redis Cache
   redis:
@@ -37,17 +39,18 @@ services:
     networks:
       - tubewhale_network
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "redis123", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 12
-      start_period: 10s
+      test: ["CMD", "redis-cli", "auth", "redis123", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   # TubeWhale Django Backend
   backend:
     build:
       context: .
       dockerfile: Dockerfile
+      target: production
     container_name: tubewhale_backend
     restart: unless-stopped
     depends_on:
@@ -56,27 +59,28 @@ services:
       redis:
         condition: service_healthy
     env_file:
-      - .env
+      - .env.docker
     ports:
       - "8000:8000"
     volumes:
       - ./media:/app/media:rw
       - ./logs:/app/logs:rw
-      - ./staticfiles:/app/staticfiles:rw
     networks:
       - tubewhale_network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/", "--connect-timeout", "5"]
-      interval: 15s
+      test: ["CMD", "python", "manage.py", "check", "--database", "default"]
+      interval: 30s
       timeout: 10s
-      retries: 5
+      retries: 3
       start_period: 60s
+    command: ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "3", "--worker-class", "sync", "--timeout", "300", "tubewhale_project.wsgi:application"]
 
   # Celery Worker
   celery_worker:
     build:
       context: .
       dockerfile: Dockerfile
+      target: production
     container_name: tubewhale_celery_worker
     restart: unless-stopped
     depends_on:
@@ -87,13 +91,13 @@ services:
       backend:
         condition: service_healthy
     env_file:
-      - .env
+      - .env.docker
     volumes:
       - ./media:/app/media:rw
       - ./logs:/app/logs:rw
     networks:
       - tubewhale_network
-    command: ["celery", "-A", "tubewhale_project", "worker", "--loglevel=info", "--concurrency=2"]
+    command: ["celery", "-A", "tubewhale_project", "worker", "--loglevel=info", "--concurrency=2", "--pool=prefork"]
     healthcheck:
       test: ["CMD", "celery", "-A", "tubewhale_project", "inspect", "ping"]
       interval: 30s
@@ -106,6 +110,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: production
     container_name: tubewhale_celery_beat
     restart: unless-stopped
     depends_on:
@@ -116,12 +121,18 @@ services:
       backend:
         condition: service_healthy
     env_file:
-      - .env
+      - .env.docker
     volumes:
       - ./logs:/app/logs:rw
     networks:
       - tubewhale_network
     command: ["celery", "-A", "tubewhale_project", "beat", "--loglevel=info", "--scheduler", "django_celery_beat.schedulers:DatabaseScheduler"]
+    healthcheck:
+      test: ["CMD", "celery", "-A", "tubewhale_project", "inspect", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
 volumes:
   postgres_data:
