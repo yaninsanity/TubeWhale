@@ -80,7 +80,8 @@ class SearchAgent:
                 prompt_template=self.settings["brainstorm_prompt_template"],
                 template_vars=prompt_vars
             )
-            keywords_response = await self.openai_service.async_completion(
+            keywords_response = await asyncio.to_thread(
+                self.openai_service.completion,
                 prompt=prompt_text,
                 prompt_template=self.settings["brainstorm_prompt_template"]
             )
@@ -215,7 +216,8 @@ class SearchAgent:
         template = "structured_output" if "structured_output" in self.openai_service.prompts else "summarization"
         prompt = self._get_prompt_content(template, template_vars={"text": summary_input})
         try:
-            summary_text = await self.openai_service.async_completion(
+            summary_text = await asyncio.to_thread(
+                self.openai_service.completion,
                 prompt=prompt,
                 prompt_template=template
             )
