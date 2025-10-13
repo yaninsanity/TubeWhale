@@ -633,7 +633,23 @@ async def process_videos(keyword, top_k, youtube_service, openai_api_key, db_pat
                 refined.append(mock_video)
         else:
             # 正常模式：真实搜索
-            search_agent = SearchAgent(youtube_service, openai_service=openai_service, logger=logger)
+            search_agent_settings = {
+                "max_results": top_k,  # TOP_K 控制每个关键词搜索的视频数量
+                "max_keywords": max_n,  # MAX_N 控制生成的联想关键词数量
+                "enable_brainstorm": not pure_youtube,
+                "brainstorm_prompt_template": "keyword_generation",
+                "enable_refine": True,
+                "order_by": "weight",
+                "order_direction": "desc",
+                "enable_optimization": True,
+                "enable_summary": True,
+            }
+            search_agent = SearchAgent(
+                youtube_service,
+                openai_service=openai_service,
+                logger=logger,
+                settings=search_agent_settings
+            )
             aggregated = await search_agent.aggregate_search(keyword)
             if asyncio.iscoroutine(aggregated):
                 aggregated = await aggregated
@@ -756,7 +772,7 @@ if __name__ == "__main__":
     max_n = config_obj.MAX_N
     top_k = config_obj.TOP_K
     pure_youtube = config_obj.PURE_YOUTUBE
-    
+
     # CLI参数覆盖配置文件设置（工业级配置优先级）
     if hasattr(args, 'keyword') and args.keyword:
         keyword = args.keyword
