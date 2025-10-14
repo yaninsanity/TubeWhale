@@ -21,7 +21,7 @@ class Config:
         self.CONCURRENCY = int(env_config.get("CONCURRENCY", "1"))
         self.PURE_YOUTUBE = env_config.get("PURE_YOUTUBE", "false").lower() == "true"
         
-        # 视频过滤选项
+        # Video filter options
         self.VIDEO_DURATION = env_config.get("VIDEO_DURATION", "any")
         self.VIDEO_DEFINITION = env_config.get("VIDEO_DEFINITION", "any")
         self.VIDEO_TYPE = env_config.get("VIDEO_TYPE", "any")

@@ -634,7 +634,7 @@ async def process_videos(keyword, top_k, youtube_service, openai_api_key, db_pat
                 refined.append(mock_video)
         else:
             # 正常模式：真实搜索
-            # 将 filter_type 转换为 YouTube API 的 order 参数
+            # Convert filter_type to YouTube API's order parameter
             order_mapping = {
                 "view_count": "viewCount",
                 "rating": "rating",
@@ -644,14 +644,14 @@ async def process_videos(keyword, top_k, youtube_service, openai_api_key, db_pat
             }
             youtube_order = order_mapping.get(filter_type, "viewCount")
 
-            # 构建搜索过滤器
+            # Build search filters
             search_filters = {
                 "videoEmbeddable": "true",
                 "videoSyndicated": "true",
                 "order": youtube_order  # 添加排序参数
             }
 
-            # 添加视频过滤选项（只在非 "any" 时添加）
+            # Add video filter options (only add when not "any")
             if video_duration and video_duration.lower() != "any":
                 search_filters["videoDuration"] = video_duration
                 logger.info(f"🎬 Video duration filter: {video_duration}")
@@ -665,11 +665,11 @@ async def process_videos(keyword, top_k, youtube_service, openai_api_key, db_pat
                 logger.info(f"🎬 Video type filter: {video_type}")
 
             search_agent_settings = {
-                "max_results": top_k,  # TOP_K 控制每个关键词搜索的视频数量
-                "max_keywords": max_n,  # MAX_N 控制生成的联想关键词数量
+                "max_results": top_k,
+                "max_keywords": max_n,
                 "enable_brainstorm": not pure_youtube,
                 "brainstorm_prompt_template": "keyword_generation",
-                "default_filter": search_filters,  # 使用配置的过滤器
+                "default_filter": search_filters,
                 "enable_refine": True,
                 "order_by": "weight",
                 "order_direction": "desc",
@@ -804,9 +804,9 @@ if __name__ == "__main__":
     max_n = config_obj.MAX_N
     top_k = config_obj.TOP_K
     pure_youtube = config_obj.PURE_YOUTUBE
-    filter_type = config_obj.FILTER_TYPE  # 读取 FILTER_TYPE 配置
+    filter_type = config_obj.FILTER_TYPE
 
-    # 读取视频过滤选项
+    # Read video filter options
     video_duration = config_obj.VIDEO_DURATION
     video_definition = config_obj.VIDEO_DEFINITION
     video_type = config_obj.VIDEO_TYPE
@@ -851,7 +851,7 @@ if __name__ == "__main__":
     logger.info(f"  full_audio_analysis = {full_audio_analysis}")
     logger.info(f"  dry_run = {dry_run}")
     logger.info(f"  max_n = {max_n}")
-    logger.info(f"  filter_type = {filter_type}")  # 显示 filter_type
+    logger.info(f"  filter_type = {filter_type}")
     logger.info(f"  concurrency = {concurrency_manager.current_concurrency}")
     logger.info(f"  pure_youtube = {pure_youtube}")
 
@@ -883,9 +883,9 @@ if __name__ == "__main__":
                 max_n=max_n,
                 pure_youtube=pure_youtube,
                 filter_type=filter_type,
-                video_duration=video_duration,  # 传递视频时长过滤
-                video_definition=video_definition,  # 传递视频清晰度过滤
-                video_type=video_type,  # 传递视频类型过滤
+                video_duration=video_duration,
+                video_definition=video_definition,
+                video_type=video_type,
                 logger=logger,
                 concurrency_manager=concurrency_manager
             )
