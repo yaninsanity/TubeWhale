@@ -648,7 +648,7 @@ async def process_videos(keyword, top_k, youtube_service, openai_api_key, db_pat
             search_filters = {
                 "videoEmbeddable": "true",
                 "videoSyndicated": "true",
-                "order": youtube_order  # 添加排序参数
+                "order": youtube_order
             }
 
             # Add video filter options (only add when not "any")
