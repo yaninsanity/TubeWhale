@@ -121,7 +121,7 @@ class AudioChunkProcessor:
             self.logger.error(f"Error obtaining summarization prompt: {e}", exc_info=True)
             prompt = (f"Summarize the following text for topic '{topic}':\n"
                       f"Previous Summary: {previous_summary}\nText: {transcript}")
-        response = await self.openai_service.async_completion(prompt=prompt)
+        response = await asyncio.to_thread(self.openai_service.completion, prompt=prompt)
         result = response.strip() if response else None
         if not result:
             self.logger.error("Generated summary is empty.")
@@ -279,7 +279,7 @@ class AudioProcessingAgent:
                 "previous_summary": previous_summary,
                 "topic": topic
             })
-            response_text = await self.openai_service.async_completion(prompt=prompt)
+            response_text = await asyncio.to_thread(self.openai_service.completion, prompt=prompt)
             summary = response_text.strip()
             if summary:
                 self.logger.info("Summary generated for transcript chunk.")

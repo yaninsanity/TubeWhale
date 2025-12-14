@@ -590,7 +590,8 @@ async def process_single_video(video, keyword, async_db: AsyncDatabase, persist_
 # -------------------------------------------------------------------------------
 async def process_videos(keyword, top_k, youtube_service, openai_api_key, db_path,
                          persist_summaries, full_audio_analysis, dry_run, max_n, pure_youtube=False,
-                         logger=None, concurrency_manager=None):
+                         filter_type="view_count", video_duration="any", video_definition="any",
+                         video_type="any", logger=None, concurrency_manager=None):
     logger.info("Starting video processing pipeline.")
     if dry_run:
         logger.info("Dry run mode: external API calls and DB writes are skipped.")
@@ -633,7 +634,54 @@ async def process_videos(keyword, top_k, youtube_service, openai_api_key, db_pat
                 refined.append(mock_video)
         else:
             # 正常模式：真实搜索
-            search_agent = SearchAgent(youtube_service, openai_service=openai_service, logger=logger)
+            # Convert filter_type to YouTube API's order parameter
+            order_mapping = {
+                "view_count": "viewCount",
+                "rating": "rating",
+                "relevance": "relevance",
+                "date": "date",
+                "title": "title"
+            }
+            youtube_order = order_mapping.get(filter_type, "viewCount")
+
+            # Build search filters
+            search_filters = {
+                "videoEmbeddable": "true",
+                "videoSyndicated": "true",
+                "order": youtube_order
+            }
+
+            # Add video filter options (only add when not "any")
+            if video_duration and video_duration.lower() != "any":
+                search_filters["videoDuration"] = video_duration
+                logger.info(f"🎬 Video duration filter: {video_duration}")
+
+            if video_definition and video_definition.lower() != "any":
+                search_filters["videoDefinition"] = video_definition
+                logger.info(f"🎬 Video definition filter: {video_definition}")
+
+            if video_type and video_type.lower() != "any":
+                search_filters["videoType"] = video_type
+                logger.info(f"🎬 Video type filter: {video_type}")
+
+            search_agent_settings = {
+                "max_results": top_k,
+                "max_keywords": max_n,
+                "enable_brainstorm": not pure_youtube,
+                "brainstorm_prompt_template": "keyword_generation",
+                "default_filter": search_filters,
+                "enable_refine": True,
+                "order_by": "weight",
+                "order_direction": "desc",
+                "enable_optimization": True,
+                "enable_summary": True,
+            }
+            search_agent = SearchAgent(
+                youtube_service,
+                openai_service=openai_service,
+                logger=logger,
+                settings=search_agent_settings
+            )
             aggregated = await search_agent.aggregate_search(keyword)
             if asyncio.iscoroutine(aggregated):
                 aggregated = await aggregated
@@ -756,7 +804,13 @@ if __name__ == "__main__":
     max_n = config_obj.MAX_N
     top_k = config_obj.TOP_K
     pure_youtube = config_obj.PURE_YOUTUBE
-    
+    filter_type = config_obj.FILTER_TYPE
+
+    # Read video filter options
+    video_duration = config_obj.VIDEO_DURATION
+    video_definition = config_obj.VIDEO_DEFINITION
+    video_type = config_obj.VIDEO_TYPE
+
     # CLI参数覆盖配置文件设置（工业级配置优先级）
     if hasattr(args, 'keyword') and args.keyword:
         keyword = args.keyword
@@ -797,6 +851,7 @@ if __name__ == "__main__":
     logger.info(f"  full_audio_analysis = {full_audio_analysis}")
     logger.info(f"  dry_run = {dry_run}")
     logger.info(f"  max_n = {max_n}")
+    logger.info(f"  filter_type = {filter_type}")
     logger.info(f"  concurrency = {concurrency_manager.current_concurrency}")
     logger.info(f"  pure_youtube = {pure_youtube}")
 
@@ -827,6 +882,10 @@ if __name__ == "__main__":
                 dry_run=dry_run,
                 max_n=max_n,
                 pure_youtube=pure_youtube,
+                filter_type=filter_type,
+                video_duration=video_duration,
+                video_definition=video_definition,
+                video_type=video_type,
                 logger=logger,
                 concurrency_manager=concurrency_manager
             )

@@ -48,6 +48,9 @@ class DummyOpenAIService:
     async def transcribe_audio(self, buffer: BytesIO):
         self.transcribed.append(buffer.getvalue())
         return "dummy transcript"
+    def completion(self, prompt, **kwargs):
+        self.summaries.append(prompt)
+        return "dummy summary"
     async def async_completion(self, prompt, **kwargs):
         self.summaries.append(prompt)
         return "dummy summary"

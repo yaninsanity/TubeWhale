@@ -21,6 +21,11 @@ class Config:
         self.CONCURRENCY = int(env_config.get("CONCURRENCY", "1"))
         self.PURE_YOUTUBE = env_config.get("PURE_YOUTUBE", "false").lower() == "true"
         
+        # Video filter options
+        self.VIDEO_DURATION = env_config.get("VIDEO_DURATION", "any")
+        self.VIDEO_DEFINITION = env_config.get("VIDEO_DEFINITION", "any")
+        self.VIDEO_TYPE = env_config.get("VIDEO_TYPE", "any")
+
         # 覆盖配置：CLI 参数优先
         if cli_args:
             for key, value in cli_args.items():

@@ -21,6 +21,12 @@ def dummy_openai():
                 "structured_output": {"system": "", "user": ""},
             }
             self.interactions = []
+        def completion(self, *, prompt: str, prompt_template: str = None, **kwargs):
+            # when generating keywords, return two lines
+            if prompt_template == "keyword_generation":
+                return "kwA\nkwB\n"
+            # otherwise return a fixed summary
+            return "DUMMY_SUMMARY"
         async def async_completion(self, *, prompt: str, prompt_template: str):
             # when generating keywords, return two lines
             if prompt_template == "keyword_generation":
